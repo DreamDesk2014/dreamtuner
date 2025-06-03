@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState, useCallback, useId, useEffect } from 'react';
+import React, { useState, useCallback, useId, useEffect, useRef } from 'react';
 import { InputForm } from '@/components/InputForm';
 import { MusicOutputDisplay } from '@/components/MusicOutputDisplay';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -38,7 +38,7 @@ export default function DreamTunerPage() {
     setIsClientMounted(true);
   }, []);
   
-  const drawingCanvasRef = React.useRef<{ getDataURL: () => string; clearCanvas: () => void }>(null);
+  const drawingCanvasRef = useRef<{ getDataURL: () => string; clearCanvas: () => void }>(null);
   const [selectedGenre, setSelectedGenre] = useState<string>(MUSIC_GENRES[0] || '');
   const genreSelectId = useId();
 
@@ -52,6 +52,25 @@ export default function DreamTunerPage() {
     error: speechErrorKids,
     resetTranscript: resetKidsTranscript
   } = useSpeechRecognition();
+
+  const handleModeChange = (newMode: 'standard' | 'kids') => {
+    setCurrentMode(newMode);
+    setMusicParams(null);
+    setError(null);
+    setShowWelcome(true);
+    setSelectedGenre(MUSIC_GENRES[0] || ''); // Reset genre
+
+    // Reset Kids Mode specific inputs
+    if (drawingCanvasRef.current) {
+      drawingCanvasRef.current.clearCanvas();
+    }
+    resetKidsTranscript();
+
+    // Standard mode inputs within InputForm will retain their state,
+    // which is generally fine for tabbing interfaces.
+    // If a full reset of InputForm was needed, we'd use a key change or a ref method.
+  };
+
 
   const handleInputSubmit = useCallback(async (input: AppInput) => {
     setIsLoading(true);
@@ -176,7 +195,7 @@ export default function DreamTunerPage() {
       </header>
 
       <main className="w-full max-w-3xl">
-        <Tabs value={currentMode} onValueChange={(value) => setCurrentMode(value as 'standard' | 'kids')} className="w-full mb-8">
+        <Tabs value={currentMode} onValueChange={(value) => handleModeChange(value as 'standard' | 'kids')} className="w-full mb-8">
           <TabsList className="grid w-full grid-cols-2 bg-nebula-gray/80 border border-slate-700">
             <TabsTrigger value="standard" className="data-[state=active]:bg-cosmic-purple data-[state=active]:text-primary-foreground">Standard Mode</TabsTrigger>
             <TabsTrigger value="kids" className="data-[state=active]:bg-stardust-blue data-[state=active]:text-primary-foreground">Kids Mode</TabsTrigger>
@@ -186,6 +205,7 @@ export default function DreamTunerPage() {
             <Card className="bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
               <CardContent className="p-6 sm:p-10">
                 <InputForm 
+                  key={`input-form-${currentMode}`} // Key change can help reset form, though not strictly necessary if it manages its own reset
                   onSubmit={(input) => handleInputSubmit({...input, mode: 'standard'})} 
                   isLoading={isLoading} 
                   selectedGenre={selectedGenre}
@@ -308,19 +328,6 @@ export default function DreamTunerPage() {
           </div>
         )}
         
-        {musicParams && !isLoading && ( // MusicOutputDisplay will handle isRenderingDrawing internally for its content
-          <Card className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
-            <CardContent className="p-6 sm:p-10">
-              <MusicOutputDisplay 
-                params={musicParams} 
-                onRegenerateIdea={handleRegenerateIdea}
-                isRegeneratingIdea={isRegeneratingIdea}
-                isRenderingDrawing={isRenderingDrawing} 
-              />
-            </CardContent>
-          </Card>
-        )}
-
         {showWelcome && !isLoading && !error && !musicParams && (
           <Card className="mt-10 text-center p-6 bg-nebula-gray/80 rounded-lg border-slate-700">
             <CardHeader>
@@ -334,6 +341,20 @@ export default function DreamTunerPage() {
             </CardContent>
           </Card>
         )}
+
+        {musicParams && !isLoading && ( // MusicOutputDisplay will handle isRenderingDrawing internally for its content
+          <Card className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
+            <CardContent className="p-6 sm:p-10">
+              <MusicOutputDisplay 
+                params={musicParams} 
+                onRegenerateIdea={handleRegenerateIdea}
+                isRegeneratingIdea={isRegeneratingIdea}
+                isRenderingDrawing={isRenderingDrawing} 
+              />
+            </CardContent>
+          </Card>
+        )}
+
       </main>
       <Footer />
     </div>
