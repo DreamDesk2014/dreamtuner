@@ -1,3 +1,4 @@
+
 // @ts-nocheck - Disabling TypeScript checks for this file due to midi-writer-js typings
 import MidiWriter from 'midi-writer-js';
 import type { MusicParameters } from '@/types';
@@ -267,6 +268,18 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string): InstrumentMappi
 
 const clamp = (num: number, min: number, max: number) => Math.min(Math.max(num, min), max);
 
+// Safely get TPQN (Ticks Per Quarter Note)
+const getTPQN = () => {
+    if (MidiWriter && MidiWriter.constants && typeof MidiWriter.constants.TPQN === 'number') {
+        return MidiWriter.constants.TPQN;
+    }
+    console.warn(
+        `midi-writer-js: MidiWriter.constants.TPQN not found or not a number. Using default value 128. MidiWriter: ${typeof MidiWriter}, MidiWriter.constants: ${typeof MidiWriter?.constants}`
+    );
+    return 128; // Default TPQN for midi-writer-js
+};
+
+
 export const generateMidiFile = (params: MusicParameters): string => {
     const melodyTrack = new MidiWriter.Track();
     const bassTrack = new MidiWriter.Track();
@@ -421,7 +434,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     });
 
     const kick = 36; const snare = 38; const hiHatClosed = 42; const crashCymbal = 49; const rideCymbal = 51; const hiTom = 50; const midTom = 47; const lowTom = 45;
-    const TPQN = MidiWriter.constants.TPQN;
+    const TPQN = getTPQN();
 
     progression.forEach((chordDef, measureIndex) => {
         const measureStartTick = measureIndex * beatsPerMeasure * TPQN;
@@ -441,10 +454,10 @@ export const generateMidiFile = (params: MusicParameters): string => {
             if (isFillMeasure && beat === beatsPerMeasure - 1 && params.rhythmicDensity > 0.3) {
                 if (genre && (genre.includes("rock") || genre.includes("pop") || genre.includes("electronic"))) {
                     drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '16', velocity: snareVel -15, channel: 10, tick: beatStartTick }));
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '16', velocity: snareVel -10, channel: 10, tick: beatStartTick + TPQN/4 }));
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '16', velocity: snareVel -5, channel: 10, tick: beatStartTick + TPQN/2 }));
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '16', velocity: kickVel, channel: 10, tick: beatStartTick + TPQN * 0.75 }));
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [crashCymbal], duration: '4', velocity: 110, channel: 10, tick: beatStartTick + TPQN * 0.75 }));
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '16', velocity: snareVel -10, channel: 10, tick: beatStartTick + Math.floor(TPQN/4) }));
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '16', velocity: snareVel -5, channel: 10, tick: beatStartTick + Math.floor(TPQN/2) }));
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '16', velocity: kickVel, channel: 10, tick: beatStartTick + Math.floor(TPQN * 0.75) }));
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [crashCymbal], duration: '4', velocity: 110, channel: 10, tick: beatStartTick + Math.floor(TPQN * 0.75) }));
                 } else if (genre && (genre.includes("jazz") || genre.includes("blues"))) {
                     drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '8t', velocity: snareVel - 10, channel: 10, tick: beatStartTick }));
                     drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [midTom], duration: '8t', velocity: snareVel - 15, channel: 10, tick: beatStartTick + Math.floor(TPQN/3) }));
@@ -507,3 +520,4 @@ export const generateMidiFile = (params: MusicParameters): string => {
         return fallbackWriter.dataUri();
     }
 };
+
