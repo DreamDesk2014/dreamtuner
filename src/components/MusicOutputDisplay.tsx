@@ -10,7 +10,7 @@ import {
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
   LibraryIcon, PlayIcon, PauseIcon, StopIcon
 } from './icons/HeroIcons';
-import { SparklesIcon as HeroSparklesIcon } from './icons/SparklesIcon'; // Corrected import
+import { SparklesIcon as HeroSparklesIcon } from './icons/SparklesIcon';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -22,7 +22,7 @@ interface MusicOutputDisplayProps {
   params: MusicParameters;
   onRegenerateIdea: () => Promise<void>;
   isRegeneratingIdea: boolean;
-  isRenderingDrawing?: boolean; // New prop for AI sketch loading state
+  isRenderingDrawing?: boolean; 
 }
 
 interface ParameterCardProps {
@@ -167,7 +167,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     return () => {
       if (midiPlayerRef.current) {
         midiPlayerRef.current.stop();
-        midiPlayerRef.current = null; // Important to nullify to allow GC
+        midiPlayerRef.current = null; 
       }
       if (soundLoadingTimeoutRef.current) {
         clearTimeout(soundLoadingTimeoutRef.current);
@@ -235,10 +235,10 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
             if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
             soundLoadingTimeoutRef.current = setTimeout(() => {
-              const currentPlayer = midiPlayerRef.current; // Re-access ref inside timeout
+              const currentPlayer = midiPlayerRef.current; 
               if (currentPlayer && isPlayerLoadingSoundsRef.current) { 
                  setPlayerError("Sound loading timed out. Check connection or try a different genre.");
-                 currentPlayer.stop(); // Attempt to stop the player
+                 currentPlayer.stop(); 
                  setIsPlayerLoadingSounds(false); 
                  setIsPlaying(false); 
                  setIsPlaybackReady(false); 
@@ -269,12 +269,11 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       soundLoadingTimeoutRef.current = null;
     }
     
-    // Force UI state update immediately
     setIsPlayerLoadingSounds(false);
     setIsPlaying(false);
     setIsPlaybackReady(false);
     setPlaybackProgress(0);
-    setPlayerError(null); // Clear any existing player errors, including timeout
+    setPlayerError(null); 
 
     player.stop();
   }, []);
@@ -389,7 +388,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   }
 
   const renderAiSketch = () => {
-    if (params.originalInput.mode !== 'kids' || (!isRenderingDrawing && !params.renderedDrawingDataUrl)) {
+    if (params.originalInput.mode !== 'kids') {
       return null;
     }
 
@@ -514,12 +513,13 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
            {isCopied ? <><ClipboardCopyIcon className="w-5 h-5 mr-2 text-green-400" />Copied!</> : <><ClipboardCopyIcon className="w-5 h-5 mr-2 group-hover:scale-110" />Copy Details</>}
         </Button>
       </div>
-      <div className="text-center mt-2 h-4"> {/* Placeholder for errors to prevent layout shift */}
+      <div className="text-center mt-2 h-4"> 
         {midiError && <p className="text-red-400 text-sm">{`MIDI Download Error: ${midiError}`}</p>}
         {copyError && <p className="text-red-400 text-sm">{copyError}</p>}
       </div>
       {params.originalInput && renderOriginalInputInfo(params.originalInput)}
-      {renderAiSketch()} {/* Call the function to render AI sketch */}
+      {renderAiSketch()} 
     </div>
   );
 };
+
