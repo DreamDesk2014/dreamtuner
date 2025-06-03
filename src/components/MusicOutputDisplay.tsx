@@ -1,14 +1,14 @@
 
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import MidiPlayer from 'midi-player-js'; 
+import MidiPlayer from 'midi-player-js';
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription, SOUNDFONT_URL, SOUND_LOADING_TIMEOUT_MS } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
-import { 
-  MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon, 
-  DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon, 
-  LibraryIcon, PlayIcon, PauseIcon, StopIcon 
+import {
+  MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon,
+  DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
+  LibraryIcon, PlayIcon, PauseIcon, StopIcon
 } from './icons/HeroIcons';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,8 +68,8 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [copyError, setCopyError] = useState<string | null>(null);
 
-  const midiPlayerRef = useRef<any>(null); 
-  const [isPlayerLoadingSounds, setIsPlayerLoadingSounds] = useState<boolean>(false); 
+  const midiPlayerRef = useRef<any>(null);
+  const [isPlayerLoadingSounds, setIsPlayerLoadingSounds] = useState<boolean>(false);
   const [isPlaybackReady, setIsPlaybackReady] = useState<boolean>(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playerError, setPlayerError] = useState<string | null>(null);
@@ -77,46 +77,51 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   const totalMidiTicksRef = useRef<number>(0);
   const [midiFileStructLoaded, setMidiFileStructLoaded] = useState<boolean>(false);
   const soundLoadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
+  const isPlayerLoadingSoundsRef = useRef(isPlayerLoadingSounds);
+  useEffect(() => {
+    isPlayerLoadingSoundsRef.current = isPlayerLoadingSounds;
+  }, [isPlayerLoadingSounds]);
+
   useEffect(() => {
     MidiPlayer.Player.SOUNDFONT_URL = SOUNDFONT_URL;
     const player = new MidiPlayer.Player((event: any) => {
       if (event.name === 'End of File') {
         setIsPlaying(false);
-        setPlaybackProgress(100); 
-        setIsPlaybackReady(false); // Needs to be re-initialized for play
+        setPlaybackProgress(100);
+        setIsPlaybackReady(false); 
       }
-      if (event.name === 'Playing' || event.name === 'playbackStart') { 
+      if (event.name === 'Playing' || event.name === 'playbackStart') {
         if (soundLoadingTimeoutRef.current) {
           clearTimeout(soundLoadingTimeoutRef.current);
           soundLoadingTimeoutRef.current = null;
         }
-        setIsPlayerLoadingSounds(false); 
-        setIsPlaybackReady(true);        
-        setIsPlaying(true); 
-        setPlayerError(null); 
+        setIsPlayerLoadingSounds(false);
+        setIsPlaybackReady(true);
+        setIsPlaying(true);
+        setPlayerError(null);
       }
       if (event.name === 'playbackPause') setIsPlaying(false);
       if (event.name === 'playbackStop') {
-        if (soundLoadingTimeoutRef.current) { 
+        if (soundLoadingTimeoutRef.current) {
           clearTimeout(soundLoadingTimeoutRef.current);
           soundLoadingTimeoutRef.current = null;
         }
-        setIsPlayerLoadingSounds(false); 
+        setIsPlayerLoadingSounds(false);
         setIsPlaying(false);
-        setIsPlaybackReady(false); 
+        setIsPlaybackReady(false);
         setPlaybackProgress(0);
       }
-      if (event.name === 'playing' && event.tick !== undefined) { 
+      if (event.name === 'playing' && event.tick !== undefined) {
         if (totalMidiTicksRef.current > 0) {
           const progress = (event.tick / totalMidiTicksRef.current) * 100;
           setPlaybackProgress(progress);
         }
       }
     });
-    
-    player.on('fileLoaded', () => { 
-       totalMidiTicksRef.current = player.getTotalTicks(); 
+
+    player.on('fileLoaded', () => {
+       totalMidiTicksRef.current = player.getTotalTicks();
        setMidiFileStructLoaded(true);
     });
 
@@ -126,9 +131,8 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         soundLoadingTimeoutRef.current = null;
       }
       setIsPlayerLoadingSounds(false);
-      // If play was intended, 'Playing' event should follow
     });
-    
+
     player.on('soundfontError', (err: any) => {
       if (soundLoadingTimeoutRef.current) {
         clearTimeout(soundLoadingTimeoutRef.current);
@@ -141,7 +145,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       setIsPlaying(false);
     });
 
-    player.on('error', (err: any) => { 
+    player.on('error', (err: any) => {
       if (soundLoadingTimeoutRef.current) {
         clearTimeout(soundLoadingTimeoutRef.current);
         soundLoadingTimeoutRef.current = null;
@@ -151,35 +155,34 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       setIsPlayerLoadingSounds(false);
       setIsPlaybackReady(false);
       setIsPlaying(false);
-      setMidiFileStructLoaded(false); 
+      setMidiFileStructLoaded(false);
       setPlaybackProgress(0);
     });
 
     midiPlayerRef.current = player;
-    
+
     return () => {
       if (midiPlayerRef.current) {
         midiPlayerRef.current.stop();
-        midiPlayerRef.current = null; 
+        midiPlayerRef.current = null;
       }
       if (soundLoadingTimeoutRef.current) {
         clearTimeout(soundLoadingTimeoutRef.current);
       }
     };
-  }, []); 
+  }, []);
 
   useEffect(() => {
     const player = midiPlayerRef.current;
     if (params && player) {
-      if (soundLoadingTimeoutRef.current) { 
+      if (soundLoadingTimeoutRef.current) {
         clearTimeout(soundLoadingTimeoutRef.current);
         soundLoadingTimeoutRef.current = null;
       }
-      player.stop(); // This triggers 'playbackStop' which handles state resets
-      // Explicitly set playerError and midiFileStructLoaded for new params
+      player.stop(); 
       setPlayerError(null);
-      setMidiFileStructLoaded(false); // New MIDI requires new file structure load
-      setPlaybackProgress(0); // Reset progress for new MIDI
+      setMidiFileStructLoaded(false); 
+      setPlaybackProgress(0); 
       totalMidiTicksRef.current = 0;
 
 
@@ -188,56 +191,58 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
           setPlayerError("Failed to generate valid MIDI data.");
           setMidiFileStructLoaded(false);
-          return; 
+          return;
         }
-        player.loadDataUri(midiDataUri); // Triggers 'fileLoaded' on success
+        player.loadDataUri(midiDataUri); 
       } catch (error) {
         setPlayerError(error instanceof Error ? error.message : "Failed to prepare MIDI for playback.");
         setMidiFileStructLoaded(false);
       }
-    } else if (!params && player) { 
+    } else if (!params && player) {
         if (soundLoadingTimeoutRef.current) {
           clearTimeout(soundLoadingTimeoutRef.current);
           soundLoadingTimeoutRef.current = null;
         }
-        player.stop(); // Resets via 'playbackStop'
-        setMidiFileStructLoaded(false); // No params, no file structure
+        player.stop(); 
+        setMidiFileStructLoaded(false); 
     }
   }, [params]);
 
   const handlePlayPause = useCallback(() => {
     const player = midiPlayerRef.current;
     if (!player) { setPlayerError("Player not available."); return; }
-    
-    if (!midiFileStructLoaded && !player.isPlaying() && !isPlayerLoadingSounds){ 
+
+    if (!midiFileStructLoaded && !player.isPlaying() && !isPlayerLoadingSoundsRef.current){
         setPlayerError("MIDI data not ready. Please wait."); return;
     }
-   
+
     const audioContext = player.audioContext;
     const performPlayAction = () => {
         if (player.isPlaying()) {
-            if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current); // Clear timeout if pausing
-            player.pause(); // Triggers 'playbackPause'
+            if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
+            player.pause(); 
         } else {
-            if (playbackProgress >= 99) { 
-                 player.skipToSeconds(0); 
-                 setPlaybackProgress(0); // Reset progress for replay
+            if (playbackProgress >= 99) {
+                 player.skipToSeconds(0);
+                 setPlaybackProgress(0); 
             }
-            setIsPlayerLoadingSounds(true); 
-            setPlayerError(null); 
-            setIsPlaybackReady(false); // Not ready until sounds are loaded and playing starts
+            setIsPlayerLoadingSounds(true);
+            setPlayerError(null);
+            setIsPlaybackReady(false); 
 
             if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
             soundLoadingTimeoutRef.current = setTimeout(() => {
-              // Timeout specifically for sound loading
-              if (player && isPlayerLoadingSounds) { // Check if still in loading phase
-                 player.stop(); // Attempt to stop, will trigger 'playbackStop'
+              const currentPlayer = midiPlayerRef.current;
+              if (currentPlayer && isPlayerLoadingSoundsRef.current) { 
+                 setPlayerError("Sound loading timed out. Check connection or try a different genre.");
+                 currentPlayer.stop(); // Attempt to stop first
+                 setIsPlayerLoadingSounds(false); 
+                 setIsPlaying(false); 
+                 setIsPlaybackReady(false); 
               }
-              setPlayerError("Sound loading timed out. Check connection or try a different genre.");
-              setIsPlayerLoadingSounds(false); // Sound loading failed or timed out
-              // Do not reset midiFileStructLoaded here. The file might be fine, only sounds failed.
+              soundLoadingTimeoutRef.current = null; 
             }, SOUND_LOADING_TIMEOUT_MS);
-            player.play(); // This will attempt to load soundfont if not already loaded
+            player.play(); 
         }
     };
 
@@ -245,23 +250,35 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       audioContext.resume().then(performPlayAction).catch((e: Error) => {
         setPlayerError(`Audio system error: ${e.message}. Please interact with the page and try again.`);
         if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
-        setIsPlayerLoadingSounds(false); 
+        setIsPlayerLoadingSounds(false);
       });
-    } else { 
+    } else {
       performPlayAction();
     }
-  }, [isPlayerLoadingSounds, playbackProgress, midiFileStructLoaded]);
+  }, [playbackProgress, midiFileStructLoaded]);
 
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     const player = midiPlayerRef.current;
     if (!player) return;
-    player.stop(); // Triggers 'playbackStop' which handles timeout clearing and state resets
-  };
+
+    if (soundLoadingTimeoutRef.current) {
+      clearTimeout(soundLoadingTimeoutRef.current);
+      soundLoadingTimeoutRef.current = null;
+    }
+
+    setIsPlayerLoadingSounds(false);
+    setIsPlaying(false);
+    setIsPlaybackReady(false);
+    setPlaybackProgress(0);
+    setPlayerError(null); 
+
+    player.stop();
+  }, []);
 
   const handleDownloadMidi = () => {
     setMidiError(null); setIsGeneratingMidiForDownload(true);
     try {
-      const midiDataUri = generateMidiFile(params); 
+      const midiDataUri = generateMidiFile(params);
       if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) throw new Error("Generated MIDI data was invalid.");
       const link = document.createElement('a');
       link.href = midiDataUri;
@@ -311,7 +328,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
       setCopyError("Failed to copy. Browser might not support this or permissions denied."); setTimeout(() => setCopyError(null), 5000);
     }
   };
-  
+
   const renderOriginalInputInfo = (input: AppInput) => {
     let icon: React.ReactNode; let title: string; let content: React.ReactNode;
     switch(input.type) {
@@ -351,7 +368,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
       </Card>
     );
   }
-  
+
   const getRhythmicDensityDescription = (density: number) => {
     if (density > 0.8) return "Very Active & Dense"; if (density > 0.6) return "Quite Active";
     if (density > 0.4) return "Moderately Active"; if (density > 0.2) return "Less Active";
@@ -368,11 +385,11 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   };
 
   const player = midiPlayerRef.current;
-  const playButtonDisabled = !player || 
-                             (!midiFileStructLoaded && !isPlayerLoadingSounds && !isPlaying) || 
-                             (isPlayerLoadingSounds && !isPlaying);
+  const playButtonDisabled = !player ||
+                             (!midiFileStructLoaded && !isPlayerLoadingSounds && !isPlaying) ||
+                             (isPlayerLoadingSounds && !isPlaying); // Disabled if loading sounds and not yet playing
   const showLoadingSpinnerInPlayButton = isPlayerLoadingSounds && !isPlaying;
-  
+
   let statusMessage = "";
   if (playerError) {
     statusMessage = `Player Error: ${playerError}`;
@@ -409,7 +426,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         <ParameterCardComponent title="Harmonic Complexity" value={params.harmonicComplexity} icon={<CogIcon />} subText={getHarmonicComplexityDescription(params.harmonicComplexity)} />
         {params.selectedGenre && <ParameterCardComponent title="Selected Genre" value={params.selectedGenre} icon={<LibraryIcon />} />}
       </div>
-      
+
       <Card className="mt-8 p-4 bg-nebula-gray/80 border-slate-700">
         <CardHeader className="pb-2">
           <CardTitle className="text-lg font-semibold text-stardust-blue text-center">Listen to Your Tune</CardTitle>
@@ -445,4 +462,4 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   );
 };
 
-
+    
