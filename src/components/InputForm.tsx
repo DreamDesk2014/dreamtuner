@@ -35,6 +35,11 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const [text, setText] = useState<string>('');
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [isClientMounted, setIsClientMounted] = useState(false);
+
+  useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
   
   const fileInputId = useId();
   const textInputId = useId();
@@ -55,7 +60,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     if (currentStandardInputType === 'text') {
       if (isListening) {
         setText(transcript + interimTranscript);
-      } else if (transcript && !interimTranscript) { // Final transcript after listening stops
+      } else if (transcript && !interimTranscript) { 
         setText(transcript);
       }
     }
@@ -65,7 +70,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     if (isListening) {
       stopListening();
     } else {
-      resetTranscript(); // Reset before starting new recording
+      resetTranscript(); 
       startListening();
     }
   };
@@ -119,7 +124,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading || isListening) return; // Disable submit if listening
+    if (isLoading || isListening) return; 
 
     let appInputPartial: Omit<AppInput, 'mode' | 'genre'> | null = null;
 
@@ -207,7 +212,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
             <Label htmlFor={textInputId} className="block text-sm font-medium text-stardust-blue">
               Enter Your Text:
             </Label>
-            {hasRecognitionSupport && (
+            {isClientMounted && hasRecognitionSupport && (
               <Button
                 type="button"
                 variant="outline"
@@ -231,7 +236,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
             disabled={isLoading || isListening}
           />
           {speechError && <p className="mt-1 text-xs text-red-400">{speechError}</p>}
-          {!hasRecognitionSupport && <p className="mt-1 text-xs text-muted-foreground">Voice input not supported in your browser.</p>}
+          {isClientMounted && !hasRecognitionSupport && <p className="mt-1 text-xs text-muted-foreground">Voice input not supported in your browser.</p>}
           <p className="mt-2 text-xs text-muted-foreground">
             Describe a scene, a feeling, a poem, or a short story. Or use the microphone!
           </p>
@@ -328,3 +333,4 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     </form>
   );
 };
+

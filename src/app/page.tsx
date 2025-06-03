@@ -28,6 +28,11 @@ export default function DreamTunerPage() {
   const [error, setError] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState<boolean>(true);
   const [currentMode, setCurrentMode] = useState<'standard' | 'kids'>('standard');
+  const [isClientMounted, setIsClientMounted] = useState(false);
+
+  useEffect(() => {
+    setIsClientMounted(true);
+  }, []);
   
   const drawingCanvasRef = React.useRef<{ getDataURL: () => string; clearCanvas: () => void }>(null);
   const [selectedGenre, setSelectedGenre] = useState<string>(MUSIC_GENRES[0] || '');
@@ -96,7 +101,7 @@ export default function DreamTunerPage() {
       fileDetails: fileDetails,
       genre: selectedGenre,
       mode: 'kids',
-      voiceDescription: kidsVoiceTranscript.trim() || undefined, // Pass final transcript for kids
+      voiceDescription: kidsVoiceTranscript.trim() || undefined, 
     };
     handleInputSubmit(kidsInput);
   }, [handleInputSubmit, selectedGenre, kidsVoiceTranscript]);
@@ -178,7 +183,7 @@ export default function DreamTunerPage() {
                   <Label className="block text-md font-medium text-stardust-blue">
                     Add a Voice Hint (Optional):
                   </Label>
-                  {hasRecognitionSupportKids ? (
+                  {isClientMounted && hasRecognitionSupportKids ? (
                     <Button
                       type="button"
                       variant="outline"
@@ -189,9 +194,9 @@ export default function DreamTunerPage() {
                       {isListeningKids ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
                       {isListeningKids ? 'Stop Listening & Save Hint' : 'Record Voice Hint'}
                     </Button>
-                  ) : (
+                  ) : isClientMounted && !hasRecognitionSupportKids ? (
                      <p className="text-xs text-muted-foreground text-center">Voice input not supported in this browser.</p>
-                  )}
+                  ) : null}
                   {isListeningKids && (
                     <p className="text-sm text-slate-300 text-center p-2 bg-slate-700/50 rounded-md">
                       Listening: <em className="text-galaxy-white">{kidsVoiceTranscript}{kidsInterimTranscript}</em>
@@ -293,3 +298,4 @@ export default function DreamTunerPage() {
     </div>
   );
 }
+
