@@ -55,8 +55,7 @@ const renderKidsDrawingFlow = ai.defineFlow(
         {text: promptText},
       ],
       config: {
-        responseModalities: ['IMAGE'], // Request only IMAGE. Text part is handled in the prompt above.
-                                          // If model needs TEXT, it will be empty.
+        responseModalities: ['TEXT', 'IMAGE'], // MUST provide both TEXT and IMAGE
         // Low safety settings for creative freedom, but still filtered.
         safetySettings: [
           { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
@@ -74,3 +73,4 @@ const renderKidsDrawingFlow = ai.defineFlow(
     return { renderedDrawingDataUrl: media.url };
   }
 );
+
