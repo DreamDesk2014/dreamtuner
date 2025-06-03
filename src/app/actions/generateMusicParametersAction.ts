@@ -23,12 +23,17 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
         size: input.fileDetails.size,
         url: input.fileDetails.url, 
       };
-      // Add voiceDescription if it exists (primarily for kids mode with image)
-      if (input.voiceDescription) {
+      if (input.voiceDescription) { // For Kids Mode
         flowInput.voiceDescription = input.voiceDescription;
+      }
+      if (input.additionalContext) { // For Standard Mode
+        flowInput.additionalContext = input.additionalContext;
       }
     } else if (input.type === 'video') {
       flowInput.fileDetails = input.fileDetails;
+      if (input.additionalContext) { // For Standard Mode
+        flowInput.additionalContext = input.additionalContext;
+      }
     }
     
     const aiResult: GenerateMusicalParametersOutput = await generateMusicalParametersFlow(flowInput);

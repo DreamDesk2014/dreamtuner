@@ -30,6 +30,7 @@ const GenerateMusicalParametersInputSchema = z.object({
   genre: z.string().optional(),
   mode: z.enum(['standard', 'kids']).default('standard').optional().describe("The operating mode: 'standard' for general inputs, 'kids' for children's drawings."),
   voiceDescription: z.string().optional().describe("Optional voice-derived text description, especially for Kids Mode drawings."),
+  additionalContext: z.string().optional().describe("Optional textual context provided by the user for an image or video input in standard mode."),
 });
 export type GenerateMusicalParametersInput = z.infer<
   typeof GenerateMusicalParametersInputSchema
@@ -102,11 +103,19 @@ const prompt = ai.definePrompt({
   {{#if fileDetails.url}}
     Analyze the following image and generate a detailed set of musical parameters that capture its essence (colors, mood, objects, composition).
     Image: {{media url=fileDetails.url}}
+    {{#if additionalContext}}
+    Additional context from user: "{{{additionalContext}}}"
+    Consider this context when generating parameters.
+    {{/if}}
   {{else}}
     {{#if fileDetails}}
       Conceptually analyze the video (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Video{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
       Generate a detailed set of musical parameters that capture its conceptual essence (e.g., theme, pacing, visual mood, implied narrative).
       Note: The video content itself is not provided, only its metadata. Base your analysis on the concept typically associated with a video of this name and type.
+      {{#if additionalContext}}
+      Additional context from user: "{{{additionalContext}}}"
+      Consider this context when generating parameters.
+      {{/if}}
     {{else}}
       {{#if content}}
         Analyze the following text and generate a detailed set of musical parameters that capture its essence.

@@ -33,6 +33,7 @@ const readFileAsDataURL = (file: File): Promise<string> => {
 export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selectedGenre, onGenreChange }) => {
   const [currentStandardInputType, setCurrentStandardInputType] = useState<StandardInputType>('text');
   const [text, setText] = useState<string>('');
+  const [additionalContext, setAdditionalContext] = useState<string>('');
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isClientMounted, setIsClientMounted] = useState(false);
@@ -43,6 +44,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   
   const fileInputId = useId();
   const textInputId = useId();
+  const additionalContextId = useId();
   const genreSelectId = useId();
 
   const {
@@ -141,9 +143,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         content: base64Content, 
         mimeType: filePreview.type,
         fileDetails: {...filePreview, url: filePreview.url },
+        additionalContext: additionalContext.trim() || undefined,
       };
     } else if (currentStandardInputType === 'video' && filePreview) {
-      appInputPartial = { type: 'video', fileDetails: filePreview };
+      appInputPartial = { 
+        type: 'video', 
+        fileDetails: filePreview,
+        additionalContext: additionalContext.trim() || undefined,
+      };
     }
 
     if (appInputPartial) {
@@ -172,6 +179,18 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     if (fileInput) fileInput.value = '';
   };
 
+  const handleInputTypeChange = (newType: StandardInputType) => {
+    setCurrentStandardInputType(newType);
+    setText('');
+    setAdditionalContext('');
+    resetTranscript();
+    if (isListening) stopListening();
+    setFilePreview(null);
+    setFileError(null);
+    const fileInput = document.getElementById(fileInputId) as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
@@ -184,16 +203,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               key={opt.type}
               type="button"
               variant={currentStandardInputType === opt.type ? "default" : "ghost"}
-              onClick={() => { 
-                setCurrentStandardInputType(opt.type); 
-                setText(''); 
-                resetTranscript();
-                if (isListening) stopListening();
-                setFilePreview(null); 
-                setFileError(null); 
-                const fileInput = document.getElementById(fileInputId) as HTMLInputElement;
-                if (fileInput) fileInput.value = '';
-              }}
+              onClick={() => handleInputTypeChange(opt.type)}
               className={`flex-1 p-3 text-sm font-medium flex items-center justify-center transition-all duration-150 
                 ${currentStandardInputType === opt.type ? 'bg-cosmic-purple text-primary-foreground shadow-md' : 'text-slate-300 hover:bg-nebula-gray'}`}
               aria-pressed={currentStandardInputType === opt.type}
@@ -244,50 +254,69 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       )}
 
       {(currentStandardInputType === 'image' || currentStandardInputType === 'video') && (
-        <div>
-          <Label htmlFor={fileInputId} className="block text-sm font-medium text-stardust-blue mb-1">
-            Upload {currentStandardInputType === 'image' ? 'Image' : 'Video'} File:
-          </Label>
-          <div className="relative">
-            <Input
-              id={fileInputId}
-              type="file"
-              accept={currentStandardInputType === 'image' ? 'image/png, image/jpeg, image/gif, image/webp' : 'video/*'}
-              onChange={handleFileChange}
-              className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cosmic-purple file:text-primary-foreground hover:file:bg-purple-700 disabled:opacity-50"
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor={fileInputId} className="block text-sm font-medium text-stardust-blue mb-1">
+              Upload {currentStandardInputType === 'image' ? 'Image' : 'Video'} File:
+            </Label>
+            <div className="relative">
+              <Input
+                id={fileInputId}
+                type="file"
+                accept={currentStandardInputType === 'image' ? 'image/png, image/jpeg, image/gif, image/webp' : 'video/*'}
+                onChange={handleFileChange}
+                className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cosmic-purple file:text-primary-foreground hover:file:bg-purple-700 disabled:opacity-50"
+                disabled={isLoading}
+              />
+               <UploadCloudIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+            </div>
+            {currentStandardInputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Note: The video content itself is not uploaded. Music parameters will be generated based on the video's filename and conceptual analysis.</p>}
+            {currentStandardInputType === 'image' && <p className="mt-2 text-xs text-muted-foreground">Max file size: {MAX_IMAGE_FILE_SIZE_MB}MB. Supported formats: JPEG, PNG, GIF, WEBP.</p>}
+
+            {fileError && (
+              <p className="mt-2 text-sm text-red-400 flex items-center">
+                <XCircleIcon className="w-5 h-5 mr-1"/> {fileError}
+              </p>
+            )}
+
+            {filePreview && (
+               <Card className="mt-4 bg-nebula-gray border-slate-600">
+                <CardHeader className="p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm font-medium text-galaxy-white">{filePreview.name}</CardTitle>
+                      <p className="text-xs text-muted-foreground">{filePreview.type} - {(filePreview.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" onClick={resetFileInput} className="text-red-400 hover:text-red-300" aria-label="Remove file">
+                       <XCircleIcon className="w-6 h-6"/>
+                    </Button>
+                  </div>
+                </CardHeader>
+                {currentStandardInputType === 'image' && filePreview.url && (
+                  <CardContent className="p-3 pt-0">
+                    <img src={filePreview.url} alt="Preview" data-ai-hint="abstract texture" className="mt-2 rounded-md max-h-40 object-contain border border-slate-700" />
+                  </CardContent>
+                )}
+              </Card>
+            )}
+          </div>
+          <div>
+            <Label htmlFor={additionalContextId} className="block text-sm font-medium text-stardust-blue">
+              Additional Context (Optional):
+            </Label>
+            <Textarea
+              id={additionalContextId}
+              value={additionalContext}
+              onChange={(e) => setAdditionalContext(e.target.value)}
+              placeholder={`Describe the ${currentStandardInputType === 'image' ? 'image' : 'video concept'} or highlight specific elements...`}
+              rows={3}
+              className="w-full p-3 mt-1 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
               disabled={isLoading}
             />
-             <UploadCloudIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
-          </div>
-          {currentStandardInputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Note: The video content itself is not uploaded. Music parameters will be generated based on the video's filename and conceptual analysis.</p>}
-          {currentStandardInputType === 'image' && <p className="mt-2 text-xs text-muted-foreground">Max file size: {MAX_IMAGE_FILE_SIZE_MB}MB. Supported formats: JPEG, PNG, GIF, WEBP.</p>}
-
-          {fileError && (
-            <p className="mt-2 text-sm text-red-400 flex items-center">
-              <XCircleIcon className="w-5 h-5 mr-1"/> {fileError}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Help the AI understand your {currentStandardInputType} better.
             </p>
-          )}
-
-          {filePreview && (
-             <Card className="mt-4 bg-nebula-gray border-slate-600">
-              <CardHeader className="p-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-sm font-medium text-galaxy-white">{filePreview.name}</CardTitle>
-                    <p className="text-xs text-muted-foreground">{filePreview.type} - {(filePreview.size / 1024).toFixed(1)} KB</p>
-                  </div>
-                  <Button type="button" variant="ghost" size="icon" onClick={resetFileInput} className="text-red-400 hover:text-red-300" aria-label="Remove file">
-                     <XCircleIcon className="w-6 h-6"/>
-                  </Button>
-                </div>
-              </CardHeader>
-              {currentStandardInputType === 'image' && filePreview.url && (
-                <CardContent className="p-3 pt-0">
-                  <img src={filePreview.url} alt="Preview" data-ai-hint="abstract texture" className="mt-2 rounded-md max-h-40 object-contain border border-slate-700" />
-                </CardContent>
-              )}
-            </Card>
-          )}
+          </div>
         </div>
       )}
 
@@ -333,4 +362,3 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     </form>
   );
 };
-

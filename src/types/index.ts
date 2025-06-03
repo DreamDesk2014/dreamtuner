@@ -1,5 +1,4 @@
 
-
 import type { GenerateMusicalParametersOutput as AIOutput, GenerateMusicalParametersInput as FlowInputTypeOriginal } from '@/ai/flows/generate-musical-parameters';
 
 export type InputType = 'text' | 'image' | 'video'; // Kept for InputForm internal state if needed
@@ -20,8 +19,8 @@ export interface BaseAppInput {
 
 export type AppInput = BaseAppInput & (
   | { type: 'text'; content: string; }
-  | { type: 'image'; content: string; mimeType: string; fileDetails: FilePreview; voiceDescription?: string; } // content is base64 for AI, voiceDescription for kids mode
-  | { type: 'video'; fileDetails: FilePreview; }
+  | { type: 'image'; content: string; mimeType: string; fileDetails: FilePreview; voiceDescription?: string; additionalContext?: string; } // content is base64 for AI, voiceDescription for kids mode
+  | { type: 'video'; fileDetails: FilePreview; additionalContext?: string; }
 );
 
 // MusicParameters is what the client expects to receive and display
@@ -32,9 +31,10 @@ export interface MusicParameters extends AIOutput {
 }
 
 // For mapping to AI Flow input schema
-// We extend the original FlowInputType to include voiceDescription
+// We extend the original FlowInputType to include voiceDescription and additionalContext
 export interface FlowInput extends FlowInputTypeOriginal {
   voiceDescription?: string;
+  additionalContext?: string;
 }
 
 
