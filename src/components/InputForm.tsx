@@ -1,8 +1,9 @@
+
 "use client";
 import React, { useState, useCallback, useId } from 'react';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { DocumentTextIcon, PhotographIcon, VideoCameraIcon, XCircleIcon, UploadCloudIcon } from './icons/HeroIcons';
-import type { InputType, AppInput, FilePreview } from '@/types';
+import type { InputType as StandardInputType, AppInput, FilePreview } from '@/types'; // Renamed InputType to StandardInputType
 import { MAX_IMAGE_FILE_SIZE_BYTES, MAX_IMAGE_FILE_SIZE_MB, MUSIC_GENRES } from '@/lib/constants';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +15,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 interface InputFormProps {
   onSubmit: (input: AppInput) => void;
   isLoading: boolean;
+  selectedGenre: string;
+  onGenreChange: (genre: string) => void;
 }
 
 const readFileAsDataURL = (file: File): Promise<string> => {
@@ -25,10 +28,9 @@ const readFileAsDataURL = (file: File): Promise<string> => {
   });
 };
 
-export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => {
-  const [inputType, setInputType] = useState<InputType>('text');
+export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selectedGenre, onGenreChange }) => {
+  const [currentStandardInputType, setCurrentStandardInputType] = useState<StandardInputType>('text'); // Renamed state variable
   const [text, setText] = useState<string>('');
-  const [selectedGenre, setSelectedGenre] = useState<string>(MUSIC_GENRES[0] || '');
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   
@@ -46,7 +48,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
         size: file.size,
       };
 
-      if (inputType === 'image') {
+      if (currentStandardInputType === 'image') {
         if (!file.type.startsWith('image/')) {
           setFileError('Invalid file type. Please select an image (JPEG, PNG, GIF, WEBP).');
           setFilePreview(null);
@@ -69,60 +71,60 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
           setFilePreview(null);
           event.target.value = '';
         }
-      } else if (inputType === 'video') {
+      } else if (currentStandardInputType === 'video') {
          if (!file.type.startsWith('video/')) {
           setFileError('Invalid file type. Please select a video.');
           setFilePreview(null);
           event.target.value = '';
           return;
         }
-        setFilePreview(fileDetails); // For video, URL is not needed for preview, just details
+        setFilePreview(fileDetails);
       }
     } else {
       setFilePreview(null);
     }
-  }, [inputType]);
+  }, [currentStandardInputType]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
 
-    let appInput: AppInput | null = null;
-    if (inputType === 'text' && text.trim()) {
-      appInput = { type: 'text', content: text.trim(), genre: selectedGenre };
-    } else if (inputType === 'image' && filePreview?.url) {
-      // For image, content sent to AI is the base64 part of the data URL
+    let appInputPartial: Omit<AppInput, 'mode' | 'genre'> | null = null;
+
+    if (currentStandardInputType === 'text' && text.trim()) {
+      appInputPartial = { type: 'text', content: text.trim() };
+    } else if (currentStandardInputType === 'image' && filePreview?.url) {
       const base64Content = filePreview.url.split(',')[1];
       if (!base64Content) {
         setFileError("Failed to process image data. Please re-upload.");
         return;
       }
-      appInput = { 
+      appInputPartial = { 
         type: 'image', 
         content: base64Content, 
         mimeType: filePreview.type,
-        fileDetails: {...filePreview, url: filePreview.url }, // Pass full data URL for flow's {{media url=...}}
-        genre: selectedGenre
+        fileDetails: {...filePreview, url: filePreview.url },
       };
-    } else if (inputType === 'video' && filePreview) {
-      appInput = { type: 'video', fileDetails: filePreview, genre: selectedGenre };
+    } else if (currentStandardInputType === 'video' && filePreview) {
+      appInputPartial = { type: 'video', fileDetails: filePreview };
     }
 
-    if (appInput) {
-      onSubmit(appInput);
+    if (appInputPartial) {
+      // The 'mode' will be added by the parent page.tsx component
+      // The 'genre' is handled by the parent as well through props.
+      onSubmit({ ...appInputPartial, genre: selectedGenre } as AppInput); 
     } else {
-      // This case should ideally be prevented by isSubmitDisabled
-      if (inputType === 'text') setFileError("Please enter some text.");
+      if (currentStandardInputType === 'text') setFileError("Please enter some text.");
       else setFileError("Please select a file.");
     }
   };
   
   const isSubmitDisabled = isLoading || 
-    (inputType === 'text' && !text.trim()) ||
-    ((inputType === 'image' || inputType === 'video') && !filePreview) ||
+    (currentStandardInputType === 'text' && !text.trim()) ||
+    ((currentStandardInputType === 'image' || currentStandardInputType === 'video') && !filePreview) ||
     !!fileError;
 
-  const inputOptions: { type: InputType, label: string, icon: React.FC<any> }[] = [
+  const inputOptions: { type: StandardInputType, label: string, icon: React.FC<any> }[] = [
     { type: 'text', label: 'Text', icon: DocumentTextIcon },
     { type: 'image', label: 'Image', icon: PhotographIcon },
     { type: 'video', label: 'Video Concept', icon: VideoCameraIcon },
@@ -146,9 +148,9 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
             <Button
               key={opt.type}
               type="button"
-              variant={inputType === opt.type ? "default" : "ghost"}
+              variant={currentStandardInputType === opt.type ? "default" : "ghost"}
               onClick={() => { 
-                setInputType(opt.type); 
+                setCurrentStandardInputType(opt.type); 
                 setText(''); 
                 setFilePreview(null); 
                 setFileError(null); 
@@ -156,17 +158,17 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
                 if (fileInput) fileInput.value = '';
               }}
               className={`flex-1 p-3 text-sm font-medium flex items-center justify-center transition-all duration-150 
-                ${inputType === opt.type ? 'bg-cosmic-purple text-primary-foreground shadow-md' : 'text-slate-300 hover:bg-nebula-gray'}`}
-              aria-pressed={inputType === opt.type}
+                ${currentStandardInputType === opt.type ? 'bg-cosmic-purple text-primary-foreground shadow-md' : 'text-slate-300 hover:bg-nebula-gray'}`}
+              aria-pressed={currentStandardInputType === opt.type}
             >
-              <opt.icon className={`w-5 h-5 mr-2 ${inputType === opt.type ? 'text-primary-foreground' : 'text-stardust-blue'}`} />
+              <opt.icon className={`w-5 h-5 mr-2 ${currentStandardInputType === opt.type ? 'text-primary-foreground' : 'text-stardust-blue'}`} />
               {opt.label}
             </Button>
           ))}
         </div>
       </div>
 
-      {inputType === 'text' && (
+      {currentStandardInputType === 'text' && (
         <div>
           <Label htmlFor={textInputId} className="block text-sm font-medium text-stardust-blue mb-1">
             Enter Your Text:
@@ -186,24 +188,24 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
         </div>
       )}
 
-      {(inputType === 'image' || inputType === 'video') && (
+      {(currentStandardInputType === 'image' || currentStandardInputType === 'video') && (
         <div>
           <Label htmlFor={fileInputId} className="block text-sm font-medium text-stardust-blue mb-1">
-            Upload {inputType === 'image' ? 'Image' : 'Video'} File:
+            Upload {currentStandardInputType === 'image' ? 'Image' : 'Video'} File:
           </Label>
           <div className="relative">
             <Input
               id={fileInputId}
               type="file"
-              accept={inputType === 'image' ? 'image/png, image/jpeg, image/gif, image/webp' : 'video/*'}
+              accept={currentStandardInputType === 'image' ? 'image/png, image/jpeg, image/gif, image/webp' : 'video/*'}
               onChange={handleFileChange}
               className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cosmic-purple file:text-primary-foreground hover:file:bg-purple-700 disabled:opacity-50"
               disabled={isLoading}
             />
              <UploadCloudIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           </div>
-          {inputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Note: The video content itself is not uploaded. Music parameters will be generated based on the video's filename and conceptual analysis.</p>}
-          {inputType === 'image' && <p className="mt-2 text-xs text-muted-foreground">Max file size: {MAX_IMAGE_FILE_SIZE_MB}MB. Supported formats: JPEG, PNG, GIF, WEBP.</p>}
+          {currentStandardInputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Note: The video content itself is not uploaded. Music parameters will be generated based on the video's filename and conceptual analysis.</p>}
+          {currentStandardInputType === 'image' && <p className="mt-2 text-xs text-muted-foreground">Max file size: {MAX_IMAGE_FILE_SIZE_MB}MB. Supported formats: JPEG, PNG, GIF, WEBP.</p>}
 
           {fileError && (
             <p className="mt-2 text-sm text-red-400 flex items-center">
@@ -224,7 +226,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
                   </Button>
                 </div>
               </CardHeader>
-              {inputType === 'image' && filePreview.url && (
+              {currentStandardInputType === 'image' && filePreview.url && (
                 <CardContent className="p-3 pt-0">
                   <img src={filePreview.url} alt="Preview" data-ai-hint="abstract texture" className="mt-2 rounded-md max-h-40 object-contain border border-slate-700" />
                 </CardContent>
@@ -238,7 +240,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading }) => 
         <Label htmlFor={genreSelectId} className="block text-lg font-medium text-stardust-blue mb-3">
           2. Select Music Genre (Optional):
         </Label>
-        <Select value={selectedGenre} onValueChange={setSelectedGenre} disabled={isLoading}>
+        <Select value={selectedGenre} onValueChange={onGenreChange} disabled={isLoading}>
           <SelectTrigger id={genreSelectId} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 text-galaxy-white">
             <SelectValue placeholder="Select a genre" />
           </SelectTrigger>

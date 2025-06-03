@@ -1,6 +1,7 @@
-import type { GenerateMusicalParametersOutput as AIOutput, GenerateMusicalParametersInput as AIInput } from '@/ai/flows/generate-musical-parameters';
 
-export type InputType = 'text' | 'image' | 'video';
+import type { GenerateMusicalParametersOutput as AIOutput, GenerateMusicalParametersInput as FlowInputType } from '@/ai/flows/generate-musical-parameters';
+
+export type InputType = 'text' | 'image' | 'video'; // Kept for InputForm internal state if needed
 
 export interface FilePreview {
   name: string;
@@ -10,22 +11,30 @@ export interface FilePreview {
 }
 
 // AppInput is the data structure the client-side form will prepare
-export type AppInput = 
-  | { type: 'text'; content: string; genre?: string; }
-  | { type: 'image'; content: string; mimeType: string; fileDetails: FilePreview; genre?: string; } // content is base64 for API
-  | { type: 'video'; fileDetails: FilePreview; genre?: string; };
-
-// MusicParameters is what the client expects to receive and display
-// It augments the AI output with original input details
-export interface MusicParameters extends AIOutput {
-  originalInput: AppInput;
-  selectedGenre?: string;
+// It includes the mode of operation.
+export interface BaseAppInput {
+  genre?: string;
+  mode: 'standard' | 'kids';
 }
 
-// For mapping to AI Flow input
-export type FlowInput = AIInput;
+export type AppInput = BaseAppInput & (
+  | { type: 'text'; content: string; }
+  | { type: 'image'; content: string; mimeType: string; fileDetails: FilePreview; } // content is base64 for AI
+  | { type: 'video'; fileDetails: FilePreview; }
+);
 
-// Helper type for the structure Gemini might return if not perfectly matching AIOutput (used in user's geminiService, might not be needed if flows are strict)
+// MusicParameters is what the client expects to receive and display
+// It augments the AI output with original input details, including the mode.
+export interface MusicParameters extends AIOutput {
+  originalInput: AppInput;
+  selectedGenre?: string; // This is somewhat redundant as originalInput.genre exists.
+}
+
+// For mapping to AI Flow input schema which will be updated
+export type FlowInput = FlowInputType;
+
+
+// Helper type for the structure Gemini might return if not perfectly matching AIOutput
 // Keeping it for reference or if direct API calls were hypothetically made elsewhere.
 export interface GeminiMusicParamsResponse {
   keySignature: string;

@@ -1,3 +1,4 @@
+
 'use server';
 import type { AppInput, MusicParameters, FlowInput } from '@/types';
 import { generateMusicalParameters as generateMusicalParametersFlow, type GenerateMusicalParametersOutput } from '@/ai/flows/generate-musical-parameters';
@@ -8,6 +9,7 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
     const flowInput: FlowInput = {
       type: input.type,
       genre: input.genre,
+      mode: input.mode, // Pass the mode
     };
 
     if (input.type === 'text') {
@@ -15,9 +17,9 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
     } else if (input.type === 'image') {
       // The AI flow's prompt for image uses {{media url=fileDetails.url}}
       // So, the base64 data string should be passed as fileDetails.url
-      flowInput.content = input.content; // Keep base64 in content for reference if needed by specific prompt versions
+      flowInput.content = input.content; // Keep base64 in content for reference if needed
       flowInput.mimeType = input.mimeType;
-      flowInput.fileDetails = { // Ensure fileDetails contains the data URI for the flow
+      flowInput.fileDetails = {
         name: input.fileDetails.name,
         type: input.fileDetails.type,
         size: input.fileDetails.size,
@@ -31,7 +33,7 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
 
     const resultForClient: MusicParameters = {
       ...aiResult,
-      originalInput: input,
+      originalInput: input, // originalInput now includes the mode
       selectedGenre: input.genre,
     };
     return resultForClient;
@@ -39,7 +41,6 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
   } catch (err) {
     console.error("Error in generateMusicParametersAction:", err);
     const errorMessage = err instanceof Error ? err.message : "An unknown error occurred while generating music parameters.";
-    // Check for specific error messages from Genkit/Gemini if needed
     if (errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("PERMISSION_DENIED")) {
       return { error: "Gemini API request failed: Invalid API Key or insufficient permissions." };
     }
@@ -48,6 +49,9 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
     }
     if (errorMessage.toLowerCase().includes("size") || errorMessage.toLowerCase().includes("request payload")){
         return { error: "Gemini API request failed: Input data (e.g. image) might be too large."};
+    }
+    if (errorMessage.includes("Handlebars")) {
+      return { error: `AI prompt template error: ${errorMessage}` };
     }
     return { error: `Failed to generate music parameters: ${errorMessage}` };
   }
