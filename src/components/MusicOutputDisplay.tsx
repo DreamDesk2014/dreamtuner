@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import MidiPlayer from 'midi-player-js'; 
@@ -83,7 +84,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       if (event.name === 'End of File') {
         setIsPlaying(false);
         setPlaybackProgress(100); 
-        setTimeout(() => setPlaybackProgress(0), 500); 
+        setIsPlaybackReady(false); // Needs to be re-initialized for play
       }
       if (event.name === 'Playing' || event.name === 'playbackStart') { 
         if (soundLoadingTimeoutRef.current) {
@@ -125,7 +126,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         soundLoadingTimeoutRef.current = null;
       }
       setIsPlayerLoadingSounds(false);
-      // If play was intended, it might proceed now or need re-triggering based on player logic
+      // If play was intended, 'Playing' event should follow
     });
     
     player.on('soundfontError', (err: any) => {
@@ -174,60 +175,69 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         clearTimeout(soundLoadingTimeoutRef.current);
         soundLoadingTimeoutRef.current = null;
       }
-      player.stop(); 
-      setIsPlaying(false); 
-      setIsPlaybackReady(false); 
-      setIsPlayerLoadingSounds(false); 
+      player.stop(); // This triggers 'playbackStop' which handles state resets
+      // Explicitly set playerError and midiFileStructLoaded for new params
       setPlayerError(null);
-      setPlaybackProgress(0);
+      setMidiFileStructLoaded(false); // New MIDI requires new file structure load
+      setPlaybackProgress(0); // Reset progress for new MIDI
       totalMidiTicksRef.current = 0;
-      setMidiFileStructLoaded(false); 
+
 
       try {
         const midiDataUri = generateMidiFile(params);
         if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
           setPlayerError("Failed to generate valid MIDI data.");
+          setMidiFileStructLoaded(false);
           return; 
         }
-        player.loadDataUri(midiDataUri); 
+        player.loadDataUri(midiDataUri); // Triggers 'fileLoaded' on success
       } catch (error) {
         setPlayerError(error instanceof Error ? error.message : "Failed to prepare MIDI for playback.");
+        setMidiFileStructLoaded(false);
       }
     } else if (!params && player) { 
         if (soundLoadingTimeoutRef.current) {
           clearTimeout(soundLoadingTimeoutRef.current);
+          soundLoadingTimeoutRef.current = null;
         }
-        player.stop();
-        setIsPlaying(false); setIsPlaybackReady(false); setIsPlayerLoadingSounds(false);
-        setPlaybackProgress(0); totalMidiTicksRef.current = 0; setMidiFileStructLoaded(false);
+        player.stop(); // Resets via 'playbackStop'
+        setMidiFileStructLoaded(false); // No params, no file structure
     }
   }, [params]);
 
   const handlePlayPause = useCallback(() => {
     const player = midiPlayerRef.current;
     if (!player) { setPlayerError("Player not available."); return; }
-    if (!midiFileStructLoaded && !player.isPlaying()){ 
+    
+    if (!midiFileStructLoaded && !player.isPlaying() && !isPlayerLoadingSounds){ 
         setPlayerError("MIDI data not ready. Please wait."); return;
     }
    
     const audioContext = player.audioContext;
     const performPlayAction = () => {
         if (player.isPlaying()) {
-            if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
-            player.pause();
+            if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current); // Clear timeout if pausing
+            player.pause(); // Triggers 'playbackPause'
         } else {
             if (playbackProgress >= 99) { 
-                 setPlaybackProgress(0);
                  player.skipToSeconds(0); 
+                 setPlaybackProgress(0); // Reset progress for replay
             }
-            setIsPlayerLoadingSounds(true); setPlayerError(null); 
+            setIsPlayerLoadingSounds(true); 
+            setPlayerError(null); 
+            setIsPlaybackReady(false); // Not ready until sounds are loaded and playing starts
+
             if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
             soundLoadingTimeoutRef.current = setTimeout(() => {
-              if (player) player.stop();
+              // Timeout specifically for sound loading
+              if (player && isPlayerLoadingSounds) { // Check if still in loading phase
+                 player.stop(); // Attempt to stop, will trigger 'playbackStop'
+              }
               setPlayerError("Sound loading timed out. Check connection or try a different genre.");
-              setIsPlayerLoadingSounds(false); setIsPlaybackReady(false); setIsPlaying(false); setMidiFileStructLoaded(false);
+              setIsPlayerLoadingSounds(false); // Sound loading failed or timed out
+              // Do not reset midiFileStructLoaded here. The file might be fine, only sounds failed.
             }, SOUND_LOADING_TIMEOUT_MS);
-            player.play(); 
+            player.play(); // This will attempt to load soundfont if not already loaded
         }
     };
 
@@ -240,12 +250,12 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     } else { 
       performPlayAction();
     }
-  }, [isPlaying, playbackProgress, midiFileStructLoaded]);
+  }, [isPlayerLoadingSounds, playbackProgress, midiFileStructLoaded]);
 
   const handleStop = () => {
     const player = midiPlayerRef.current;
     if (!player) return;
-    player.stop();
+    player.stop(); // Triggers 'playbackStop' which handles timeout clearing and state resets
   };
 
   const handleDownloadMidi = () => {
@@ -255,11 +265,11 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) throw new Error("Generated MIDI data was invalid.");
       const link = document.createElement('a');
       link.href = midiDataUri;
-      let baseFileName = 'resonance_ai_music';
+      let baseFileName = 'dreamtuner_music';
       if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
-      else if (params.originalInput.type === 'text') baseFileName = params.originalInput.content.substring(0,30).replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
-      else if (params.originalInput.type === 'image' || params.originalInput.type === 'video') baseFileName = params.originalInput.fileDetails.name.split('.')[0].replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
-      link.download = `${baseFileName || 'resonance_ai_output'}.mid`;
+      else if (params.originalInput.type === 'text' && params.originalInput.content) baseFileName = params.originalInput.content.substring(0,30).replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
+      else if ((params.originalInput.type === 'image' || params.originalInput.type === 'video') && params.originalInput.fileDetails) baseFileName = params.originalInput.fileDetails.name.split('.')[0].replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
+      link.download = `${baseFileName || 'dreamtuner_output'}.mid`;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
     } catch (error) {
       setMidiError(error instanceof Error ? error.message : "Unknown error generating MIDI.");
@@ -272,13 +282,13 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     setIsCopied(false); setCopyError(null);
     let originalInputSummary = "";
     switch(params.originalInput.type) {
-      case 'text': originalInputSummary = `Text: "${params.originalInput.content.substring(0, 100)}${params.originalInput.content.length > 100 ? '...' : ''}"`; break;
+      case 'text': originalInputSummary = `Text: "${params.originalInput.content ? params.originalInput.content.substring(0, 100) : ''}${params.originalInput.content && params.originalInput.content.length > 100 ? '...' : ''}"`; break;
       case 'image': originalInputSummary = `Image: ${params.originalInput.fileDetails.name}`; break;
       case 'video': originalInputSummary = `Video Concept: ${params.originalInput.fileDetails.name}`; break;
     }
     if (params.selectedGenre) originalInputSummary += `\nGenre: ${params.selectedGenre}`;
 
-    const detailsToCopy = `ResonanceAI - Musical Essence:
+    const detailsToCopy = `DreamTuner - Musical Essence:
 ----------------------------------
 Generated Idea: ${params.generatedIdea}
 Original Input: ${originalInputSummary}
@@ -307,7 +317,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     switch(input.type) {
       case 'text':
         icon = <DocumentTextIcon className="w-6 h-6" />; title = "Original Input Text";
-        content = <ScrollArea className="h-24"><p className="text-muted-foreground text-sm italic whitespace-pre-wrap font-code">{input.content}</p></ScrollArea>;
+        content = <ScrollArea className="h-24"><p className="text-muted-foreground text-sm italic whitespace-pre-wrap font-code">{input.content || ""}</p></ScrollArea>;
         break;
       case 'image':
         icon = <PhotographIcon className="w-6 h-6" />; title = "Original Input Image";
@@ -358,8 +368,24 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   };
 
   const player = midiPlayerRef.current;
-  const playButtonDisabled = !player || (isPlayerLoadingSounds && !isPlaying) || (!midiFileStructLoaded && !isPlaying); 
+  const playButtonDisabled = !player || 
+                             (!midiFileStructLoaded && !isPlayerLoadingSounds && !isPlaying) || 
+                             (isPlayerLoadingSounds && !isPlaying);
   const showLoadingSpinnerInPlayButton = isPlayerLoadingSounds && !isPlaying;
+  
+  let statusMessage = "";
+  if (playerError) {
+    statusMessage = `Player Error: ${playerError}`;
+  } else if (params && !midiFileStructLoaded && !isPlaying && !isPlayerLoadingSounds) {
+    statusMessage = "Preparing MIDI data...";
+  } else if (midiFileStructLoaded && isPlayerLoadingSounds && !isPlaying) {
+    statusMessage = "Loading instrument sounds...";
+  } else if (midiFileStructLoaded && !isPlayerLoadingSounds && isPlaybackReady && !isPlaying && playbackProgress < 1) {
+    statusMessage = "Ready to play.";
+  } else if (midiFileStructLoaded && !isPlayerLoadingSounds && !isPlaybackReady && !isPlaying && playbackProgress >= 99) {
+    statusMessage = "Playback finished. Play again?";
+  }
+
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -398,10 +424,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
             </Button>
           </div>
           <Progress value={playbackProgress} className="mt-4 h-2.5 [&>div]:bg-stardust-blue" aria-label="MIDI playback progress" />
-          {playerError && <p className="text-red-400 text-sm text-center mt-2">{`Player Error: ${playerError}`}</p>}
-          {!playerError && params && !midiFileStructLoaded && !isPlaying && <p className="text-stardust-blue text-sm text-center mt-2 animate-pulse-subtle">Preparing MIDI...</p>}
-          {!playerError && midiFileStructLoaded && isPlayerLoadingSounds && !isPlaying && <p className="text-stardust-blue text-sm text-center mt-2 animate-pulse-subtle">Loading sounds...</p>}
-          {!playerError && midiFileStructLoaded && !isPlayerLoadingSounds && isPlaybackReady && !isPlaying && playbackProgress < 1 && <p className="text-stardust-blue text-sm text-center mt-2">Ready to play.</p>}
+          {statusMessage && <p className={`text-sm text-center mt-2 ${playerError ? 'text-red-400' : 'text-stardust-blue animate-pulse-subtle'}`}>{statusMessage}</p>}
         </CardContent>
       </Card>
 
@@ -421,3 +444,5 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     </div>
   );
 };
+
+
