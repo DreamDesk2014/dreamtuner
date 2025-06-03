@@ -1,3 +1,4 @@
+
 "use client";
 import React, { useState, useCallback } from 'react';
 import { InputForm } from '@/components/InputForm';
@@ -9,7 +10,7 @@ import { regenerateMusicalIdeaAction } from '@/app/actions/regenerateMusicalIdea
 import type { MusicParameters, AppInput } from '@/types';
 import { LogoIcon } from '@/components/icons/LogoIcon';
 import { Footer } from '@/components/Footer';
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function ResonanceAIPage() {
   const [musicParams, setMusicParams] = useState<MusicParameters | null>(null);
