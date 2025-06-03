@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: 'ResonanceAI',
+  title: 'DreamTuner',
   description: 'Translate Your Words, Images, or Video Concepts into Musical Vibrations',
 };
 

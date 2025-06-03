@@ -1,5 +1,5 @@
-# Firebase Studio
+# DreamTuner
 
-This is a NextJS starter in Firebase Studio.
+This is DreamTuner, a NextJS app built with Firebase Studio. It translates your words, images, or video concepts into musical vibrations.
 
 To get started, take a look at src/app/page.tsx.

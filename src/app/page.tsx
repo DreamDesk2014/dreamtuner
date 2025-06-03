@@ -12,7 +12,7 @@ import { LogoIcon } from '@/components/icons/LogoIcon';
 import { Footer } from '@/components/Footer';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function ResonanceAIPage() {
+export default function DreamTunerPage() {
   const [musicParams, setMusicParams] = useState<MusicParameters | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isRegeneratingIdea, setIsRegeneratingIdea] = useState<boolean>(false);
@@ -67,7 +67,7 @@ export default function ResonanceAIPage() {
         <div className="flex items-center justify-center space-x-3 mb-2">
           <LogoIcon className="w-12 h-12 text-stardust-blue" />
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-stardust-blue to-cosmic-purple font-headline">
-            ResonanceAI
+            DreamTuner
           </h1>
         </div>
         <p className="text-lg text-slate-300">Translate Your Words, Images, or Video Concepts into Musical Vibrations</p>
@@ -108,11 +108,11 @@ export default function ResonanceAIPage() {
         {showWelcome && !isLoading && !error && !musicParams && (
           <Card className="mt-10 text-center p-6 bg-nebula-gray/80 rounded-lg border-slate-700">
             <CardHeader>
-              <CardTitle className="text-2xl font-semibold text-stardust-blue mb-3 font-headline">Welcome to ResonanceAI</CardTitle>
+              <CardTitle className="text-2xl font-semibold text-stardust-blue mb-3 font-headline">Welcome to DreamTuner</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-slate-300">
-                Enter text, upload an image, or specify a video concept. Select a genre, and ResonanceAI will unveil its musical soul,
+                Enter text, upload an image, or specify a video concept. Select a genre, and DreamTuner will unveil its musical soul,
                 revealing the key, tempo, mood, and instrumental colors hidden within your input.
               </p>
             </CardContent>

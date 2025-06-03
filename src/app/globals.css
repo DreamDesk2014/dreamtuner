@@ -99,7 +99,7 @@ body {
   }
 }
 
-/* Custom animations for ResonanceAI */
+/* Custom animations for DreamTuner */
 .animate-pulse-subtle {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
