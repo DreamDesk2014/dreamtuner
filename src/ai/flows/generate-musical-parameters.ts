@@ -67,11 +67,11 @@ export async function generateMusicalParameters(
 const prompt = ai.definePrompt({
   name: 'generateMusicalParametersPrompt',
   model: 'googleai/gemini-1.5-flash-latest',
-  input: {schema: GenerateMusicalParametersInputSchema},
+  input: {schema: GenerateMusicalParametersInputSchema}, // Schema remains for flow input validation
   output: {schema: GenerateMusicalParametersOutputSchema},
   prompt: `You are DreamTuner, an AI that translates human expression into musical concepts.
 
-{{#if पीड़ा '===' 'kids'}}
+{{#if isKidsMode}}
   {{! Kids Mode Specific Prompt }}
   You are in Kids Mode! Analyze the following child's drawing. Focus on simple shapes, bright colors, the overall energy, and density of strokes.
   Image: {{media url=fileDetails.url}}
@@ -142,9 +142,15 @@ const generateMusicalParametersFlow = ai.defineFlow(
     inputSchema: GenerateMusicalParametersInputSchema,
     outputSchema: GenerateMusicalParametersOutputSchema,
   },
-  async input => {
-    // Default to 'standard' mode if not provided, which Zod schema handles with .default()
-    const {output} = await prompt(input);
+  async (input: GenerateMusicalParametersInput) => {
+    // Prepare a context object for Handlebars, including the isKidsMode flag
+    const handlebarsContext = {
+      ...input,
+      isKidsMode: input.mode === 'kids',
+    };
+    // The Zod schema ensures input.mode defaults to 'standard' if not provided.
+    const {output} = await prompt(handlebarsContext); // Pass the augmented context to the prompt
     return output!;
   }
 );
+
