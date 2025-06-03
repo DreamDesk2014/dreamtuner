@@ -20,7 +20,9 @@ const GenerateMusicalParametersInputSchema = z.object({
       name: z.string(),
       type: z.string(),
       size: z.number(),
-      url: z.string().optional(),
+      url: z.string().optional().describe(
+        "The image content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      ),
     })
     .optional(),
   genre: z.string().optional(),
@@ -61,32 +63,33 @@ export async function generateMusicalParameters(
 
 const prompt = ai.definePrompt({
   name: 'generateMusicalParametersPrompt',
+  model: 'googleai/gemini-pro-vision', // Specify a vision-capable model
   input: {schema: GenerateMusicalParametersInputSchema},
   output: {schema: GenerateMusicalParametersOutputSchema},
   prompt: `You are DreamTuner, an AI that translates human expression into musical concepts.
 
-{% if type === 'text' %}
+{{#if type '===' 'text'}}
 Analyze the following text and generate a detailed set of musical parameters that capture its essence.
 The text is: {{{content}}}
-{% endif %}
+{{/if}}
 
-{% if type === 'image' %}
+{{#if type '===' 'image'}}
 Analyze the following image and generate a detailed set of musical parameters that capture its essence (colors, mood, objects, composition).
 Image: {{media url=fileDetails.url}}
-{% endif %}
+{{/if}}
 
-{% if type === 'video' %}
+{{#if type '===' 'video'}}
 Conceptually analyze the video (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Video{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
 Generate a detailed set of musical parameters that capture its conceptual essence (e.g., theme, pacing, visual mood, implied narrative).
 Note: The video content itself is not provided, only its metadata. Base your analysis on the concept typically associated with a video of this name and type.
-{% endif %}
+{{/if}}
 
-{% if genre %}
+{{#if genre}}
 The user has specified a musical genre: '{{{genre}}}'.
 Please ensure the generated musical parameters are stylistically appropriate for this genre, while still reflecting the core essence of the primary input (text, image, or video concept).
-{% else %}
+{{else}}
 No specific musical genre was provided. You have creative freedom to suggest parameters based purely on the input's perceived essence.
-{% endif %}
+{{/if}}
 
 For all inputs, generate the following musical parameters:
 - keySignature: The musical key and its quality (e.g., "C# major", "F minor").
