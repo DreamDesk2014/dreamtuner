@@ -64,7 +64,7 @@ export async function generateMusicalParameters(
 
 const prompt = ai.definePrompt({
   name: 'generateMusicalParametersPrompt',
-  model: 'googleai/gemini-pro-vision', // Specify a vision-capable model
+  model: 'googleai/gemini-1.5-flash-latest', // Updated from gemini-pro-vision
   input: {schema: GenerateMusicalParametersInputSchema},
   output: {schema: GenerateMusicalParametersOutputSchema},
   prompt: `You are DreamTuner, an AI that translates human expression into musical concepts.
