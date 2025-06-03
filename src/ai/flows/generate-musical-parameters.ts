@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -68,20 +69,26 @@ const prompt = ai.definePrompt({
   output: {schema: GenerateMusicalParametersOutputSchema},
   prompt: `You are DreamTuner, an AI that translates human expression into musical concepts.
 
-{{#if type '===' 'text'}}
-Analyze the following text and generate a detailed set of musical parameters that capture its essence.
-The text is: {{{content}}}
-{{/if}}
-
-{{#if type '===' 'image'}}
+{{! Check for image first, as fileDetails.url is most specific }}
+{{#if fileDetails.url}}
 Analyze the following image and generate a detailed set of musical parameters that capture its essence (colors, mood, objects, composition).
 Image: {{media url=fileDetails.url}}
-{{/if}}
-
-{{#if type '===' 'video'}}
+{{else}}
+  {{! Not an image; check if it's video (has fileDetails but no url) }}
+  {{#if fileDetails}}
 Conceptually analyze the video (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Video{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
 Generate a detailed set of musical parameters that capture its conceptual essence (e.g., theme, pacing, visual mood, implied narrative).
 Note: The video content itself is not provided, only its metadata. Base your analysis on the concept typically associated with a video of this name and type.
+  {{else}}
+    {{! Not an image or video; check if it's text (has content but no fileDetails) }}
+    {{#if content}}
+Analyze the following text and generate a detailed set of musical parameters that capture its essence.
+The text is: {{{content}}}
+    {{else}}
+{{! Fallback if none of the primary conditions are met }}
+No specific input type (text, image with URL, or video details) was clearly identified. Please generate musical parameters based on any general information available or indicate the need for clearer input.
+    {{/if}}
+  {{/if}}
 {{/if}}
 
 {{#if genre}}
@@ -118,3 +125,4 @@ const generateMusicalParametersFlow = ai.defineFlow(
     return output!;
   }
 );
+
