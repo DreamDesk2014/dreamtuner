@@ -9,22 +9,24 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
     const flowInput: FlowInput = {
       type: input.type,
       genre: input.genre,
-      mode: input.mode, // Pass the mode
+      mode: input.mode,
     };
 
     if (input.type === 'text') {
       flowInput.content = input.content;
     } else if (input.type === 'image') {
-      // The AI flow's prompt for image uses {{media url=fileDetails.url}}
-      // So, the base64 data string should be passed as fileDetails.url
-      flowInput.content = input.content; // Keep base64 in content for reference if needed
+      flowInput.content = input.content; 
       flowInput.mimeType = input.mimeType;
       flowInput.fileDetails = {
         name: input.fileDetails.name,
         type: input.fileDetails.type,
         size: input.fileDetails.size,
-        url: input.fileDetails.url, // This should be the base64 data URI
+        url: input.fileDetails.url, 
       };
+      // Add voiceDescription if it exists (primarily for kids mode with image)
+      if (input.voiceDescription) {
+        flowInput.voiceDescription = input.voiceDescription;
+      }
     } else if (input.type === 'video') {
       flowInput.fileDetails = input.fileDetails;
     }
@@ -33,7 +35,7 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
 
     const resultForClient: MusicParameters = {
       ...aiResult,
-      originalInput: input, // originalInput now includes the mode
+      originalInput: input, 
       selectedGenre: input.genre,
     };
     return resultForClient;

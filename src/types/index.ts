@@ -1,5 +1,6 @@
 
-import type { GenerateMusicalParametersOutput as AIOutput, GenerateMusicalParametersInput as FlowInputType } from '@/ai/flows/generate-musical-parameters';
+
+import type { GenerateMusicalParametersOutput as AIOutput, GenerateMusicalParametersInput as FlowInputTypeOriginal } from '@/ai/flows/generate-musical-parameters';
 
 export type InputType = 'text' | 'image' | 'video'; // Kept for InputForm internal state if needed
 
@@ -19,7 +20,7 @@ export interface BaseAppInput {
 
 export type AppInput = BaseAppInput & (
   | { type: 'text'; content: string; }
-  | { type: 'image'; content: string; mimeType: string; fileDetails: FilePreview; } // content is base64 for AI
+  | { type: 'image'; content: string; mimeType: string; fileDetails: FilePreview; voiceDescription?: string; } // content is base64 for AI, voiceDescription for kids mode
   | { type: 'video'; fileDetails: FilePreview; }
 );
 
@@ -30,8 +31,11 @@ export interface MusicParameters extends AIOutput {
   selectedGenre?: string; // This is somewhat redundant as originalInput.genre exists.
 }
 
-// For mapping to AI Flow input schema which will be updated
-export type FlowInput = FlowInputType;
+// For mapping to AI Flow input schema
+// We extend the original FlowInputType to include voiceDescription
+export interface FlowInput extends FlowInputTypeOriginal {
+  voiceDescription?: string;
+}
 
 
 // Helper type for the structure Gemini might return if not perfectly matching AIOutput

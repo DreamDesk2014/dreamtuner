@@ -1,9 +1,11 @@
 
 "use client";
-import React, { useState, useCallback, useId } from 'react';
+import React, { useState, useCallback, useId, useEffect } from 'react';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { DocumentTextIcon, PhotographIcon, VideoCameraIcon, XCircleIcon, UploadCloudIcon } from './icons/HeroIcons';
-import type { InputType as StandardInputType, AppInput, FilePreview } from '@/types'; // Renamed InputType to StandardInputType
+import { Mic, MicOff } from 'lucide-react';
+import useSpeechRecognition from '@/hooks/useSpeechRecognition';
+import type { InputType as StandardInputType, AppInput, FilePreview } from '@/types';
 import { MAX_IMAGE_FILE_SIZE_BYTES, MAX_IMAGE_FILE_SIZE_MB, MUSIC_GENRES } from '@/lib/constants';
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,7 +31,7 @@ const readFileAsDataURL = (file: File): Promise<string> => {
 };
 
 export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selectedGenre, onGenreChange }) => {
-  const [currentStandardInputType, setCurrentStandardInputType] = useState<StandardInputType>('text'); // Renamed state variable
+  const [currentStandardInputType, setCurrentStandardInputType] = useState<StandardInputType>('text');
   const [text, setText] = useState<string>('');
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -37,6 +39,36 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const fileInputId = useId();
   const textInputId = useId();
   const genreSelectId = useId();
+
+  const {
+    transcript,
+    interimTranscript,
+    isListening,
+    startListening,
+    stopListening,
+    hasRecognitionSupport,
+    error: speechError,
+    resetTranscript
+  } = useSpeechRecognition();
+
+  useEffect(() => {
+    if (currentStandardInputType === 'text') {
+      if (isListening) {
+        setText(transcript + interimTranscript);
+      } else if (transcript && !interimTranscript) { // Final transcript after listening stops
+        setText(transcript);
+      }
+    }
+  }, [transcript, interimTranscript, isListening, currentStandardInputType]);
+
+  const handleVoiceInputToggle = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      resetTranscript(); // Reset before starting new recording
+      startListening();
+    }
+  };
 
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -87,7 +119,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading) return;
+    if (isLoading || isListening) return; // Disable submit if listening
 
     let appInputPartial: Omit<AppInput, 'mode' | 'genre'> | null = null;
 
@@ -110,16 +142,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     }
 
     if (appInputPartial) {
-      // The 'mode' will be added by the parent page.tsx component
-      // The 'genre' is handled by the parent as well through props.
       onSubmit({ ...appInputPartial, genre: selectedGenre } as AppInput); 
     } else {
-      if (currentStandardInputType === 'text') setFileError("Please enter some text.");
+      if (currentStandardInputType === 'text') setFileError("Please enter some text or use voice input.");
       else setFileError("Please select a file.");
     }
   };
   
-  const isSubmitDisabled = isLoading || 
+  const isSubmitDisabled = isLoading || isListening ||
     (currentStandardInputType === 'text' && !text.trim()) ||
     ((currentStandardInputType === 'image' || currentStandardInputType === 'video') && !filePreview) ||
     !!fileError;
@@ -152,6 +182,8 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               onClick={() => { 
                 setCurrentStandardInputType(opt.type); 
                 setText(''); 
+                resetTranscript();
+                if (isListening) stopListening();
                 setFilePreview(null); 
                 setFileError(null); 
                 const fileInput = document.getElementById(fileInputId) as HTMLInputElement;
@@ -160,6 +192,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               className={`flex-1 p-3 text-sm font-medium flex items-center justify-center transition-all duration-150 
                 ${currentStandardInputType === opt.type ? 'bg-cosmic-purple text-primary-foreground shadow-md' : 'text-slate-300 hover:bg-nebula-gray'}`}
               aria-pressed={currentStandardInputType === opt.type}
+              disabled={isLoading}
             >
               <opt.icon className={`w-5 h-5 mr-2 ${currentStandardInputType === opt.type ? 'text-primary-foreground' : 'text-stardust-blue'}`} />
               {opt.label}
@@ -170,20 +203,37 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
       {currentStandardInputType === 'text' && (
         <div>
-          <Label htmlFor={textInputId} className="block text-sm font-medium text-stardust-blue mb-1">
-            Enter Your Text:
-          </Label>
+          <div className="flex justify-between items-center mb-1">
+            <Label htmlFor={textInputId} className="block text-sm font-medium text-stardust-blue">
+              Enter Your Text:
+            </Label>
+            {hasRecognitionSupport && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleVoiceInputToggle}
+                disabled={isLoading}
+                className="text-sm border-slate-600 hover:bg-slate-700"
+              >
+                {isListening ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
+                {isListening ? 'Stop' : 'Speak'}
+              </Button>
+            )}
+          </div>
           <Textarea
             id={textInputId}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="A lonely star in a cold, dark night..."
+            placeholder={isListening ? "Listening..." : "A lonely star in a cold, dark night..."}
             rows={6}
             className="w-full p-4 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
-            disabled={isLoading}
+            disabled={isLoading || isListening}
           />
+          {speechError && <p className="mt-1 text-xs text-red-400">{speechError}</p>}
+          {!hasRecognitionSupport && <p className="mt-1 text-xs text-muted-foreground">Voice input not supported in your browser.</p>}
           <p className="mt-2 text-xs text-muted-foreground">
-            Describe a scene, a feeling, a poem, or a short story.
+            Describe a scene, a feeling, a poem, or a short story. Or use the microphone!
           </p>
         </div>
       )}
@@ -237,11 +287,11 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       )}
 
       <div className="mt-6">
-        <Label htmlFor={genreSelectId} className="block text-lg font-medium text-stardust-blue mb-3">
+        <Label htmlFor={genreSelectId + "-standard"} className="block text-lg font-medium text-stardust-blue mb-3">
           2. Select Music Genre (Optional):
         </Label>
         <Select value={selectedGenre} onValueChange={onGenreChange} disabled={isLoading}>
-          <SelectTrigger id={genreSelectId} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 text-galaxy-white">
+          <SelectTrigger id={genreSelectId + "-standard"} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 text-galaxy-white">
             <SelectValue placeholder="Select a genre" />
           </SelectTrigger>
           <SelectContent className="bg-nebula-gray border-slate-500 text-galaxy-white">

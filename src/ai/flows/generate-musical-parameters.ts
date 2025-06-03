@@ -3,7 +3,7 @@
 
 /**
  * @fileOverview Generates musical parameters based on user input (text, image, video),
- * and supports a 'kids' mode for interpreting drawings.
+ * and supports a 'kids' mode for interpreting drawings with optional voice hints.
  *
  * - generateMusicalParameters - A function that handles the generation of musical parameters.
  * - GenerateMusicalParametersInput - The input type for the generateMusicalParameters function.
@@ -29,6 +29,7 @@ const GenerateMusicalParametersInputSchema = z.object({
     .optional(),
   genre: z.string().optional(),
   mode: z.enum(['standard', 'kids']).default('standard').optional().describe("The operating mode: 'standard' for general inputs, 'kids' for children's drawings."),
+  voiceDescription: z.string().optional().describe("Optional voice-derived text description, especially for Kids Mode drawings."),
 });
 export type GenerateMusicalParametersInput = z.infer<
   typeof GenerateMusicalParametersInputSchema
@@ -66,8 +67,8 @@ export async function generateMusicalParameters(
 
 const prompt = ai.definePrompt({
   name: 'generateMusicalParametersPrompt',
-  model: 'googleai/gemini-1.5-flash-latest',
-  input: {schema: GenerateMusicalParametersInputSchema}, // Schema remains for flow input validation
+  model: 'googleai/gemini-1.5-flash-latest', 
+  input: {schema: GenerateMusicalParametersInputSchema}, 
   output: {schema: GenerateMusicalParametersOutputSchema},
   prompt: `You are DreamTuner, an AI that translates human expression into musical concepts.
 
@@ -75,8 +76,12 @@ const prompt = ai.definePrompt({
   {{! Kids Mode Specific Prompt }}
   You are in Kids Mode! Analyze the following child's drawing. Focus on simple shapes, bright colors, the overall energy, and density of strokes.
   Image: {{media url=fileDetails.url}}
+  {{#if voiceDescription}}
+  The child also provided this voice hint about their drawing: "{{{voiceDescription}}}"
+  Use this hint to further understand the drawing's theme or mood, and let it influence the 'generatedIdea'.
+  {{/if}}
 
-  Translate these visual elements into simple, playful, and melody-focused musical parameters.
+  Translate these visual elements (and optional voice hint) into simple, playful, and melody-focused musical parameters.
   - keySignature: Use major keys primarily (e.g., "C major", "G major").
   - mode: Should be "major".
   - tempoBpm: Suggest moderate tempos (e.g., 90-130 BPM).
@@ -86,7 +91,7 @@ const prompt = ai.definePrompt({
   - harmonicComplexity: Keep very low (0.0 to 0.3).
   - targetValence: Should be positive (0.5 to 1.0).
   - targetArousal: Can be low to mid (-0.5 to 0.5).
-  - generatedIdea: A brief, fun, and imaginative textual description (maximum 20 words) of the musical piece inspired by the drawing.
+  - generatedIdea: A brief, fun, and imaginative textual description (maximum 20 words) of the musical piece inspired by the drawing{{#if voiceDescription}} and the voice hint{{/if}}.
 
   {{#if genre}}
   The user has also selected a musical genre: '{{{genre}}}'. Try to subtly incorporate this genre if it complements the playful nature, but prioritize the kid-friendly parameters above.
@@ -143,14 +148,11 @@ const generateMusicalParametersFlow = ai.defineFlow(
     outputSchema: GenerateMusicalParametersOutputSchema,
   },
   async (input: GenerateMusicalParametersInput) => {
-    // Prepare a context object for Handlebars, including the isKidsMode flag
     const handlebarsContext = {
       ...input,
       isKidsMode: input.mode === 'kids',
     };
-    // The Zod schema ensures input.mode defaults to 'standard' if not provided.
-    const {output} = await prompt(handlebarsContext); // Pass the augmented context to the prompt
+    const {output} = await prompt(handlebarsContext); 
     return output!;
   }
 );
-

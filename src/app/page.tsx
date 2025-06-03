@@ -1,6 +1,6 @@
 
 "use client";
-import React, { useState, useCallback, useId } from 'react';
+import React, { useState, useCallback, useId, useEffect } from 'react';
 import { InputForm } from '@/components/InputForm';
 import { MusicOutputDisplay } from '@/components/MusicOutputDisplay';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
@@ -18,6 +18,8 @@ import { SparklesIcon } from '@/components/icons/SparklesIcon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { MUSIC_GENRES } from '@/lib/constants';
+import useSpeechRecognition from '@/hooks/useSpeechRecognition';
+import { Mic, MicOff } from 'lucide-react';
 
 export default function DreamTunerPage() {
   const [musicParams, setMusicParams] = useState<MusicParameters | null>(null);
@@ -31,6 +33,16 @@ export default function DreamTunerPage() {
   const [selectedGenre, setSelectedGenre] = useState<string>(MUSIC_GENRES[0] || '');
   const genreSelectId = useId();
 
+  const {
+    transcript: kidsVoiceTranscript,
+    interimTranscript: kidsInterimTranscript,
+    isListening: isListeningKids,
+    startListening: startListeningKids,
+    stopListening: stopListeningKids,
+    hasRecognitionSupport: hasRecognitionSupportKids,
+    error: speechErrorKids,
+    resetTranscript: resetKidsTranscript
+  } = useSpeechRecognition();
 
   const handleInputSubmit = useCallback(async (input: AppInput) => {
     setIsLoading(true);
@@ -73,7 +85,7 @@ export default function DreamTunerPage() {
     const fileDetails: FilePreview = {
       name: "kids_drawing.png",
       type: "image/png",
-      size: base64Content.length * 0.75, // Approximate size
+      size: base64Content.length * 0.75, 
       url: drawingDataURL,
     };
 
@@ -84,10 +96,19 @@ export default function DreamTunerPage() {
       fileDetails: fileDetails,
       genre: selectedGenre,
       mode: 'kids',
+      voiceDescription: kidsVoiceTranscript.trim() || undefined, // Pass final transcript for kids
     };
     handleInputSubmit(kidsInput);
-  }, [handleInputSubmit, selectedGenre]);
+  }, [handleInputSubmit, selectedGenre, kidsVoiceTranscript]);
 
+  const handleKidsVoiceInputToggle = () => {
+    if (isListeningKids) {
+      stopListeningKids();
+    } else {
+      resetKidsTranscript();
+      startListeningKids();
+    }
+  };
 
   const handleRegenerateIdea = useCallback(async () => {
     if (!musicParams) return;
@@ -110,7 +131,7 @@ export default function DreamTunerPage() {
   
   const mainTitle = currentMode === 'kids' ? "DreamTuner Kids!" : "DreamTuner";
   const mainSubtitle = currentMode === 'kids' 
-    ? "Draw a picture and hear its music!"
+    ? "Draw a picture (and optionally add a voice hint!) to hear its music!"
     : "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
 
   return (
@@ -152,11 +173,43 @@ export default function DreamTunerPage() {
               </CardHeader>
               <CardContent className="p-6 sm:p-10 space-y-6">
                 <DrawingCanvas ref={drawingCanvasRef} width={500} height={300} />
+                
+                <div className="mt-4 space-y-2">
+                  <Label className="block text-md font-medium text-stardust-blue">
+                    Add a Voice Hint (Optional):
+                  </Label>
+                  {hasRecognitionSupportKids ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleKidsVoiceInputToggle}
+                      disabled={isLoading}
+                      className="w-full text-sm border-slate-600 hover:bg-slate-700 flex items-center justify-center"
+                    >
+                      {isListeningKids ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
+                      {isListeningKids ? 'Stop Listening & Save Hint' : 'Record Voice Hint'}
+                    </Button>
+                  ) : (
+                     <p className="text-xs text-muted-foreground text-center">Voice input not supported in this browser.</p>
+                  )}
+                  {isListeningKids && (
+                    <p className="text-sm text-slate-300 text-center p-2 bg-slate-700/50 rounded-md">
+                      Listening: <em className="text-galaxy-white">{kidsVoiceTranscript}{kidsInterimTranscript}</em>
+                    </p>
+                  )}
+                  {!isListeningKids && kidsVoiceTranscript && (
+                     <p className="text-sm text-slate-300 text-center p-2 bg-slate-700/50 rounded-md">
+                      Your hint: <em className="text-galaxy-white">{kidsVoiceTranscript}</em>
+                    </p>
+                  )}
+                  {speechErrorKids && <p className="mt-1 text-xs text-red-400 text-center">{speechErrorKids}</p>}
+                </div>
+
                 <div className="mt-4">
                   <Label htmlFor={genreSelectId + "-kids"} className="block text-lg font-medium text-stardust-blue mb-3">
                     What kind of music style? (Optional):
                   </Label>
-                  <Select value={selectedGenre} onValueChange={setSelectedGenre} disabled={isLoading}>
+                  <Select value={selectedGenre} onValueChange={setSelectedGenre} disabled={isLoading || isListeningKids}>
                     <SelectTrigger id={genreSelectId + "-kids"} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 text-galaxy-white">
                       <SelectValue placeholder="Select a genre" />
                     </SelectTrigger>
@@ -171,7 +224,7 @@ export default function DreamTunerPage() {
                 </div>
                 <Button
                   onClick={handleDrawingSubmit}
-                  disabled={isLoading}
+                  disabled={isLoading || isListeningKids}
                   className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-gradient-to-r from-stardust-blue to-green-400 hover:from-sky-500 hover:to-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-nebula-dark focus:ring-stardust-blue disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
                   size="lg"
                 >
@@ -193,7 +246,7 @@ export default function DreamTunerPage() {
               </CardContent>
             </Card>
           </TabsContent>
-        </Tabs> {/* Tabs component now correctly wraps TabsContent */}
+        </Tabs>
         
         {isLoading && (
           <div className="mt-10 text-center">
@@ -229,8 +282,8 @@ export default function DreamTunerPage() {
             </CardHeader>
             <CardContent>
               <p className="text-slate-300">
-                Enter text, upload an image, or specify a video concept. Select a genre, and DreamTuner will unveil its musical soul,
-                revealing the key, tempo, mood, and instrumental colors hidden within your input. Or, switch to Kids Mode and draw something!
+                Enter text (or speak!), upload an image, or specify a video concept. Select a genre, and DreamTuner will unveil its musical soul.
+                Or, switch to Kids Mode, draw something, and optionally give a voice hint!
               </p>
             </CardContent>
           </Card>
