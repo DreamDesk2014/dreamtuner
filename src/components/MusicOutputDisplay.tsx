@@ -10,16 +10,19 @@ import {
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
   LibraryIcon, PlayIcon, PauseIcon, StopIcon
 } from './icons/HeroIcons';
+import { SparklesIcon as HeroSparklesIcon } from './icons/SparklesIcon'; // Corrected import
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
+import { Skeleton } from '@/components/ui/skeleton'; // For loading state of rendered image
 
 interface MusicOutputDisplayProps {
   params: MusicParameters;
   onRegenerateIdea: () => Promise<void>;
   isRegeneratingIdea: boolean;
+  isRenderingDrawing?: boolean; // New prop for AI sketch loading state
 }
 
 interface ParameterCardProps {
@@ -62,7 +65,7 @@ const ParameterCardComponent: React.FC<ParameterCardProps> = ({ title, value, ic
   );
 };
 
-export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, onRegenerateIdea, isRegeneratingIdea }) => {
+export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, onRegenerateIdea, isRegeneratingIdea, isRenderingDrawing }) => {
   const [midiError, setMidiError] = useState<string | null>(null);
   const [isGeneratingMidiForDownload, setIsGeneratingMidiForDownload] = useState<boolean>(false);
   const [isCopied, setIsCopied] = useState<boolean>(false);
@@ -164,7 +167,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     return () => {
       if (midiPlayerRef.current) {
         midiPlayerRef.current.stop();
-        midiPlayerRef.current = null;
+        midiPlayerRef.current = null; // Important to nullify to allow GC
       }
       if (soundLoadingTimeoutRef.current) {
         clearTimeout(soundLoadingTimeoutRef.current);
@@ -232,10 +235,10 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
             if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
             soundLoadingTimeoutRef.current = setTimeout(() => {
-              const currentPlayer = midiPlayerRef.current;
+              const currentPlayer = midiPlayerRef.current; // Re-access ref inside timeout
               if (currentPlayer && isPlayerLoadingSoundsRef.current) { 
                  setPlayerError("Sound loading timed out. Check connection or try a different genre.");
-                 currentPlayer.stop(); // Attempt to stop first
+                 currentPlayer.stop(); // Attempt to stop the player
                  setIsPlayerLoadingSounds(false); 
                  setIsPlaying(false); 
                  setIsPlaybackReady(false); 
@@ -265,12 +268,13 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       clearTimeout(soundLoadingTimeoutRef.current);
       soundLoadingTimeoutRef.current = null;
     }
-
+    
+    // Force UI state update immediately
     setIsPlayerLoadingSounds(false);
     setIsPlaying(false);
     setIsPlaybackReady(false);
     setPlaybackProgress(0);
-    setPlayerError(null); 
+    setPlayerError(null); // Clear any existing player errors, including timeout
 
     player.stop();
   }, []);
@@ -304,8 +308,12 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       case 'video': originalInputSummary = `Video Concept: ${params.originalInput.fileDetails.name}`; break;
     }
     if (params.selectedGenre) originalInputSummary += `\nGenre: ${params.selectedGenre}`;
+    if (params.originalInput.mode === 'kids' && params.originalInput.type === 'image' && params.originalInput.voiceDescription) {
+        originalInputSummary += `\nChild's Voice Hint: "${params.originalInput.voiceDescription}"`;
+    }
 
-    const detailsToCopy = `DreamTuner - Musical Essence:
+
+    const detailsToCopy = `DreamTuner - Musical Essence (${params.originalInput.mode} mode):
 ----------------------------------
 Generated Idea: ${params.generatedIdea}
 Original Input: ${originalInputSummary}
@@ -337,15 +345,26 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         content = <ScrollArea className="h-24"><p className="text-muted-foreground text-sm italic whitespace-pre-wrap font-code">{input.content || ""}</p></ScrollArea>;
         break;
       case 'image':
-        icon = <PhotographIcon className="w-6 h-6" />; title = "Original Input Image";
+        icon = <PhotographIcon className="w-6 h-6" />; title = input.mode === 'kids' ? "Child's Original Drawing" : "Original Input Image";
         content = (<>
             <p className="text-muted-foreground text-sm italic">Filename: {input.fileDetails.name}</p>
-            {input.fileDetails.url && <Image src={input.fileDetails.url} alt={input.fileDetails.name} data-ai-hint="pattern background" width={160} height={160} className="mt-2 rounded max-h-40 object-contain border border-slate-700"/>}
+            {input.fileDetails.url && <Image src={input.fileDetails.url} alt={input.fileDetails.name} data-ai-hint={input.mode === 'kids' ? "kids drawing" : "abstract texture"} width={160} height={160} className="mt-2 rounded max-h-40 object-contain border border-slate-700"/>}
+             {input.mode === 'kids' && input.voiceDescription && (
+                <p className="text-muted-foreground text-xs italic mt-2">Voice Hint: "{input.voiceDescription}"</p>
+             )}
+             {input.mode === 'standard' && input.additionalContext && (
+                <p className="text-muted-foreground text-xs italic mt-2">Additional Context: "{input.additionalContext}"</p>
+             )}
           </>);
         break;
       case 'video':
         icon = <VideoCameraIcon className="w-6 h-6" />; title = "Original Input Video Concept";
-        content = <p className="text-muted-foreground text-sm italic">Filename: {input.fileDetails.name} (Analyzed conceptually)</p>;
+        content = <>
+            <p className="text-muted-foreground text-sm italic">Filename: {input.fileDetails.name} (Analyzed conceptually)</p>;
+            {input.additionalContext && (
+                <p className="text-muted-foreground text-xs italic mt-2">Additional Context: "{input.additionalContext}"</p>
+             )}
+        </>;
         break;
       default: return null;
     }
@@ -369,6 +388,48 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     );
   }
 
+  const renderAiSketch = () => {
+    if (params.originalInput.mode !== 'kids' || (!isRenderingDrawing && !params.renderedDrawingDataUrl)) {
+      return null;
+    }
+
+    return (
+      <Card className="mt-8 bg-nebula-gray/80 border-slate-700">
+        <CardHeader>
+          <div className="flex items-center text-stardust-blue mb-2">
+            <HeroSparklesIcon className="w-6 h-6" />
+            <CardTitle className="ml-2 text-lg font-semibold">AI's Artistic Rendition</CardTitle>
+          </div>
+           <CardDescription className="text-sm text-muted-foreground">
+            See how our AI artist reimagined the drawing!
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center items-center">
+          {isRenderingDrawing && !params.renderedDrawingDataUrl && (
+            <div className="flex flex-col items-center space-y-2">
+              <Skeleton className="h-[200px] w-[250px] rounded-md bg-slate-700" />
+              <p className="text-sm text-stardust-blue animate-pulse-subtle">AI is painting...</p>
+            </div>
+          )}
+          {!isRenderingDrawing && params.renderedDrawingDataUrl && (
+            <Image 
+              src={params.renderedDrawingDataUrl} 
+              alt="AI Rendered Sketch" 
+              data-ai-hint="illustration drawing"
+              width={300} 
+              height={200} 
+              className="rounded-md max-h-60 object-contain border border-slate-600 shadow-lg"
+            />
+          )}
+           {!isRenderingDrawing && !params.renderedDrawingDataUrl && (
+            <p className="text-sm text-muted-foreground">Could not generate an AI rendition this time.</p>
+           )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+
   const getRhythmicDensityDescription = (density: number) => {
     if (density > 0.8) return "Very Active & Dense"; if (density > 0.6) return "Quite Active";
     if (density > 0.4) return "Moderately Active"; if (density > 0.2) return "Less Active";
@@ -387,7 +448,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   const player = midiPlayerRef.current;
   const playButtonDisabled = !player ||
                              (!midiFileStructLoaded && !isPlayerLoadingSounds && !isPlaying) ||
-                             (isPlayerLoadingSounds && !isPlaying); // Disabled if loading sounds and not yet playing
+                             (isPlayerLoadingSounds && !isPlaying); 
   const showLoadingSpinnerInPlayButton = isPlayerLoadingSounds && !isPlaying;
 
   let statusMessage = "";
@@ -458,8 +519,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         {copyError && <p className="text-red-400 text-sm">{copyError}</p>}
       </div>
       {params.originalInput && renderOriginalInputInfo(params.originalInput)}
+      {renderAiSketch()} {/* Call the function to render AI sketch */}
     </div>
   );
 };
-
-    

@@ -1,5 +1,6 @@
 
 import type { GenerateMusicalParametersOutput as AIOutput, GenerateMusicalParametersInput as FlowInputTypeOriginal } from '@/ai/flows/generate-musical-parameters';
+import type { RenderKidsDrawingOutput } from '@/ai/flows/render-kids-drawing-flow'; // Will be created
 
 export type InputType = 'text' | 'image' | 'video'; // Kept for InputForm internal state if needed
 
@@ -28,6 +29,7 @@ export type AppInput = BaseAppInput & (
 export interface MusicParameters extends AIOutput {
   originalInput: AppInput;
   selectedGenre?: string; // This is somewhat redundant as originalInput.genre exists.
+  renderedDrawingDataUrl?: string; // For AI-rendered sketch in Kids Mode
 }
 
 // For mapping to AI Flow input schema
@@ -56,3 +58,6 @@ export interface GeminiMusicParamsResponse {
 export interface NewIdeaResponse {
   newIdea: string;
 }
+
+// Types for the new image rendering flow
+export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}

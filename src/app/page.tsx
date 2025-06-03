@@ -8,10 +8,11 @@ import { ErrorMessage } from '@/components/ErrorMessage';
 import { DrawingCanvas } from '@/components/DrawingCanvas';
 import { generateMusicParametersAction } from '@/app/actions/generateMusicParametersAction';
 import { regenerateMusicalIdeaAction } from '@/app/actions/regenerateMusicalIdeaAction';
+import { renderKidsDrawingAction } from '@/app/actions/renderKidsDrawingAction';
 import type { MusicParameters, AppInput, FilePreview } from '@/types';
 import { LogoIcon } from '@/components/icons/LogoIcon';
 import { Footer } from '@/components/Footer';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
 import { SparklesIcon } from '@/components/icons/SparklesIcon';
@@ -19,12 +20,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { MUSIC_GENRES } from '@/lib/constants';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic, MicOff, Image as LucideImage } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+
 
 export default function DreamTunerPage() {
   const [musicParams, setMusicParams] = useState<MusicParameters | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isRegeneratingIdea, setIsRegeneratingIdea] = useState<boolean>(false);
+  const [isRenderingDrawing, setIsRenderingDrawing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState<boolean>(true);
   const [currentMode, setCurrentMode] = useState<'standard' | 'kids'>('standard');
@@ -56,15 +60,34 @@ export default function DreamTunerPage() {
     setShowWelcome(false);
 
     try {
-      const result = await generateMusicParametersAction(input);
-      if ('error' in result) {
-        setError(result.error);
+      const musicResult = await generateMusicParametersAction(input);
+      if ('error' in musicResult) {
+        setError(musicResult.error);
+        setMusicParams(null);
       } else {
-        setMusicParams(result);
+        setMusicParams(musicResult);
+        // If kids mode and image input (drawing), also try to render the drawing
+        if (input.mode === 'kids' && input.type === 'image' && input.fileDetails?.url) {
+          setIsRenderingDrawing(true);
+          toast({ title: "DreamTuner Magic ✨", description: "Music idea created! Now, let's try to paint your drawing with AI..." });
+          const drawingDataUrl = input.fileDetails.url;
+          const voiceHint = input.voiceDescription;
+          const musicalIdea = musicResult.generatedIdea;
+
+          const renderResult = await renderKidsDrawingAction(drawingDataUrl, voiceHint, musicalIdea);
+          if ('error' in renderResult) {
+            toast({ variant: "destructive", title: "AI Artist Hiccup", description: `Couldn't render the drawing: ${renderResult.error}` });
+          } else if (renderResult.renderedDrawingDataUrl) {
+            setMusicParams(prevParams => prevParams ? { ...prevParams, renderedDrawingDataUrl: renderResult.renderedDrawingDataUrl } : null);
+             toast({ title: "Artwork Ready!", description: "Your drawing has been reimagined by AI!" });
+          }
+          setIsRenderingDrawing(false);
+        }
       }
     } catch (err) {
-      console.error("Error generating music parameters:", err);
-      setError(err instanceof Error ? `Failed to generate music: ${err.message}.` : "An unknown error occurred.");
+      console.error("Error in main submission process:", err);
+      setError(err instanceof Error ? `Failed process input: ${err.message}.` : "An unknown error occurred.");
+      setMusicParams(null);
     } finally {
       setIsLoading(false);
     }
@@ -78,6 +101,7 @@ export default function DreamTunerPage() {
     const drawingDataURL = drawingCanvasRef.current.getDataURL();
     if (!drawingDataURL || drawingDataURL === 'data:,') {
         setError("Please draw something on the canvas first!");
+        toast({ variant: "destructive", title: "Empty Canvas", description: "Please draw something before tuning!" });
         return;
     }
 
@@ -96,14 +120,14 @@ export default function DreamTunerPage() {
 
     const kidsInput: AppInput = {
       type: 'image',
-      content: base64Content,
+      content: base64Content, // content is base64 for AI
       mimeType: 'image/png',
-      fileDetails: fileDetails,
+      fileDetails: fileDetails, // fileDetails includes data URI for AI
       genre: selectedGenre,
       mode: 'kids',
       voiceDescription: kidsVoiceTranscript.trim() || undefined, 
     };
-    handleInputSubmit(kidsInput);
+    await handleInputSubmit(kidsInput);
   }, [handleInputSubmit, selectedGenre, kidsVoiceTranscript]);
 
   const handleKidsVoiceInputToggle = () => {
@@ -136,7 +160,7 @@ export default function DreamTunerPage() {
   
   const mainTitle = currentMode === 'kids' ? "DreamTuner Kids!" : "DreamTuner";
   const mainSubtitle = currentMode === 'kids' 
-    ? "Draw a picture (and optionally add a voice hint!) to hear its music!"
+    ? "Draw a picture (and optionally add a voice hint!) to hear its music and see it reimagined!"
     : "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
 
   return (
@@ -175,6 +199,7 @@ export default function DreamTunerPage() {
             <Card className="bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
               <CardHeader>
                 <CardTitle className="text-center text-2xl font-semibold text-stardust-blue">Draw Your Music!</CardTitle>
+                <CardDescription className="text-center text-sm text-slate-300">Sketch something, add a voice hint if you like, and see what music it makes!</CardDescription>
               </CardHeader>
               <CardContent className="p-6 sm:p-10 space-y-6">
                 <DrawingCanvas ref={drawingCanvasRef} width={500} height={300} />
@@ -188,7 +213,7 @@ export default function DreamTunerPage() {
                       type="button"
                       variant="outline"
                       onClick={handleKidsVoiceInputToggle}
-                      disabled={isLoading}
+                      disabled={isLoading || isRenderingDrawing}
                       className="w-full text-sm border-slate-600 hover:bg-slate-700 flex items-center justify-center"
                     >
                       {isListeningKids ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
@@ -196,7 +221,7 @@ export default function DreamTunerPage() {
                     </Button>
                   ) : isClientMounted && !hasRecognitionSupportKids ? (
                      <p className="text-xs text-muted-foreground text-center">Voice input not supported in this browser.</p>
-                  ) : null}
+                  ) : null }
                   {isListeningKids && (
                     <p className="text-sm text-slate-300 text-center p-2 bg-slate-700/50 rounded-md">
                       Listening: <em className="text-galaxy-white">{kidsVoiceTranscript}{kidsInterimTranscript}</em>
@@ -214,7 +239,7 @@ export default function DreamTunerPage() {
                   <Label htmlFor={genreSelectId + "-kids"} className="block text-lg font-medium text-stardust-blue mb-3">
                     What kind of music style? (Optional):
                   </Label>
-                  <Select value={selectedGenre} onValueChange={setSelectedGenre} disabled={isLoading || isListeningKids}>
+                  <Select value={selectedGenre} onValueChange={setSelectedGenre} disabled={isLoading || isListeningKids || isRenderingDrawing}>
                     <SelectTrigger id={genreSelectId + "-kids"} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 text-galaxy-white">
                       <SelectValue placeholder="Select a genre" />
                     </SelectTrigger>
@@ -229,7 +254,7 @@ export default function DreamTunerPage() {
                 </div>
                 <Button
                   onClick={handleDrawingSubmit}
-                  disabled={isLoading || isListeningKids}
+                  disabled={isLoading || isListeningKids || isRenderingDrawing}
                   className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-gradient-to-r from-stardust-blue to-green-400 hover:from-sky-500 hover:to-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-nebula-dark focus:ring-stardust-blue disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
                   size="lg"
                 >
@@ -240,6 +265,11 @@ export default function DreamTunerPage() {
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
                       Tuning Your Drawing...
+                    </>
+                  ) : isRenderingDrawing ? (
+                     <>
+                      <LucideImage className="animate-pulse -ml-1 mr-3 h-5 w-5 text-primary-foreground" />
+                      AI Painting Your Sketch...
                     </>
                   ) : (
                     <>
@@ -253,7 +283,7 @@ export default function DreamTunerPage() {
           </TabsContent>
         </Tabs>
         
-        {isLoading && (
+        {isLoading && !isRenderingDrawing && (
           <div className="mt-10 text-center">
             <LoadingSpinner />
             <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
@@ -262,19 +292,30 @@ export default function DreamTunerPage() {
           </div>
         )}
 
-        {error && !isLoading && (
+        {isRenderingDrawing && (
+           <div className="mt-10 text-center">
+            <LoadingSpinner />
+            <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
+              AI is reimagining your awesome drawing... just a moment!
+            </p>
+          </div>
+        )}
+
+
+        {error && !isLoading && !isRenderingDrawing && (
           <div className="mt-10">
             <ErrorMessage message={error} />
           </div>
         )}
         
-        {musicParams && !isLoading && (
+        {musicParams && !isLoading && ( // MusicOutputDisplay will handle isRenderingDrawing internally for its content
           <Card className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
             <CardContent className="p-6 sm:p-10">
               <MusicOutputDisplay 
                 params={musicParams} 
                 onRegenerateIdea={handleRegenerateIdea}
                 isRegeneratingIdea={isRegeneratingIdea}
+                isRenderingDrawing={isRenderingDrawing} 
               />
             </CardContent>
           </Card>
@@ -298,4 +339,3 @@ export default function DreamTunerPage() {
     </div>
   );
 }
-
