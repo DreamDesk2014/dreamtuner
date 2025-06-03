@@ -45,6 +45,7 @@
     "genkit": "^1.8.0",
     "lucide-react": "^0.475.0",
     "midi-player-js": "^2.0.16",
+    "midi-writer-js": "^3.1.1",
     "next": "15.2.3",
     "patch-package": "^8.0.0",
     "react": "^18.3.1",
