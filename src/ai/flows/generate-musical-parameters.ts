@@ -2,7 +2,7 @@
 'use server';
 
 /**
- * @fileOverview Generates musical parameters based on user input (text, image, video),
+ * @fileOverview Generates musical parameters based on user input (text, image, video, audio),
  * and supports a 'kids' mode for interpreting drawings with optional voice hints and sound sequences.
  *
  * - generateMusicalParameters - A function that handles the generation of musical parameters.
@@ -14,13 +14,13 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const GenerateMusicalParametersInputSchema = z.object({
-  type: z.enum(['text', 'image', 'video']),
+  type: z.enum(['text', 'image', 'video']), // 'video' type covers video and audio concepts
   content: z.string().optional(),
   mimeType: z.string().optional(),
   fileDetails: z
     .object({
       name: z.string(),
-      type: z.string(),
+      type: z.string(), // Will be e.g., 'video/mp4' or 'audio/mpeg'
       size: z.number(),
       url: z.string().optional().describe(
         "The image content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
@@ -30,7 +30,7 @@ const GenerateMusicalParametersInputSchema = z.object({
   genre: z.string().optional(),
   mode: z.enum(['standard', 'kids']).default('standard').optional().describe("The operating mode: 'standard' for general inputs, 'kids' for children's drawings."),
   voiceDescription: z.string().optional().describe("Optional voice-derived text description, especially for Kids Mode drawings."),
-  additionalContext: z.string().optional().describe("Optional textual context provided by the user for an image or video input in standard mode."),
+  additionalContext: z.string().optional().describe("Optional textual context provided by the user for an image, video, or audio input in standard mode."),
   drawingSoundSequence: z.string().optional().describe("A comma-separated sequence of musical notes (e.g., C4,E4,G4) played when the child used different colors while drawing. Available only in Kids Mode."),
 });
 export type GenerateMusicalParametersInput = z.infer<
@@ -77,10 +77,10 @@ const prompt = ai.definePrompt({
 {{#if isKidsMode}}
   {{! Kids Mode Specific Prompt }}
   You are in Kids Mode!
-  {{#if fileDetails.url}}
+  {{#if fileDetails.url}} {{! Child provided a drawing }}
     Analyze the following child's drawing. Focus on simple shapes, bright colors, the overall energy, and density of strokes.
     Image: {{media url=fileDetails.url}}
-  {{else}}
+  {{else}} {{! No drawing, might be voice-only }}
     {{#if voiceDescription}}
       A child has provided a voice hint instead of a drawing.
     {{else}}
@@ -120,35 +120,43 @@ const prompt = ai.definePrompt({
 
 {{else}}
   {{! Standard Mode Prompt }}
-  {{#if fileDetails.url}}
+  {{#if fileDetails.url}} {{! This is for image input with URL }}
     Analyze the following image and generate a detailed set of musical parameters that capture its essence (colors, mood, objects, composition).
     Image: {{media url=fileDetails.url}}
     {{#if additionalContext}}
     Additional context from user: "{{{additionalContext}}}"
     Consider this context when generating parameters.
     {{/if}}
-  {{else}}
-    {{#if fileDetails}}
+  {{else}} {{! This block is for text input OR video/audio concept }}
+    {{#if fileDetails}} {{! This means it's video/audio concept (no URL) }}
+      {{#if isInputVideo}}
       Conceptually analyze the video (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Video{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
       Generate a detailed set of musical parameters that capture its conceptual essence (e.g., theme, pacing, visual mood, implied narrative).
-      Note: The video content itself is not provided, only its metadata. Base your analysis on the concept typically associated with a video of this name and type.
+      {{else if isInputAudio}}
+      Conceptually analyze the audio (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Audio{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
+      Generate a detailed set of musical parameters that capture its conceptual essence (e.g., theme, rhythm, sonic texture, implied mood).
+      {{else}} {{! Fallback for other file types if they somehow get here }}
+      Conceptually analyze the media file (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown File{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
+      Generate a detailed set of musical parameters that capture its conceptual essence.
+      {{/if}}
+      Note: The media content itself is not provided, only its metadata. Base your analysis on the concept typically associated with a file of this name and type.
       {{#if additionalContext}}
       Additional context from user: "{{{additionalContext}}}"
       Consider this context when generating parameters.
       {{/if}}
-    {{else}}
+    {{else}} {{! This means it's text input (no fileDetails or no fileDetails.url) }}
       {{#if content}}
         Analyze the following text and generate a detailed set of musical parameters that capture its essence.
         The text is: {{{content}}}
       {{else}}
-        No specific input type (text, image with URL, or video details) was clearly identified. Please generate musical parameters based on any general information available or indicate the need for clearer input.
+        No specific input type (text, image with URL, or video/audio details) was clearly identified. Please generate musical parameters based on any general information available or indicate the need for clearer input.
       {{/if}}
     {{/if}}
   {{/if}}
 
   {{#if genre}}
   The user has specified a musical genre: '{{{genre}}}'.
-  Please ensure the generated musical parameters are stylistically appropriate for this genre, while still reflecting the core essence of the primary input (text, image, or video concept).
+  Please ensure the generated musical parameters are stylistically appropriate for this genre, while still reflecting the core essence of the primary input (text, image, or video/audio concept).
   {{else}}
   No specific musical genre was provided. You have creative freedom to suggest parameters based purely on the input's perceived essence.
   {{/if}}
@@ -180,6 +188,8 @@ const generateMusicalParametersFlow = ai.defineFlow(
     const handlebarsContext = {
       ...input,
       isKidsMode: input.mode === 'kids',
+      isInputVideo: input.fileDetails?.type?.startsWith('video/'),
+      isInputAudio: input.fileDetails?.type?.startsWith('audio/'),
     };
     const {output} = await prompt(handlebarsContext); 
     return output!;

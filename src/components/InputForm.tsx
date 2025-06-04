@@ -110,9 +110,9 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           setFilePreview(null);
           event.target.value = '';
         }
-      } else if (currentStandardInputType === 'video') {
-         if (!file.type.startsWith('video/')) {
-          setFileError('Invalid file type. Please select a video.');
+      } else if (currentStandardInputType === 'video') { // This now handles both video and audio concepts
+         if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
+          setFileError('Invalid file type. Please select a video or audio file.');
           setFilePreview(null);
           event.target.value = '';
           return;
@@ -145,7 +145,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         fileDetails: {...filePreview, url: filePreview.url },
         additionalContext: additionalContext.trim() || undefined,
       };
-    } else if (currentStandardInputType === 'video' && filePreview) {
+    } else if (currentStandardInputType === 'video' && filePreview) { // 'video' type covers video/audio concepts
       appInputPartial = { 
         type: 'video', 
         fileDetails: filePreview,
@@ -169,7 +169,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const inputOptions: { type: StandardInputType, label: string, icon: React.FC<any> }[] = [
     { type: 'text', label: 'Text', icon: DocumentTextIcon },
     { type: 'image', label: 'Image', icon: PhotographIcon },
-    { type: 'video', label: 'Video Concept', icon: VideoCameraIcon },
+    { type: 'video', label: 'Video/Audio', icon: VideoCameraIcon },
   ];
 
   const resetFileInput = () => {
@@ -257,20 +257,20 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         <div className="space-y-4">
           <div>
             <Label htmlFor={fileInputId} className="block text-sm font-medium text-stardust-blue mb-1">
-              Upload {currentStandardInputType === 'image' ? 'Image' : 'Video'} File:
+              Upload {currentStandardInputType === 'image' ? 'Image' : 'Video/Audio'} File:
             </Label>
             <div className="relative">
               <Input
                 id={fileInputId}
                 type="file"
-                accept={currentStandardInputType === 'image' ? 'image/png, image/jpeg, image/gif, image/webp' : 'video/*'}
+                accept={currentStandardInputType === 'image' ? 'image/png, image/jpeg, image/gif, image/webp' : 'video/*, audio/*'}
                 onChange={handleFileChange}
                 className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cosmic-purple file:text-primary-foreground hover:file:bg-purple-700 disabled:opacity-50"
                 disabled={isLoading}
               />
                <UploadCloudIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
             </div>
-            {currentStandardInputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Note: The video content itself is not uploaded. Music parameters will be generated based on the video's filename and conceptual analysis.</p>}
+            {currentStandardInputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Note: The video/audio content itself is not uploaded. Music parameters will be generated based on the file's name and conceptual analysis.</p>}
             {currentStandardInputType === 'image' && <p className="mt-2 text-xs text-muted-foreground">Max file size: {MAX_IMAGE_FILE_SIZE_MB}MB. Supported formats: JPEG, PNG, GIF, WEBP.</p>}
 
             {fileError && (
@@ -308,13 +308,13 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               id={additionalContextId}
               value={additionalContext}
               onChange={(e) => setAdditionalContext(e.target.value)}
-              placeholder={`Describe the ${currentStandardInputType === 'image' ? 'image' : 'video concept'} or highlight specific elements...`}
+              placeholder={`Describe the ${currentStandardInputType === 'image' ? 'image' : 'video/audio concept'} or highlight specific elements...`}
               rows={3}
               className="w-full p-3 mt-1 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
               disabled={isLoading}
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Help the AI understand your {currentStandardInputType} better.
+              Help the AI understand your {currentStandardInputType === 'image' ? 'image' : 'video/audio concept'} better.
             </p>
           </div>
         </div>

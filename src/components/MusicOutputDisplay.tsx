@@ -311,7 +311,10 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
           originalInputSummary += `\nAdditional Context: "${params.originalInput.additionalContext}"`;
         }
         break;
-      case 'video': originalInputSummary = `Video Concept: ${params.originalInput.fileDetails.name}`; 
+      case 'video': // Covers both video and audio concepts
+        const fileTypeLabel = params.originalInput.fileDetails.type.startsWith('video/') ? 'Video' : 
+                              params.originalInput.fileDetails.type.startsWith('audio/') ? 'Audio' : 'Media';
+        originalInputSummary = `${fileTypeLabel} Concept: ${params.originalInput.fileDetails.name}`; 
         if (params.originalInput.additionalContext) {
           originalInputSummary += `\nAdditional Context: "${params.originalInput.additionalContext}"`;
         }
@@ -372,10 +375,12 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
              )}
           </>);
         break;
-      case 'video':
-        icon = <VideoCameraIcon className="w-6 h-6" />; title = "Original Input Video Concept";
+      case 'video': // Covers both video and audio concepts
+        icon = <VideoCameraIcon className="w-6 h-6" />; title = "Original Input Video/Audio Concept";
+        const fileTypeDisplay = input.fileDetails.type.startsWith('video/') ? 'Video' : 
+                                input.fileDetails.type.startsWith('audio/') ? 'Audio' : 'Media';
         content = <>
-            <p className="text-muted-foreground text-sm italic">Filename: {input.fileDetails.name} (Analyzed conceptually)</p>
+            <p className="text-muted-foreground text-sm italic">{fileTypeDisplay} Concept: {input.fileDetails.name} (Analyzed conceptually)</p>
             {input.additionalContext && (
                 <p className="text-muted-foreground text-xs italic mt-2">Additional Context: "{input.additionalContext}"</p>
              )}
