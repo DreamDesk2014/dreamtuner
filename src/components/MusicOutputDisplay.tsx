@@ -10,19 +10,21 @@ import {
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
   LibraryIcon, PlayIcon, PauseIcon, StopIcon
 } from './icons/HeroIcons';
-import { SparklesIcon as HeroSparklesIcon } from './icons/SparklesIcon';
+// Removed SparklesIcon import from HeroIcons
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
-import { Skeleton } from '@/components/ui/skeleton'; // For loading state of rendered image
+// Correctly import SparklesIcon from its own file
+import { SparklesIcon as HeroSparklesIcon } from './icons/SparklesIcon';
+
 
 interface MusicOutputDisplayProps {
   params: MusicParameters;
   onRegenerateIdea: () => Promise<void>;
   isRegeneratingIdea: boolean;
-  isRenderingDrawing?: boolean; 
+  // isRenderingDrawing prop is removed as this component no longer handles AI art display
 }
 
 interface ParameterCardProps {
@@ -65,7 +67,7 @@ const ParameterCardComponent: React.FC<ParameterCardProps> = ({ title, value, ic
   );
 };
 
-export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, onRegenerateIdea, isRegeneratingIdea, isRenderingDrawing }) => {
+export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, onRegenerateIdea, isRegeneratingIdea }) => {
   const [midiError, setMidiError] = useState<string | null>(null);
   const [isGeneratingMidiForDownload, setIsGeneratingMidiForDownload] = useState<boolean>(false);
   const [isCopied, setIsCopied] = useState<boolean>(false);
@@ -303,7 +305,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     let originalInputSummary = "";
     switch(params.originalInput.type) {
       case 'text': originalInputSummary = `Text: "${params.originalInput.content ? params.originalInput.content.substring(0, 100) : ''}${params.originalInput.content && params.originalInput.content.length > 100 ? '...' : ''}"`; break;
-      case 'image': originalInputSummary = `Image: ${params.originalInput.fileDetails.name}`; break;
+      case 'image': originalInputSummary = `${params.originalInput.mode === 'kids' ? "Child's Drawing" : "Image"}: ${params.originalInput.fileDetails.name}`; break;
       case 'video': originalInputSummary = `Video Concept: ${params.originalInput.fileDetails.name}`; break;
     }
     if (params.selectedGenre) originalInputSummary += `\nGenre: ${params.selectedGenre}`;
@@ -359,7 +361,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
       case 'video':
         icon = <VideoCameraIcon className="w-6 h-6" />; title = "Original Input Video Concept";
         content = <>
-            <p className="text-muted-foreground text-sm italic">Filename: {input.fileDetails.name} (Analyzed conceptually)</p>;
+            <p className="text-muted-foreground text-sm italic">Filename: {input.fileDetails.name} (Analyzed conceptually)</p>
             {input.additionalContext && (
                 <p className="text-muted-foreground text-xs italic mt-2">Additional Context: "{input.additionalContext}"</p>
              )}
@@ -387,47 +389,8 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     );
   }
 
-  const renderAiSketch = () => {
-    if (params.originalInput.mode !== 'kids') {
-      return null;
-    }
-
-    return (
-      <Card className="mt-8 bg-nebula-gray/80 border-slate-700">
-        <CardHeader>
-          <div className="flex items-center text-stardust-blue mb-2">
-            <HeroSparklesIcon className="w-6 h-6" />
-            <CardTitle className="ml-2 text-lg font-semibold">AI's Artistic Rendition</CardTitle>
-          </div>
-           <CardDescription className="text-sm text-muted-foreground">
-            See how our AI artist reimagined the drawing!
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-center items-center">
-          {isRenderingDrawing && !params.renderedDrawingDataUrl && (
-            <div className="flex flex-col items-center space-y-2">
-              <Skeleton className="h-[200px] w-[250px] rounded-md bg-slate-700" />
-              <p className="text-sm text-stardust-blue animate-pulse-subtle">AI is painting...</p>
-            </div>
-          )}
-          {!isRenderingDrawing && params.renderedDrawingDataUrl && (
-            <Image 
-              src={params.renderedDrawingDataUrl} 
-              alt="AI Rendered Sketch" 
-              data-ai-hint="illustration drawing"
-              width={300} 
-              height={200} 
-              className="rounded-md max-h-60 object-contain border border-slate-600 shadow-lg"
-            />
-          )}
-           {!isRenderingDrawing && !params.renderedDrawingDataUrl && (
-            <p className="text-sm text-muted-foreground">Could not generate an AI rendition this time.</p>
-           )}
-        </CardContent>
-      </Card>
-    );
-  };
-
+  // AI Rendered Sketch display logic is removed from this component.
+  // It's now handled directly in page.tsx for Kids Mode.
 
   const getRhythmicDensityDescription = (density: number) => {
     if (density > 0.8) return "Very Active & Dense"; if (density > 0.6) return "Quite Active";
@@ -517,9 +480,13 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         {midiError && <p className="text-red-400 text-sm">{`MIDI Download Error: ${midiError}`}</p>}
         {copyError && <p className="text-red-400 text-sm">{copyError}</p>}
       </div>
+      
+      {/* Display original input details */}
       {params.originalInput && renderOriginalInputInfo(params.originalInput)}
-      {renderAiSketch()} 
+      
+      {/* AI Rendered Sketch is no longer displayed here, it's in page.tsx for Kids Mode */}
     </div>
   );
 };
 
+    
