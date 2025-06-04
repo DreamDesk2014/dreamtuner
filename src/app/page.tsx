@@ -7,22 +7,24 @@ import { ErrorMessage } from '@/components/ErrorMessage';
 import { generateMusicParametersAction } from '@/app/actions/generateMusicParametersAction';
 import { regenerateMusicalIdeaAction } from '@/app/actions/regenerateMusicalIdeaAction';
 import { renderKidsDrawingAction } from '@/app/actions/renderKidsDrawingAction';
-import type { MusicParameters, AppInput, RenderKidsDrawingInput, RenderedDrawingResponse, FilePreview } from '@/types';
+import type { MusicParameters, AppInput, RenderKidsDrawingInput, RenderedDrawingResponse } from '@/types';
 import { LogoIcon } from '@/components/icons/LogoIcon';
 import { Footer } from '@/components/Footer';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MUSIC_GENRES } from '@/lib/constants';
 import { StandardModeTab } from '@/components/StandardModeTab';
 import { KidsModeTab } from '@/components/KidsModeTab';
 import { toast } from '@/hooks/use-toast';
+import { MUSIC_GENRES } from '@/lib/constants';
+import { NavigationBar } from '@/components/NavigationBar';
+import { Badge } from "@/components/ui/badge";
 
 
 export default function DreamTunerPage() {
   const [musicParams, setMusicParams] = useState<MusicParameters | null>(null);
   const [isLoadingMusic, setIsLoadingMusic] = useState<boolean>(false);
   const [isRegeneratingIdea, setIsRegeneratingIdea] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null); // General error, primarily for music generation
+  const [error, setError] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState<boolean>(true);
   const [currentMode, setCurrentMode] = useState<'standard' | 'kids'>('standard');
   const [isClientMounted, setIsClientMounted] = useState(false);
@@ -45,7 +47,6 @@ export default function DreamTunerPage() {
     setAiKidsArtError(null);
     setShowWelcome(true);
     setSelectedGenre(MUSIC_GENRES[0] || ''); 
-    // Canvas and voice transcript resets are handled within KidsModeTab or via its key prop change
   };
 
   const handleStandardModeSubmit = useCallback(async (input: AppInput) => {
@@ -53,7 +54,7 @@ export default function DreamTunerPage() {
     setError(null);
     setMusicParams(null);
     setShowWelcome(false);
-    setAiKidsArtUrl(null); // Clear any kids art if switching flow
+    setAiKidsArtUrl(null); 
     setAiKidsArtError(null);
     setIsRenderingAiKidsArt(false);
 
@@ -99,7 +100,7 @@ export default function DreamTunerPage() {
       const musicResult = await generateMusicParametersAction(musicInput);
       if ('error' in musicResult) {
         musicGenError = musicResult.error;
-        setError(musicResult.error); // Set top-level error for music
+        setError(musicResult.error); 
         setMusicParams(null);
       } else {
         musicParametersResult = musicResult;
@@ -181,14 +182,16 @@ export default function DreamTunerPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-nebula-dark via-slate-900 to-nebula-dark text-galaxy-white flex flex-col items-center p-4 sm:p-8 font-body">
+      <NavigationBar />
       <header className="w-full max-w-3xl mb-8 text-center">
-        <div className="flex items-center justify-center space-x-3 mb-2">
-          <LogoIcon className="w-12 h-12 text-stardust-blue" />
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-stardust-blue to-cosmic-purple font-headline">
+        <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2">
+          <LogoIcon className="w-10 h-10 sm:w-12 sm:h-12 text-stardust-blue" />
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-stardust-blue to-cosmic-purple font-headline">
             {mainTitle}
           </h1>
+          <Badge variant="outline" className="border-amber-500 text-amber-400 text-xs sm:text-sm font-semibold px-1.5 py-0.5 sm:px-2">BETA</Badge>
         </div>
-        <p className="text-lg text-slate-300">{mainSubtitle}</p>
+        <p className="text-md sm:text-lg text-slate-300">{mainSubtitle}</p>
       </header>
 
       <main className="w-full max-w-3xl">
@@ -209,8 +212,6 @@ export default function DreamTunerPage() {
           
           <TabsContent value="kids" className="mt-6">
             <KidsModeTab
-              // Use a key to force re-mount and reset internal state of KidsModeTab when mode changes,
-              // though handleModeChange also tries to reset relevant page-level states.
               key={`kids-mode-tab-${currentMode}`} 
               onTuneCreation={handleKidsModeTuneCreation}
               isLoadingMusic={isLoadingMusic}
@@ -233,7 +234,6 @@ export default function DreamTunerPage() {
           </div>
         )}
         
-        {/* Loading for Kids mode is handled within KidsModeTab or via combined main loader if both are true */}
          {isLoadingMusic && currentMode === 'kids' && !musicParams && !aiKidsArtUrl && (
            <div className="mt-10 text-center">
             <LoadingSpinner />
@@ -244,13 +244,12 @@ export default function DreamTunerPage() {
         )}
 
 
-        {error && !isLoadingMusic && !isRenderingAiKidsArt && ( // General error display
+        {error && !isLoadingMusic && !isRenderingAiKidsArt && (
           <div className="mt-10">
             <ErrorMessage message={error} />
           </div>
         )}
         
-        {/* Welcome message logic */}
         {showWelcome && !isLoadingMusic && !isRenderingAiKidsArt && !error && !musicParams && !aiKidsArtUrl && (
           <Card className="mt-10 text-center p-6 bg-nebula-gray/80 rounded-lg border-slate-700">
             <CardHeader>
@@ -283,3 +282,4 @@ export default function DreamTunerPage() {
     </div>
   );
 }
+
