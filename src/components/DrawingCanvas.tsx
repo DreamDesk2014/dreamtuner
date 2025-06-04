@@ -9,6 +9,7 @@ interface DrawingCanvasProps {
   height: number;
   backgroundColor?: string;
   isKidsMode?: boolean;
+  onDrawingActivity?: (hasContent: boolean) => void;
 }
 
 interface CanvasPoint {
@@ -45,7 +46,7 @@ export const DrawingCanvas = forwardRef<
     getRecordedNotesSequence: () => string[];
   },
   DrawingCanvasProps
->(({ width, height, backgroundColor = '#FFFFFF', isKidsMode = false }, ref) => {
+>(({ width, height, backgroundColor = '#FFFFFF', isKidsMode = false, onDrawingActivity }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentColor, setCurrentColor] = useState(DEFAULT_BRUSH_COLOR);
@@ -70,6 +71,13 @@ export const DrawingCanvas = forwardRef<
     { name: 'Green', value: '#00FF00' },
     { name: 'Blue', value: '#0000FF' },
   ];
+
+  useEffect(() => {
+    if (onDrawingActivity) {
+      const hasContent = paths.length > 0 || (currentPath !== null && currentPath.points.length > 0);
+      onDrawingActivity(hasContent);
+    }
+  }, [paths, currentPath, onDrawingActivity]);
 
   useEffect(() => {
     if (isKidsMode && typeof window !== 'undefined' && !audioContextRef.current) {
@@ -288,11 +296,6 @@ export const DrawingCanvas = forwardRef<
       tempCtx.fillStyle = backgroundColor;
       tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
       
-      const scale = window.devicePixelRatio || 1;
-      // Don't scale context for export if canvas itself is already scaled by DPR
-      // tempCtx.scale(scale, scale); // Removed, as canvas.width/height are already DPR scaled
-
-
       paths.forEach(p => drawPath(tempCtx, p));
       // If there's a current path being drawn but not yet committed to `paths`
       if (currentPath && currentPath.points.length > 1) {
@@ -327,7 +330,7 @@ export const DrawingCanvas = forwardRef<
             redrawCanvas(); // Redraw existing paths
         }
     }
-  }, [width, height, backgroundColor]); // No need to add redrawCanvas to deps if it's stable or its own deps are covered
+  }, [width, height, backgroundColor]); 
 
   return (
     <div className="flex flex-col items-center space-y-4">
@@ -336,7 +339,7 @@ export const DrawingCanvas = forwardRef<
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={stopDrawing}
-        onMouseLeave={stopDrawing} // Added onMouseLeave to handle mouse exiting canvas while drawing
+        onMouseLeave={stopDrawing} 
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -350,7 +353,7 @@ export const DrawingCanvas = forwardRef<
             variant="outline"
             size="icon"
             onClick={() => {
-              if (isDrawing) stopDrawing(); // Stop current stroke if changing color mid-draw
+              if (isDrawing) stopDrawing(); 
               setIsErasing(false);
               setCurrentColor(color.value);
               setCurrentLineWidth(DEFAULT_BRUSH_SIZE);
@@ -385,4 +388,3 @@ export const DrawingCanvas = forwardRef<
 });
 
 DrawingCanvas.displayName = 'DrawingCanvas';
-

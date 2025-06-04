@@ -37,6 +37,8 @@ export default function DreamTunerPage() {
   const [aiKidsArtUrl, setAiKidsArtUrl] = useState<string | null>(null);
   const [isRenderingAiKidsArt, setIsRenderingAiKidsArt] = useState<boolean>(false);
   const [aiKidsArtError, setAiKidsArtError] = useState<string | null>(null);
+  const [hasDrawingContent, setHasDrawingContent] = useState<boolean>(false);
+
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -67,6 +69,8 @@ export default function DreamTunerPage() {
     setAiKidsArtUrl(null);
     setIsRenderingAiKidsArt(false);
     setAiKidsArtError(null);
+    setHasDrawingContent(false);
+
 
     if (drawingCanvasRef.current) {
       drawingCanvasRef.current.clearCanvas(); // This will also clear recorded notes
@@ -173,7 +177,7 @@ export default function DreamTunerPage() {
             genre: selectedGenre,
             mode: 'kids',
             voiceDescription: voiceTranscript,
-            drawingSoundSequence: recordedSoundSequence.length > 0 ? recordedSoundSequence.join(',') : undefined, // Technically no drawing, but if sounds were somehow recorded
+            drawingSoundSequence: recordedSoundSequence.length > 0 ? recordedSoundSequence.join(',') : undefined, 
         };
         renderArtInput = { 
             originalVoiceHint: voiceTranscript,
@@ -233,7 +237,7 @@ export default function DreamTunerPage() {
         setIsRenderingAiKidsArt(false);
     }
 
-  }, [selectedGenre, kidsVoiceTranscript, drawingCanvasRef]);
+  }, [selectedGenre, kidsVoiceTranscript, drawingCanvasRef ]);
 
   const handleKidsVoiceInputToggle = () => {
     if (isListeningKids) {
@@ -278,6 +282,11 @@ export default function DreamTunerPage() {
   const mainSubtitle = currentMode === 'kids' 
     ? "Draw, make sounds, add voice hints! Hear music & see AI art!"
     : "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
+
+  const isTuneMyCreationDisabled = isLoadingMusic || 
+                                   isListeningKids || 
+                                   isRenderingAiKidsArt ||
+                                   (currentMode === 'kids' && !hasDrawingContent && kidsVoiceTranscript.trim() === '');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-nebula-dark via-slate-900 to-nebula-dark text-galaxy-white flex flex-col items-center p-4 sm:p-8 font-body">
@@ -324,6 +333,7 @@ export default function DreamTunerPage() {
                     width={500} 
                     height={300}
                     isKidsMode={currentMode === 'kids'}
+                    onDrawingActivity={setHasDrawingContent}
                 />
                 
                 <div className="mt-4 space-y-2">
@@ -335,7 +345,7 @@ export default function DreamTunerPage() {
                       type="button"
                       variant="outline"
                       onClick={handleKidsVoiceInputToggle}
-                      disabled={isLoadingMusic || isRenderingAiKidsArt } 
+                      disabled={isLoadingMusic || isRenderingAiKidsArt} 
                       className="w-full text-sm border-slate-600 hover:bg-slate-700 flex items-center justify-center"
                     >
                       {isListeningKids ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
@@ -376,7 +386,7 @@ export default function DreamTunerPage() {
                 </div>
                 <Button
                   onClick={handleDrawingSubmit}
-                  disabled={isLoadingMusic || isListeningKids || isRenderingAiKidsArt}
+                  disabled={isTuneMyCreationDisabled}
                   className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-gradient-to-r from-stardust-blue to-green-400 hover:from-sky-500 hover:to-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-nebula-dark focus:ring-stardust-blue disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
                   size="lg"
                 >
