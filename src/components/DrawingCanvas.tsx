@@ -82,9 +82,8 @@ export const DrawingCanvas = forwardRef<
 
   useEffect(() => {
     backgroundColorRef.current = initialBackgroundColor;
-    // If background color changes, redraw the canvas
     redrawCanvas();
-  }, [initialBackgroundColor]); // Added redrawCanvas to deps of this effect
+  }, [initialBackgroundColor, redrawCanvas]); 
 
   useEffect(() => {
     if (onDrawingActivity) {
@@ -113,34 +112,43 @@ export const DrawingCanvas = forwardRef<
   const getCanvasContext = useCallback(() => canvasRef.current?.getContext('2d') || null, []);
 
   const drawPath = useCallback((ctx: CanvasRenderingContext2D, path: CanvasPath) => {
-    if (path.points.length < 2 && !(path.points.length === 1 && path.isErasing)) { // Allow single point for eraser if needed
-      if (path.points.length === 1 && !path.isErasing) return; // Dot for brush
+    if (path.points.length < 2 && !(path.points.length === 1 && path.isErasing)) { 
+      if (path.points.length === 1 && !path.isErasing) { // Draw a dot for brush
+        ctx.beginPath();
+        ctx.arc(path.points[0].x, path.points[0].y, path.lineWidth / 2, 0, 2 * Math.PI);
+        ctx.fillStyle = path.color;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fill();
+        return;
+      }
+      if (path.points.length === 1 && path.isErasing){ // Dot for eraser
+        ctx.beginPath();
+        ctx.arc(path.points[0].x, path.points[0].y, ERASER_SIZE / 2, 0, 2 * Math.PI);
+        ctx.globalCompositeOperation = 'destination-out'; 
+        ctx.fillStyle = "rgba(0,0,0,1)"; 
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        return;
+      }
+      return;
     }
     ctx.beginPath();
-    if (path.points.length === 1) { // Draw a dot
-        ctx.arc(path.points[0].x, path.points[0].y, (path.isErasing ? ERASER_SIZE : path.lineWidth) / 2, 0, 2 * Math.PI);
-        ctx.fillStyle = path.isErasing ? backgroundColorRef.current : path.color;
-        ctx.globalCompositeOperation = path.isErasing ? 'destination-out' : 'source-over';
-        if (path.isErasing) ctx.fillStyle = "rgba(0,0,0,1)"; // Opaque for destination-out
-        ctx.fill();
-    } else {
-        ctx.moveTo(path.points[0].x, path.points[0].y);
-        for (let i = 1; i < path.points.length; i++) {
-          ctx.lineTo(path.points[i].x, path.points[i].y);
-        }
-        ctx.strokeStyle = path.isErasing ? backgroundColorRef.current : path.color;
-        ctx.lineWidth = path.isErasing ? ERASER_SIZE : path.lineWidth;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        
-        ctx.globalCompositeOperation = path.isErasing ? 'destination-out' : 'source-over';
-        if (path.isErasing) {
-          ctx.strokeStyle = "rgba(0,0,0,1)"; 
-        }
-        ctx.stroke();
+    ctx.moveTo(path.points[0].x, path.points[0].y);
+    for (let i = 1; i < path.points.length; i++) {
+      ctx.lineTo(path.points[i].x, path.points[i].y);
     }
+    ctx.strokeStyle = path.isErasing ? backgroundColorRef.current : path.color;
+    ctx.lineWidth = path.isErasing ? ERASER_SIZE : path.lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    ctx.globalCompositeOperation = path.isErasing ? 'destination-out' : 'source-over';
+    if (path.isErasing) {
+      ctx.strokeStyle = "rgba(0,0,0,1)"; 
+    }
+    ctx.stroke();
     ctx.globalCompositeOperation = 'source-over';
-  }, []); // backgroundColorRef removed, use .current inside
+  }, []); 
 
   const redrawCanvas = useCallback(() => {
     const ctx = getCanvasContext();
@@ -151,7 +159,6 @@ export const DrawingCanvas = forwardRef<
     const logicalWidth = container.offsetWidth;
     const logicalHeight = container.offsetHeight;
 
-    // The context is assumed to be persistently scaled by setTransform
     ctx.fillStyle = backgroundColorRef.current;
     ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
@@ -181,7 +188,6 @@ export const DrawingCanvas = forwardRef<
 
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          // Set the base transform for all drawing operations to handle DPR
           ctx.setTransform(scale, 0, 0, scale, 0, 0);
           redrawCanvas(); 
         }
@@ -245,7 +251,6 @@ export const DrawingCanvas = forwardRef<
     };
     currentPathRef.current = newPath;
     
-    // Draw the first point (dot)
     drawPath(ctx, newPath);
 
     if (isKidsMode && !isErasing) {
@@ -266,9 +271,8 @@ export const DrawingCanvas = forwardRef<
     if(!ctx) return;
 
     const currentPoint = { x: eventX, y: eventY };
-    currentPathRef.current.points.push(currentPoint); // Still add to path for full redraw on resize/stop
+    currentPathRef.current.points.push(currentPoint); 
 
-    // Draw only the new segment
     ctx.beginPath();
     ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
     ctx.lineTo(currentPoint.x, currentPoint.y);
@@ -300,7 +304,7 @@ export const DrawingCanvas = forwardRef<
   };
 
   const stopDrawing = () => {
-    if (isDrawing && currentPathRef.current && currentPathRef.current.points.length > 0) { // Allow single point paths
+    if (isDrawing && currentPathRef.current && currentPathRef.current.points.length > 0) { 
       pathsRef.current = [...pathsRef.current, currentPathRef.current];
     }
     currentPathRef.current = null;
@@ -325,7 +329,6 @@ export const DrawingCanvas = forwardRef<
         clientX = event.clientX;
         clientY = event.clientY;
     }
-    // These are logical CSS pixels relative to the canvas element's bounding box
     return { x: clientX - rect.left, y: clientY - rect.top };
   };
 
@@ -342,27 +345,27 @@ export const DrawingCanvas = forwardRef<
 
   const handleTouchStart = (event: React.TouchEvent<HTMLCanvasElement>) => {
     if (event.touches.length === 0) return;
+    event.preventDefault();
     const { x, y } = getRelativeCoords(event);
     startDrawing(x, y);
-    event.preventDefault();
   };
 
   const handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawing || event.touches.length === 0) return;
+    event.preventDefault();
     const { x, y } = getRelativeCoords(event);
     draw(x, y);
-    event.preventDefault();
   };
 
   const handleTouchEnd = (event: React.TouchEvent<HTMLCanvasElement>) => {
-    stopDrawing();
     event.preventDefault();
+    stopDrawing();
   };
 
   const clearCanvas = () => {
     pathsRef.current = [];
     currentPathRef.current = null;
-    redrawCanvas(); // This will clear using the current background color
+    redrawCanvas(); 
     
     if (isKidsMode) {
       setRecordedNotesSequence([]);
@@ -434,6 +437,7 @@ export const DrawingCanvas = forwardRef<
               width: '100%', 
               height: '100%',
               cursor: 'crosshair',
+              touchAction: 'none', // Prevent page scroll on touch devices
           }}
         />
       </div>
@@ -479,3 +483,5 @@ export const DrawingCanvas = forwardRef<
 });
 
 DrawingCanvas.displayName = 'DrawingCanvas';
+
+    
