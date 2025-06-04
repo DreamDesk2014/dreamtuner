@@ -5,7 +5,6 @@ import { generateMusicalParameters as generateMusicalParametersFlow, type Genera
 
 export async function generateMusicParametersAction(input: AppInput): Promise<MusicParameters | { error: string }> {
   try {
-    // Map AppInput to FlowInput
     const flowInput: FlowInput = {
       type: input.type,
       genre: input.genre,
@@ -23,15 +22,18 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
         size: input.fileDetails.size,
         url: input.fileDetails.url, 
       };
-      if (input.voiceDescription) { // For Kids Mode
+      if (input.voiceDescription) { 
         flowInput.voiceDescription = input.voiceDescription;
       }
-      if (input.additionalContext) { // For Standard Mode
+      if (input.additionalContext) { 
         flowInput.additionalContext = input.additionalContext;
+      }
+      if (input.drawingSoundSequence && input.mode === 'kids') {
+        flowInput.drawingSoundSequence = input.drawingSoundSequence;
       }
     } else if (input.type === 'video') {
       flowInput.fileDetails = input.fileDetails;
-      if (input.additionalContext) { // For Standard Mode
+      if (input.additionalContext) { 
         flowInput.additionalContext = input.additionalContext;
       }
     }

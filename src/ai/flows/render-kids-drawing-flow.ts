@@ -1,7 +1,8 @@
 
 'use server';
 /**
- * @fileOverview An AI agent that takes a kid's drawing (or voice hint) and generates an artistic rendition.
+ * @fileOverview An AI agent that takes a kid's drawing (or voice hint, or sound sequence) 
+ * and generates an artistic rendition.
  *
  * - renderKidsDrawing - A function that handles rendering the drawing.
  * - RenderKidsDrawingInput - The input type for the renderKidsDrawing function.
@@ -14,12 +15,13 @@ import {z} from 'genkit';
 const RenderKidsDrawingInputSchema = z.object({
   drawingDataUri: z
     .string()
-    .optional() // Made optional
+    .optional() 
     .describe(
-      "A kid's drawing, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'. Optional if voice hint is provided."
+      "A kid's drawing, as a data URI. Optional if voice hint is provided."
     ),
   originalVoiceHint: z.string().optional().describe("The original voice hint provided by the child for their drawing, if any."),
   originalMusicalIdea: z.string().optional().describe("The musical idea generated based on the original drawing and voice hint."),
+  drawingSoundSequence: z.string().optional().describe("A comma-separated sequence of musical notes played during the drawing process. Provides context about the sounds heard while drawing."),
 });
 export type RenderKidsDrawingInput = z.infer<typeof RenderKidsDrawingInputSchema>;
 
@@ -42,7 +44,7 @@ const renderKidsDrawingFlow = ai.defineFlow(
     let mainPromptText: string;
     const genPromptPayload: ({ text: string } | { media: { url: string } })[] = [];
 
-    if (input.drawingDataUri && input.drawingDataUri !== 'data:,' && input.drawingDataUri.includes('base64')) { // Check for valid, non-empty data URI
+    if (input.drawingDataUri && input.drawingDataUri !== 'data:,' && input.drawingDataUri.includes('base64')) { 
       mainPromptText = "You are a friendly AI artist. A child has made this drawing. Create a more polished, colorful, and imaginative artistic rendition of it, suitable for a child. Make it look like a beautiful illustration. Keep the style whimsical and fun.";
       genPromptPayload.push({ media: { url: input.drawingDataUri } });
       
@@ -50,16 +52,17 @@ const renderKidsDrawingFlow = ai.defineFlow(
         mainPromptText += `\n\nThe child also described their drawing (or what they intended to draw) as: "${input.originalVoiceHint}". Try to incorporate this feeling or theme into your rendition.`;
       }
     } else if (input.originalVoiceHint) {
-      // Voice-only input path
       mainPromptText = `You are a friendly AI artist. A child has described something they are thinking about with their voice: "${input.originalVoiceHint}". Create a colorful, imaginative artistic illustration based *solely* on this voice description, suitable for a child. Make it look like a beautiful illustration. Keep the style whimsical and fun.`;
     } else {
-      // This case should ideally be prevented by the frontend logic.
-      // If for some reason it's reached, the AI won't have enough input.
       throw new Error("Cannot render art without either a drawing or a voice hint.");
     }
     
     if (input.originalMusicalIdea) {
       mainPromptText += `\n\nThe input also inspired a musical idea described as: "${input.originalMusicalIdea}". Let this musical mood also subtly influence your artistic rendition.`;
+    }
+
+    if (input.drawingSoundSequence) {
+      mainPromptText += `\n\nWhile creating, the child heard a sequence of musical tones: "${input.drawingSoundSequence}". This might subtly influence the emotional context or themes present in your artistic rendition.`;
     }
     
     genPromptPayload.push({ text: mainPromptText });

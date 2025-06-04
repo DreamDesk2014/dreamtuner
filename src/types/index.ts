@@ -18,7 +18,15 @@ export interface BaseAppInput {
 
 export type AppInput = BaseAppInput & (
   | { type: 'text'; content: string; }
-  | { type: 'image'; content: string; mimeType: string; fileDetails: FilePreview; voiceDescription?: string; additionalContext?: string; } 
+  | { 
+      type: 'image'; 
+      content: string; 
+      mimeType: string; 
+      fileDetails: FilePreview; 
+      voiceDescription?: string; 
+      additionalContext?: string; 
+      drawingSoundSequence?: string; // For Kids Mode drawing sounds
+    } 
   | { type: 'video'; fileDetails: FilePreview; additionalContext?: string; }
 );
 
@@ -30,6 +38,7 @@ export interface MusicParameters extends AIOutput {
 export interface FlowInput extends FlowInputTypeOriginal {
   voiceDescription?: string;
   additionalContext?: string;
+  drawingSoundSequence?: string; 
 }
 
 export interface GeminiMusicParamsResponse {
@@ -49,10 +58,8 @@ export interface NewIdeaResponse {
   newIdea: string;
 }
 
-// Update RenderKidsDrawingInput to make drawingDataUri optional
-export interface RenderKidsDrawingInput extends Omit<RenderKidsDrawingInputOriginal, 'drawingDataUri'> {
-  drawingDataUri?: string; // Made optional
+export interface RenderKidsDrawingInput extends Omit<RenderKidsDrawingInputOriginal, 'drawingDataUri' | 'drawingSoundSequence' > {
+  drawingDataUri?: string;
+  drawingSoundSequence?: string;
 }
 export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}
-
-    

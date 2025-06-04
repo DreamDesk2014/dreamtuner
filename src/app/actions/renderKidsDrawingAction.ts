@@ -1,18 +1,20 @@
 
 'use server';
-import { renderKidsDrawing as renderKidsDrawingFlow, type RenderKidsDrawingInput, type RenderKidsDrawingOutput } from '@/ai/flows/render-kids-drawing-flow';
-import type { RenderedDrawingResponse } from '@/types';
+import { renderKidsDrawing as renderKidsDrawingFlow, type RenderKidsDrawingOutput } from '@/ai/flows/render-kids-drawing-flow';
+import type { RenderedDrawingResponse, RenderKidsDrawingInput } from '@/types'; // Import RenderKidsDrawingInput
 
 export async function renderKidsDrawingAction(
-    drawingDataUri: string, 
+    drawingDataUri?: string, 
     originalVoiceHint?: string, 
-    originalMusicalIdea?: string
+    originalMusicalIdea?: string,
+    drawingSoundSequence?: string // New parameter
 ): Promise<RenderedDrawingResponse | { error: string }> {
   try {
     const flowInput: RenderKidsDrawingInput = { 
         drawingDataUri,
         originalVoiceHint,
-        originalMusicalIdea 
+        originalMusicalIdea,
+        drawingSoundSequence // Pass to flow
     };
     const result: RenderKidsDrawingOutput = await renderKidsDrawingFlow(flowInput);
     return result;

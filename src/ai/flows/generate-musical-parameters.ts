@@ -3,7 +3,7 @@
 
 /**
  * @fileOverview Generates musical parameters based on user input (text, image, video),
- * and supports a 'kids' mode for interpreting drawings with optional voice hints.
+ * and supports a 'kids' mode for interpreting drawings with optional voice hints and sound sequences.
  *
  * - generateMusicalParameters - A function that handles the generation of musical parameters.
  * - GenerateMusicalParametersInput - The input type for the generateMusicalParameters function.
@@ -22,7 +22,7 @@ const GenerateMusicalParametersInputSchema = z.object({
       name: z.string(),
       type: z.string(),
       size: z.number(),
-      url: z.string().optional().describe( // Already optional, good.
+      url: z.string().optional().describe(
         "The image content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
       ),
     })
@@ -31,6 +31,7 @@ const GenerateMusicalParametersInputSchema = z.object({
   mode: z.enum(['standard', 'kids']).default('standard').optional().describe("The operating mode: 'standard' for general inputs, 'kids' for children's drawings."),
   voiceDescription: z.string().optional().describe("Optional voice-derived text description, especially for Kids Mode drawings."),
   additionalContext: z.string().optional().describe("Optional textual context provided by the user for an image or video input in standard mode."),
+  drawingSoundSequence: z.string().optional().describe("A comma-separated sequence of musical notes (e.g., C4,E4,G4) played when the child used different colors while drawing. Available only in Kids Mode."),
 });
 export type GenerateMusicalParametersInput = z.infer<
   typeof GenerateMusicalParametersInputSchema
@@ -96,6 +97,11 @@ const prompt = ai.definePrompt({
     {{/unless}}
   {{/if}}
 
+  {{#if drawingSoundSequence}}
+    Additionally, as the child drew with different colors, this sequence of musical tones was played: {{{drawingSoundSequence}}}.
+    Use these tones as a subtle inspirational cue for the melody, rhythm, or overall playful character of the music. For example, if the tones are generally ascending, it might suggest a more uplifting feel. If they are sparse, it might suggest a calmer rhythm.
+  {{/if}}
+
   Translate these visual elements (if drawing exists) and/or the voice hint into simple, playful, and melody-focused musical parameters.
   - keySignature: Use major keys primarily (e.g., "C major", "G major").
   - mode: Should be "major".
@@ -106,7 +112,7 @@ const prompt = ai.definePrompt({
   - harmonicComplexity: Keep very low (0.0 to 0.3).
   - targetValence: Should be positive (0.5 to 1.0).
   - targetArousal: Can be low to mid (-0.5 to 0.5).
-  - generatedIdea: A brief, fun, and imaginative textual description (maximum 20 words) inspired by the drawing{{#if voiceDescription}} and/or the voice hint{{/if}}. If only a voice hint is present, the idea should be based solely on that.
+  - generatedIdea: A brief, fun, and imaginative textual description (maximum 20 words) inspired by the drawing{{#if voiceDescription}} and/or the voice hint{{/if}}{{#if drawingSoundSequence}} and accompanying sounds{{/if}}. If only a voice hint is present, the idea should be based solely on that {{#if drawingSoundSequence}}and the sounds{{/if}}.
 
   {{#if genre}}
   The user has also selected a musical genre: '{{{genre}}}'. Try to subtly incorporate this genre if it complements the playful nature, but prioritize the kid-friendly parameters above.
@@ -179,4 +185,3 @@ const generateMusicalParametersFlow = ai.defineFlow(
     return output!;
   }
 );
-
