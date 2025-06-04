@@ -10,7 +10,6 @@ import {
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
   LibraryIcon, PlayIcon, PauseIcon, StopIcon
 } from './icons/HeroIcons';
-// Removed SparklesIcon import from HeroIcons
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -24,7 +23,6 @@ interface MusicOutputDisplayProps {
   params: MusicParameters;
   onRegenerateIdea: () => Promise<void>;
   isRegeneratingIdea: boolean;
-  // isRenderingDrawing prop is removed as this component no longer handles AI art display
 }
 
 interface ParameterCardProps {
@@ -305,13 +303,21 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     let originalInputSummary = "";
     switch(params.originalInput.type) {
       case 'text': originalInputSummary = `Text: "${params.originalInput.content ? params.originalInput.content.substring(0, 100) : ''}${params.originalInput.content && params.originalInput.content.length > 100 ? '...' : ''}"`; break;
-      case 'image': originalInputSummary = `${params.originalInput.mode === 'kids' ? "Child's Drawing" : "Image"}: ${params.originalInput.fileDetails.name}`; break;
-      case 'video': originalInputSummary = `Video Concept: ${params.originalInput.fileDetails.name}`; break;
+      case 'image': originalInputSummary = `${params.originalInput.mode === 'kids' ? "Child's Drawing/Voice Input" : "Image"}: ${params.originalInput.fileDetails.name}`; 
+        if (params.originalInput.mode === 'kids' && params.originalInput.voiceDescription) {
+            originalInputSummary += `\nChild's Voice Hint: "${params.originalInput.voiceDescription}"`;
+        }
+        if (params.originalInput.additionalContext) {
+          originalInputSummary += `\nAdditional Context: "${params.originalInput.additionalContext}"`;
+        }
+        break;
+      case 'video': originalInputSummary = `Video Concept: ${params.originalInput.fileDetails.name}`; 
+        if (params.originalInput.additionalContext) {
+          originalInputSummary += `\nAdditional Context: "${params.originalInput.additionalContext}"`;
+        }
+        break;
     }
     if (params.selectedGenre) originalInputSummary += `\nGenre: ${params.selectedGenre}`;
-    if (params.originalInput.mode === 'kids' && params.originalInput.type === 'image' && params.originalInput.voiceDescription) {
-        originalInputSummary += `\nChild's Voice Hint: "${params.originalInput.voiceDescription}"`;
-    }
 
 
     const detailsToCopy = `DreamTuner - Musical Essence (${params.originalInput.mode} mode):
@@ -346,10 +352,18 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         content = <ScrollArea className="h-24"><p className="text-muted-foreground text-sm italic whitespace-pre-wrap font-code">{input.content || ""}</p></ScrollArea>;
         break;
       case 'image':
-        icon = <PhotographIcon className="w-6 h-6" />; title = input.mode === 'kids' ? "Child's Original Drawing" : "Original Input Image";
+        icon = <PhotographIcon className="w-6 h-6" />; 
+        title = input.mode === 'kids' ? "Child's Original Concept" : "Original Input Image";
         content = (<>
-            <p className="text-muted-foreground text-sm italic">Filename: {input.fileDetails.name}</p>
-            {input.fileDetails.url && <Image src={input.fileDetails.url} alt={input.fileDetails.name} data-ai-hint={input.mode === 'kids' ? "kids drawing" : "abstract texture"} width={160} height={160} className="mt-2 rounded max-h-40 object-contain border border-slate-700"/>}
+            {input.fileDetails.url && input.fileDetails.size > 0 ? // Check if there's actual image data
+                <>
+                    <p className="text-muted-foreground text-sm italic">Drawing: {input.fileDetails.name}</p>
+                    <Image src={input.fileDetails.url} alt={input.fileDetails.name} data-ai-hint={input.mode === 'kids' ? "kids drawing" : "abstract texture"} width={160} height={160} className="mt-2 rounded max-h-40 object-contain border border-slate-700"/>
+                </>
+                : input.mode === 'kids' && input.voiceDescription ? 
+                <p className="text-muted-foreground text-sm italic">Input was voice-only.</p> 
+                :  <p className="text-muted-foreground text-sm italic">Filename: {input.fileDetails.name}</p>
+            }
              {input.mode === 'kids' && input.voiceDescription && (
                 <p className="text-muted-foreground text-xs italic mt-2">Voice Hint: "{input.voiceDescription}"</p>
              )}
@@ -389,8 +403,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     );
   }
 
-  // AI Rendered Sketch display logic is removed from this component.
-  // It's now handled directly in page.tsx for Kids Mode.
 
   const getRhythmicDensityDescription = (density: number) => {
     if (density > 0.8) return "Very Active & Dense"; if (density > 0.6) return "Quite Active";
@@ -447,7 +459,10 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         <ParameterCardComponent title="Valence & Arousal" value={`V: ${params.targetValence.toFixed(2)}, A: ${params.targetArousal.toFixed(2)}`} icon={<LightningBoltIcon />} subText={getValenceArousalDescription(params.targetValence, params.targetArousal)} />
         <ParameterCardComponent title="Rhythmic Density" value={params.rhythmicDensity} icon={<ScaleIcon />} subText={getRhythmicDensityDescription(params.rhythmicDensity)} />
         <ParameterCardComponent title="Harmonic Complexity" value={params.harmonicComplexity} icon={<CogIcon />} subText={getHarmonicComplexityDescription(params.harmonicComplexity)} />
-        {params.selectedGenre && <ParameterCardComponent title="Selected Genre" value={params.selectedGenre} icon={<LibraryIcon />} />}
+        {/* Conditionally render Selected Genre card only if NOT in Kids Mode or if genre is not set (though it should be set if selected) */}
+        {params.selectedGenre && params.originalInput.mode !== 'kids' && (
+          <ParameterCardComponent title="Selected Genre" value={params.selectedGenre} icon={<LibraryIcon />} />
+        )}
       </div>
 
       <Card className="mt-8 p-4 bg-nebula-gray/80 border-slate-700">
@@ -481,10 +496,8 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         {copyError && <p className="text-red-400 text-sm">{copyError}</p>}
       </div>
       
-      {/* Display original input details */}
       {params.originalInput && renderOriginalInputInfo(params.originalInput)}
       
-      {/* AI Rendered Sketch is no longer displayed here, it's in page.tsx for Kids Mode */}
     </div>
   );
 };
