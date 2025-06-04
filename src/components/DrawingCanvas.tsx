@@ -1,15 +1,15 @@
 
 "use client";
-import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef, useCallback, useLayoutEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Eraser, Paintbrush, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface DrawingCanvasProps {
-  width: number;
-  height: number;
   backgroundColor?: string;
   isKidsMode?: boolean;
   onDrawingActivity?: (hasContent: boolean) => void;
+  canvasContainerClassName?: string;
 }
 
 interface CanvasPoint {
@@ -35,9 +35,9 @@ const COLOR_TO_NOTE_MAP: Record<string, { frequency: number; name: string }> = {
   '#00FF00': { frequency: 349.23, name: 'F4' }, // Green
   '#0000FF': { frequency: 392.00, name: 'G4' }, // Blue
 };
-const NOTE_DURATION_MS = 150; // Duration for the initial note when a color is selected
-const NOTE_DURATION_MS_WHILE_DRAWING = 100; // Shorter duration for notes played during a stroke
-const PIXELS_PER_NOTE = 30; // Play a note every X pixels drawn during a stroke
+const NOTE_DURATION_MS = 150;
+const NOTE_DURATION_MS_WHILE_DRAWING = 100;
+const PIXELS_PER_NOTE = 30;
 
 export const DrawingCanvas = forwardRef<
   {
@@ -46,14 +46,23 @@ export const DrawingCanvas = forwardRef<
     getRecordedNotesSequence: () => string[];
   },
   DrawingCanvasProps
->(({ width, height, backgroundColor = '#FFFFFF', isKidsMode = false, onDrawingActivity }, ref) => {
+>(({ 
+    backgroundColor: initialBackgroundColor = '#FFFFFF', 
+    isKidsMode = false, 
+    onDrawingActivity,
+    canvasContainerClassName 
+}, ref) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentColor, setCurrentColor] = useState(DEFAULT_BRUSH_COLOR);
   const [currentLineWidth, setCurrentLineWidth] = useState(DEFAULT_BRUSH_SIZE);
   const [isErasing, setIsErasing] = useState(false);
-  const [paths, setPaths] = useState<CanvasPath[]>([]);
-  const [currentPath, setCurrentPath] = useState<CanvasPath | null>(null);
+  
+  const pathsRef = useRef<CanvasPath[]>([]);
+  const currentPathRef = useRef<CanvasPath | null>(null);
+  const backgroundColorRef = useRef(initialBackgroundColor);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const [lastPlayedColorForSound, setLastPlayedColorForSound] = useState<string | null>(null);
@@ -62,7 +71,6 @@ export const DrawingCanvas = forwardRef<
   const lastPointRef = useRef<CanvasPoint | null>(null);
   const distanceSinceLastNoteRef = useRef(0);
   const activeStrokeColorRef = useRef<string | null>(null);
-
 
   const colors = [
     { name: 'Black', value: '#000000' },
@@ -73,11 +81,16 @@ export const DrawingCanvas = forwardRef<
   ];
 
   useEffect(() => {
+    backgroundColorRef.current = initialBackgroundColor;
+  }, [initialBackgroundColor]);
+
+  useEffect(() => {
     if (onDrawingActivity) {
-      const hasContent = paths.length > 0 || (currentPath !== null && currentPath.points.length > 0);
+      const hasContent = pathsRef.current.length > 0 || (currentPathRef.current !== null && currentPathRef.current.points.length > 0);
       onDrawingActivity(hasContent);
     }
-  }, [paths, currentPath, onDrawingActivity]);
+  }, [pathsRef.current.length, currentPathRef.current?.points.length, onDrawingActivity]);
+
 
   useEffect(() => {
     if (isKidsMode && typeof window !== 'undefined' && !audioContextRef.current) {
@@ -94,6 +107,105 @@ export const DrawingCanvas = forwardRef<
       }
     };
   }, [isKidsMode]);
+
+  const getCanvasContext = useCallback(() => canvasRef.current?.getContext('2d') || null, []);
+
+  const drawPath = useCallback((ctx: CanvasRenderingContext2D, path: CanvasPath) => {
+    if (path.points.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(path.points[0].x, path.points[0].y);
+    for (let i = 1; i < path.points.length; i++) {
+      ctx.lineTo(path.points[i].x, path.points[i].y);
+    }
+    ctx.strokeStyle = path.isErasing ? backgroundColorRef.current : path.color;
+    ctx.lineWidth = path.isErasing ? ERASER_SIZE : path.lineWidth;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    ctx.globalCompositeOperation = path.isErasing ? 'destination-out' : 'source-over';
+    if (path.isErasing) {
+      ctx.strokeStyle = "rgba(0,0,0,1)"; // For destination-out to work, stroke must be opaque
+    }
+
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+  }, []);
+
+
+  const redrawCanvas = useCallback(() => {
+    const ctx = getCanvasContext();
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!ctx || !canvas || !container) return;
+
+    const logicalWidth = container.offsetWidth;
+    const logicalHeight = container.offsetHeight;
+
+    ctx.save();
+    // If context is already scaled, we might not need to scale again here unless clearing transform
+    // However, the scale is set in useLayoutEffect, so it should be fine for redraws.
+    // If not, ensure transform is reset before fillRect if scale is applied per draw operation.
+    // ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0); // Reset and apply DPR scale
+
+    ctx.fillStyle = backgroundColorRef.current;
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+    pathsRef.current.forEach(p => drawPath(ctx, p));
+    if (currentPathRef.current) {
+      drawPath(ctx, currentPathRef.current);
+    }
+    ctx.restore();
+  }, [getCanvasContext, drawPath]);
+  
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    let animationFrameId: number;
+
+    const handleResize = () => {
+      // Debounce or throttle resize if performance becomes an issue
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = requestAnimationFrame(() => {
+        const { width: logicalWidth, height: logicalHeight } = container.getBoundingClientRect();
+        
+        if (logicalWidth === 0 || logicalHeight === 0) return;
+
+        const scale = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(logicalWidth * scale);
+        canvas.height = Math.floor(logicalHeight * scale);
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.save();
+          ctx.scale(scale, scale);
+          // Redraw content after scaling context
+          // Ensure redrawCanvas uses logicalWidth & logicalHeight for its operations
+          const currentCtx = getCanvasContext(); // Re-get context if necessary
+          if(currentCtx) { // Check if context is still valid
+            currentCtx.fillStyle = backgroundColorRef.current;
+            currentCtx.fillRect(0, 0, logicalWidth, logicalHeight);
+            pathsRef.current.forEach(p => drawPath(currentCtx, p));
+            if (currentPathRef.current) {
+                drawPath(currentCtx, currentPathRef.current);
+            }
+          }
+          ctx.restore();
+        }
+      });
+    };
+
+    const observer = new ResizeObserver(handleResize);
+    observer.observe(container);
+    handleResize(); // Initial setup
+
+    return () => {
+      observer.unobserve(container);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, [getCanvasContext, drawPath]); // backgroundColorRef, pathsRef, currentPathRef are refs, don't need to be deps
+
 
   const playToneForColor = (color: string, durationMs: number = NOTE_DURATION_MS) => {
     if (!isKidsMode || !audioContextRef.current) return;
@@ -121,53 +233,16 @@ export const DrawingCanvas = forwardRef<
     oscillator.stop(audioContextRef.current.currentTime + durationMs / 1000);
   };
 
-  const getCanvasContext = () => canvasRef.current?.getContext('2d') || null;
-
-  const redrawCanvas = () => {
-    const ctx = getCanvasContext();
-    if (!ctx || !canvasRef.current) return;
-
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-    paths.forEach(path => drawPath(ctx, path));
-    if (currentPath) {
-      drawPath(ctx, currentPath);
-    }
-  };
-
-  useEffect(() => {
-    redrawCanvas();
-  }, [paths, backgroundColor, width, height, currentPath]);
-
-  const drawPath = (ctx: CanvasRenderingContext2D, path: CanvasPath) => {
-    if (path.points.length < 2) return;
-    ctx.beginPath();
-    ctx.moveTo(path.points[0].x, path.points[0].y);
-    for (let i = 1; i < path.points.length; i++) {
-      ctx.lineTo(path.points[i].x, path.points[i].y);
-    }
-    ctx.strokeStyle = path.isErasing ? backgroundColor : path.color;
-    ctx.lineWidth = path.isErasing ? ERASER_SIZE : path.lineWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    
-    ctx.globalCompositeOperation = path.isErasing ? 'destination-out' : 'source-over';
-    if (path.isErasing) {
-      ctx.strokeStyle = "rgba(0,0,0,1)";
-    }
-
-    ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over';
-  };
-
   const startDrawing = (eventX: number, eventY: number) => {
+    const ctx = getCanvasContext();
+    if(!ctx) return;
+
     setIsDrawing(true);
     const currentPoint = { x: eventX, y: eventY };
     lastPointRef.current = currentPoint;
     distanceSinceLastNoteRef.current = 0;
 
-    const newPathColor = isErasing ? backgroundColor : currentColor;
+    const newPathColor = isErasing ? backgroundColorRef.current : currentColor;
     activeStrokeColorRef.current = newPathColor;
 
     const newPath: CanvasPath = {
@@ -176,7 +251,7 @@ export const DrawingCanvas = forwardRef<
       lineWidth: isErasing ? ERASER_SIZE : currentLineWidth,
       isErasing: isErasing,
     };
-    setCurrentPath(newPath);
+    currentPathRef.current = newPath;
 
     if (isKidsMode && !isErasing) {
       if (currentColor !== lastPlayedColorForSound || recordedNotesSequence.length === 0) {
@@ -191,12 +266,26 @@ export const DrawingCanvas = forwardRef<
   };
 
   const draw = (eventX: number, eventY: number) => {
-    if (!isDrawing || !currentPath) return;
+    if (!isDrawing || !currentPathRef.current) return;
+    const ctx = getCanvasContext();
+    if(!ctx) return;
+
     const currentPoint = { x: eventX, y: eventY };
     
-    const newPoints = [...currentPath.points, currentPoint];
-    const updatedPath = { ...currentPath, points: newPoints };
-    setCurrentPath(updatedPath);
+    currentPathRef.current.points.push(currentPoint);
+    // Redraw only the current path for performance during mouse move. Full redraw on stop.
+    // Or, for simplicity and given DPR scaling, a full redraw might be okay.
+    // Let's try drawing just the last segment of currentPath for performance.
+    // For simplicity, we'll redraw the whole current path on the existing canvas content.
+    // The useLayoutEffect handles the full redraw on resize.
+    
+    // This direct draw needs to happen on the already scaled context.
+    ctx.save();
+    // If scale is applied once in useLayoutEffect, no need to rescale here.
+    // ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+    drawPath(ctx, currentPathRef.current);
+    ctx.restore();
+
 
     if (isKidsMode && !isErasing && isDrawing && lastPointRef.current && activeStrokeColorRef.current) {
         const dx = currentPoint.x - lastPointRef.current.x;
@@ -213,41 +302,56 @@ export const DrawingCanvas = forwardRef<
   };
 
   const stopDrawing = () => {
-    if (isDrawing && currentPath && currentPath.points.length > 1) {
-      setPaths(prevPaths => [...prevPaths, currentPath]);
+    if (isDrawing && currentPathRef.current && currentPathRef.current.points.length > 1) {
+      pathsRef.current = [...pathsRef.current, currentPathRef.current];
     }
-    setCurrentPath(null);
+    currentPathRef.current = null;
     setIsDrawing(false);
     lastPointRef.current = null;
     activeStrokeColorRef.current = null;
     distanceSinceLastNoteRef.current = 0;
+    redrawCanvas(); // Ensure final path is on canvas
+    if (onDrawingActivity) onDrawingActivity(pathsRef.current.length > 0);
+  };
+
+  const getRelativeCoords = (event: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+
+    let clientX, clientY;
+    if ('touches' in event) {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+    } else {
+        clientX = event.clientX;
+        clientY = event.clientY;
+    }
+    return { x: clientX - rect.left, y: clientY - rect.top };
   };
 
   const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    startDrawing(event.clientX - rect.left, event.clientY - rect.top);
+    const { x, y } = getRelativeCoords(event);
+    startDrawing(x, y);
   };
 
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect || !isDrawing) return; // Ensure isDrawing is checked
-    draw(event.clientX - rect.left, event.clientY - rect.top);
+    if (!isDrawing) return;
+    const { x, y } = getRelativeCoords(event);
+    draw(x, y);
   };
 
   const handleTouchStart = (event: React.TouchEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect || event.touches.length === 0) return;
-    const touch = event.touches[0];
-    startDrawing(touch.clientX - rect.left, touch.clientY - rect.top);
+    if (event.touches.length === 0) return;
+    const { x, y } = getRelativeCoords(event);
+    startDrawing(x, y);
     event.preventDefault();
   };
 
   const handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect || event.touches.length === 0 || !isDrawing) return; // Ensure isDrawing is checked
-    const touch = event.touches[0];
-    draw(touch.clientX - rect.left, touch.clientY - rect.top);
+    if (!isDrawing || event.touches.length === 0) return;
+    const { x, y } = getRelativeCoords(event);
+    draw(x, y);
     event.preventDefault();
   };
 
@@ -257,49 +361,59 @@ export const DrawingCanvas = forwardRef<
   };
 
   const clearCanvas = () => {
-    setPaths([]);
-    setCurrentPath(null);
+    pathsRef.current = [];
+    currentPathRef.current = null;
     const ctx = getCanvasContext();
-    if (ctx && canvasRef.current) {
-      ctx.fillStyle = backgroundColor;
-      ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    const container = containerRef.current;
+    if (ctx && canvasRef.current && container) {
+      const logicalWidth = container.offsetWidth;
+      const logicalHeight = container.offsetHeight;
+      ctx.save();
+      // ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1); // Already scaled by useLayoutEffect
+      ctx.fillStyle = backgroundColorRef.current;
+      ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+      ctx.restore();
     }
     if (isKidsMode) {
       setRecordedNotesSequence([]);
       setLastPlayedColorForSound(null);
     }
-    // Reset drawing state refs
     lastPointRef.current = null;
     activeStrokeColorRef.current = null;
     distanceSinceLastNoteRef.current = 0;
-    if (isDrawing) setIsDrawing(false); // Ensure drawing state is also reset if clear is called mid-draw
+    if (isDrawing) setIsDrawing(false);
+    if (onDrawingActivity) onDrawingActivity(false);
   };
 
   const toggleEraser = () => {
     setIsErasing(!isErasing);
-    // If switching to eraser mid-draw, stop current sound/stroke logic
     if (isDrawing) stopDrawing(); 
   };
 
   useImperativeHandle(ref, () => ({
     getDataURL: () => {
       const canvas = canvasRef.current;
-      if (!canvas) return 'data:,';
+      const container = containerRef.current;
+      if (!canvas || !container) return 'data:,';
       
+      const logicalWidth = container.offsetWidth;
+      const logicalHeight = container.offsetHeight;
+
+      // Create a temporary canvas to draw scaled content for export
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
+      tempCanvas.width = logicalWidth; // Export at logical dimensions
+      tempCanvas.height = logicalHeight;
       const tempCtx = tempCanvas.getContext('2d');
 
       if (!tempCtx) return 'data:,';
 
-      tempCtx.fillStyle = backgroundColor;
-      tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+      tempCtx.fillStyle = backgroundColorRef.current;
+      tempCtx.fillRect(0, 0, logicalWidth, logicalHeight);
       
-      paths.forEach(p => drawPath(tempCtx, p));
-      // If there's a current path being drawn but not yet committed to `paths`
-      if (currentPath && currentPath.points.length > 1) {
-         drawPath(tempCtx, currentPath)
+      // Draw paths without DPR scaling for export, as points are already logical
+      pathsRef.current.forEach(p => drawPath(tempCtx, p));
+      if (currentPathRef.current && currentPathRef.current.points.length > 1) {
+         drawPath(tempCtx, currentPathRef.current)
       }
       return tempCanvas.toDataURL('image/png');
     },
@@ -307,45 +421,34 @@ export const DrawingCanvas = forwardRef<
     getRecordedNotesSequence: () => recordedNotesSequence,
   }));
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-        // Physical size on screen
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
-        
-        // Resolution considering device pixel ratio
-        const scale = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(width * scale);
-        canvas.height = Math.floor(height * scale);
-        
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-            // Scale the drawing context to match the DPR
-            ctx.scale(scale, scale);
-            
-            // Initial clear to background color, using unscaled width/height for fillRect
-            ctx.fillStyle = backgroundColor;
-            ctx.fillRect(0, 0, width, height); 
-            redrawCanvas(); // Redraw existing paths
-        }
-    }
-  }, [width, height, backgroundColor]); 
 
   return (
-    <div className="flex flex-col items-center space-y-4">
-      <canvas
-        ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={stopDrawing}
-        onMouseLeave={stopDrawing} 
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        className="border border-slate-400 rounded-md shadow-lg cursor-crosshair"
-        style={{ backgroundColor: backgroundColor }} 
-      />
+    <div className="flex flex-col items-center space-y-4 w-full">
+       <div 
+        ref={containerRef} 
+        className={cn(
+          "w-full relative border border-slate-400 rounded-md shadow-lg overflow-hidden", // Added overflow-hidden
+          canvasContainerClassName
+        )}
+        style={{ backgroundColor: backgroundColorRef.current }}
+      >
+        <canvas
+          ref={canvasRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={stopDrawing}
+          onMouseLeave={stopDrawing} 
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          style={{ 
+              display: 'block',
+              width: '100%', 
+              height: '100%',
+              cursor: 'crosshair',
+          }}
+        />
+      </div>
       <div className="flex space-x-2 items-center">
         {colors.map(color => (
           <Button
@@ -388,3 +491,4 @@ export const DrawingCanvas = forwardRef<
 });
 
 DrawingCanvas.displayName = 'DrawingCanvas';
+

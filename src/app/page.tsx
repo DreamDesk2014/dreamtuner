@@ -73,7 +73,7 @@ export default function DreamTunerPage() {
 
 
     if (drawingCanvasRef.current) {
-      drawingCanvasRef.current.clearCanvas(); // This will also clear recorded notes
+      drawingCanvasRef.current.clearCanvas(); 
     }
     resetKidsTranscript();
     if (isListeningKids) { 
@@ -168,16 +168,16 @@ export default function DreamTunerPage() {
             drawingSoundSequence: recordedSoundSequence.length > 0 ? recordedSoundSequence.join(',') : undefined,
         };
     } else if (hasVoice) { 
-        const dummyFileDetails: FilePreview = { name: "voice_input.png", type: "image/png", size: 0 };
+        const dummyFileDetails: FilePreview = { name: "voice_input.png", type: "image/png", size: 0 }; // Placeholder for voice-only
         appInputForMusic = {
             type: 'image', 
             content: '', 
             mimeType: 'image/png',
-            fileDetails: dummyFileDetails,
+            fileDetails: dummyFileDetails, // Pass dummy to satisfy schema if needed, flow handles it
             genre: selectedGenre,
             mode: 'kids',
             voiceDescription: voiceTranscript,
-            drawingSoundSequence: recordedSoundSequence.length > 0 ? recordedSoundSequence.join(',') : undefined, 
+            drawingSoundSequence: recordedSoundSequence.length > 0 ? recordedSoundSequence.join(',') : undefined, // Sounds might still be recorded if colors were clicked
         };
         renderArtInput = { 
             originalVoiceHint: voiceTranscript,
@@ -234,7 +234,7 @@ export default function DreamTunerPage() {
             setIsRenderingAiKidsArt(false);
         }
     } else {
-        setIsRenderingAiKidsArt(false);
+        setIsRenderingAiKidsArt(false); // Ensure this is set if no art rendering was attempted
     }
 
   }, [selectedGenre, kidsVoiceTranscript, drawingCanvasRef ]);
@@ -330,10 +330,10 @@ export default function DreamTunerPage() {
               <CardContent className="p-6 sm:p-10 space-y-6">
                 <DrawingCanvas 
                     ref={drawingCanvasRef} 
-                    width={500} 
-                    height={300}
+                    canvasContainerClassName="h-[300px] sm:h-[400px] md:h-[450px] lg:h-[500px]"
                     isKidsMode={currentMode === 'kids'}
                     onDrawingActivity={setHasDrawingContent}
+                    backgroundColor="#FFFFFF"
                 />
                 
                 <div className="mt-4 space-y-2">
@@ -435,7 +435,7 @@ export default function DreamTunerPage() {
                         width={400} 
                         height={250} 
                         className="rounded-md max-h-64 object-contain border border-slate-500 shadow-lg"
-                        unoptimized // Required for data URIs in Next.js Image component if not explicitly allowed in next.config.js
+                        unoptimized 
                       />
                       <Button onClick={handleDownloadAiArt} variant="outline" className="border-stardust-blue text-stardust-blue hover:bg-stardust-blue/10">
                         <Download className="w-4 h-4 mr-2" />
@@ -506,3 +506,4 @@ export default function DreamTunerPage() {
     </div>
   );
 }
+
