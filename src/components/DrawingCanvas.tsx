@@ -8,7 +8,7 @@ interface DrawingCanvasProps {
   width: number;
   height: number;
   backgroundColor?: string;
-  isKidsMode?: boolean; // New prop
+  isKidsMode?: boolean;
 }
 
 interface CanvasPoint {
@@ -25,7 +25,6 @@ interface CanvasPath {
 
 const DEFAULT_BRUSH_COLOR = '#000000';
 const DEFAULT_BRUSH_SIZE = 5;
-// Eraser color will be the background color
 const ERASER_SIZE = 20;
 
 const COLOR_TO_NOTE_MAP: Record<string, { frequency: number; name: string }> = {
@@ -35,7 +34,9 @@ const COLOR_TO_NOTE_MAP: Record<string, { frequency: number; name: string }> = {
   '#00FF00': { frequency: 349.23, name: 'F4' }, // Green
   '#0000FF': { frequency: 392.00, name: 'G4' }, // Blue
 };
-const NOTE_DURATION_MS = 150;
+const NOTE_DURATION_MS = 150; // Duration for the initial note when a color is selected
+const NOTE_DURATION_MS_WHILE_DRAWING = 100; // Shorter duration for notes played during a stroke
+const PIXELS_PER_NOTE = 30; // Play a note every X pixels drawn during a stroke
 
 export const DrawingCanvas = forwardRef<
   {
@@ -56,6 +57,11 @@ export const DrawingCanvas = forwardRef<
   const audioContextRef = useRef<AudioContext | null>(null);
   const [lastPlayedColorForSound, setLastPlayedColorForSound] = useState<string | null>(null);
   const [recordedNotesSequence, setRecordedNotesSequence] = useState<string[]>([]);
+
+  const lastPointRef = useRef<CanvasPoint | null>(null);
+  const distanceSinceLastNoteRef = useRef(0);
+  const activeStrokeColorRef = useRef<string | null>(null);
+
 
   const colors = [
     { name: 'Black', value: '#000000' },
@@ -81,14 +87,13 @@ export const DrawingCanvas = forwardRef<
     };
   }, [isKidsMode]);
 
-  const playToneForColor = (color: string) => {
+  const playToneForColor = (color: string, durationMs: number = NOTE_DURATION_MS) => {
     if (!isKidsMode || !audioContextRef.current) return;
 
     if (audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume().catch(e => console.error("Error resuming AudioContext:", e));
     }
     if (audioContextRef.current.state !== 'running') return;
-
 
     const noteDetails = COLOR_TO_NOTE_MAP[color];
     if (!noteDetails) return;
@@ -98,16 +103,14 @@ export const DrawingCanvas = forwardRef<
 
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(noteDetails.frequency, audioContextRef.current.currentTime);
-    gainNode.gain.setValueAtTime(0.2, audioContextRef.current.currentTime); // Reduced volume
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContextRef.current.currentTime + NOTE_DURATION_MS / 1000);
+    gainNode.gain.setValueAtTime(0.2, audioContextRef.current.currentTime); 
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContextRef.current.currentTime + durationMs / 1000);
 
     oscillator.connect(gainNode);
     gainNode.connect(audioContextRef.current.destination);
 
     oscillator.start();
-    oscillator.stop(audioContextRef.current.currentTime + NOTE_DURATION_MS / 1000);
-
-    setRecordedNotesSequence(prev => [...prev, noteDetails.name]);
+    oscillator.stop(audioContextRef.current.currentTime + durationMs / 1000);
   };
 
   const getCanvasContext = () => canvasRef.current?.getContext('2d') || null;
@@ -136,27 +139,31 @@ export const DrawingCanvas = forwardRef<
     for (let i = 1; i < path.points.length; i++) {
       ctx.lineTo(path.points[i].x, path.points[i].y);
     }
-    ctx.strokeStyle = path.isErasing ? backgroundColor : path.color; // Eraser uses background color
+    ctx.strokeStyle = path.isErasing ? backgroundColor : path.color;
     ctx.lineWidth = path.isErasing ? ERASER_SIZE : path.lineWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     
-    // Set composite operation for erasing vs drawing
     ctx.globalCompositeOperation = path.isErasing ? 'destination-out' : 'source-over';
-    if (path.isErasing) { // For destination-out to work on clear background, ensure alpha is used if not fully opaque
-      ctx.strokeStyle = "rgba(0,0,0,1)"; // Use an opaque color for destination-out
+    if (path.isErasing) {
+      ctx.strokeStyle = "rgba(0,0,0,1)";
     }
 
-
     ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over'; // Reset for next path
+    ctx.globalCompositeOperation = 'source-over';
   };
 
   const startDrawing = (eventX: number, eventY: number) => {
     setIsDrawing(true);
+    const currentPoint = { x: eventX, y: eventY };
+    lastPointRef.current = currentPoint;
+    distanceSinceLastNoteRef.current = 0;
+
     const newPathColor = isErasing ? backgroundColor : currentColor;
+    activeStrokeColorRef.current = newPathColor;
+
     const newPath: CanvasPath = {
-      points: [{ x: eventX, y: eventY }],
+      points: [currentPoint],
       color: newPathColor,
       lineWidth: isErasing ? ERASER_SIZE : currentLineWidth,
       isErasing: isErasing,
@@ -165,7 +172,11 @@ export const DrawingCanvas = forwardRef<
 
     if (isKidsMode && !isErasing) {
       if (currentColor !== lastPlayedColorForSound || recordedNotesSequence.length === 0) {
-        playToneForColor(currentColor);
+        playToneForColor(currentColor, NOTE_DURATION_MS); 
+        const noteDetails = COLOR_TO_NOTE_MAP[currentColor];
+        if (noteDetails) {
+            setRecordedNotesSequence(prev => [...prev, noteDetails.name]);
+        }
         setLastPlayedColorForSound(currentColor);
       }
     }
@@ -173,9 +184,24 @@ export const DrawingCanvas = forwardRef<
 
   const draw = (eventX: number, eventY: number) => {
     if (!isDrawing || !currentPath) return;
-    const newPoints = [...currentPath.points, { x: eventX, y: eventY }];
+    const currentPoint = { x: eventX, y: eventY };
+    
+    const newPoints = [...currentPath.points, currentPoint];
     const updatedPath = { ...currentPath, points: newPoints };
     setCurrentPath(updatedPath);
+
+    if (isKidsMode && !isErasing && isDrawing && lastPointRef.current && activeStrokeColorRef.current) {
+        const dx = currentPoint.x - lastPointRef.current.x;
+        const dy = currentPoint.y - lastPointRef.current.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        distanceSinceLastNoteRef.current += dist;
+
+        if (distanceSinceLastNoteRef.current >= PIXELS_PER_NOTE) {
+            playToneForColor(activeStrokeColorRef.current, NOTE_DURATION_MS_WHILE_DRAWING);
+            distanceSinceLastNoteRef.current = 0; 
+        }
+    }
+    lastPointRef.current = currentPoint;
   };
 
   const stopDrawing = () => {
@@ -184,6 +210,9 @@ export const DrawingCanvas = forwardRef<
     }
     setCurrentPath(null);
     setIsDrawing(false);
+    lastPointRef.current = null;
+    activeStrokeColorRef.current = null;
+    distanceSinceLastNoteRef.current = 0;
   };
 
   const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
@@ -194,7 +223,7 @@ export const DrawingCanvas = forwardRef<
 
   const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect || !isDrawing) return;
+    if (!rect || !isDrawing) return; // Ensure isDrawing is checked
     draw(event.clientX - rect.left, event.clientY - rect.top);
   };
 
@@ -208,7 +237,7 @@ export const DrawingCanvas = forwardRef<
 
   const handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect || event.touches.length === 0 || !isDrawing) return;
+    if (!rect || event.touches.length === 0 || !isDrawing) return; // Ensure isDrawing is checked
     const touch = event.touches[0];
     draw(touch.clientX - rect.left, touch.clientY - rect.top);
     event.preventDefault();
@@ -231,10 +260,17 @@ export const DrawingCanvas = forwardRef<
       setRecordedNotesSequence([]);
       setLastPlayedColorForSound(null);
     }
+    // Reset drawing state refs
+    lastPointRef.current = null;
+    activeStrokeColorRef.current = null;
+    distanceSinceLastNoteRef.current = 0;
+    if (isDrawing) setIsDrawing(false); // Ensure drawing state is also reset if clear is called mid-draw
   };
 
   const toggleEraser = () => {
     setIsErasing(!isErasing);
+    // If switching to eraser mid-draw, stop current sound/stroke logic
+    if (isDrawing) stopDrawing(); 
   };
 
   useImperativeHandle(ref, () => ({
@@ -242,7 +278,6 @@ export const DrawingCanvas = forwardRef<
       const canvas = canvasRef.current;
       if (!canvas) return 'data:,';
       
-      // Create a temporary canvas to draw final state for export
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvas.width;
       tempCanvas.height = canvas.height;
@@ -250,20 +285,17 @@ export const DrawingCanvas = forwardRef<
 
       if (!tempCtx) return 'data:,';
 
-      // Draw background
       tempCtx.fillStyle = backgroundColor;
       tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
       
-      // Scale context if needed (mirroring main canvas scaling)
       const scale = window.devicePixelRatio || 1;
-      tempCtx.scale(scale, scale);
+      // Don't scale context for export if canvas itself is already scaled by DPR
+      // tempCtx.scale(scale, scale); // Removed, as canvas.width/height are already DPR scaled
 
 
-      // Draw paths on temporary canvas
       paths.forEach(p => drawPath(tempCtx, p));
+      // If there's a current path being drawn but not yet committed to `paths`
       if (currentPath && currentPath.points.length > 1) {
-         // Temporarily add currentPath to paths for drawing, then remove if not stopping
-         // Or just draw it directly if it's substantial
          drawPath(tempCtx, currentPath)
       }
       return tempCanvas.toDataURL('image/png');
@@ -275,35 +307,27 @@ export const DrawingCanvas = forwardRef<
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
+        // Physical size on screen
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
+        
+        // Resolution considering device pixel ratio
         const scale = window.devicePixelRatio || 1;
         canvas.width = Math.floor(width * scale);
         canvas.height = Math.floor(height * scale);
+        
         const ctx = canvas.getContext('2d');
         if (ctx) {
+            // Scale the drawing context to match the DPR
             ctx.scale(scale, scale);
-            // Initial clear to background color
+            
+            // Initial clear to background color, using unscaled width/height for fillRect
             ctx.fillStyle = backgroundColor;
-            ctx.fillRect(0, 0, width, height);
-            redrawCanvas();
+            ctx.fillRect(0, 0, width, height); 
+            redrawCanvas(); // Redraw existing paths
         }
     }
-  }, [width, height, backgroundColor]);
-  
-  // Adjust eraser logic for `destination-out`
-  // In drawPath:
-  // if (path.isErasing) {
-  //   ctx.globalCompositeOperation = 'destination-out';
-  // //  ctx.strokeStyle = "rgba(0,0,0,1)"; // Any opaque color works here, actual color doesn't matter
-  // } else {
-  //   ctx.globalCompositeOperation = 'source-over';
-  //   ctx.strokeStyle = path.color;
-  // }
-  // The current redrawCanvas and drawPath structure is complex for `destination-out` because paths are redrawn.
-  // For simplicity, if backgroundColor is white, drawing white is okay. If it's complex, `destination-out` needs careful handling.
-  // Given it's '#FFFFFF' by default, drawing with backgroundColor is visually correct.
-  // The export getDataURL needed fix for correct rendering of currentPath.
+  }, [width, height, backgroundColor]); // No need to add redrawCanvas to deps if it's stable or its own deps are covered
 
   return (
     <div className="flex flex-col items-center space-y-4">
@@ -312,12 +336,12 @@ export const DrawingCanvas = forwardRef<
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={stopDrawing}
-        onMouseOut={stopDrawing}
+        onMouseLeave={stopDrawing} // Added onMouseLeave to handle mouse exiting canvas while drawing
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         className="border border-slate-400 rounded-md shadow-lg cursor-crosshair"
-        style={{ backgroundColor: backgroundColor }} // Explicitly set style for visual cue
+        style={{ backgroundColor: backgroundColor }} 
       />
       <div className="flex space-x-2 items-center">
         {colors.map(color => (
@@ -326,6 +350,7 @@ export const DrawingCanvas = forwardRef<
             variant="outline"
             size="icon"
             onClick={() => {
+              if (isDrawing) stopDrawing(); // Stop current stroke if changing color mid-draw
               setIsErasing(false);
               setCurrentColor(color.value);
               setCurrentLineWidth(DEFAULT_BRUSH_SIZE);
@@ -360,3 +385,4 @@ export const DrawingCanvas = forwardRef<
 });
 
 DrawingCanvas.displayName = 'DrawingCanvas';
+
