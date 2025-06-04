@@ -69,40 +69,40 @@ export async function generateMusicalParameters(
 
 const prompt = ai.definePrompt({
   name: 'generateMusicalParametersPrompt',
-  model: 'googleai/gemini-1.5-flash-latest', 
-  input: {schema: GenerateMusicalParametersInputSchema}, 
+  model: 'googleai/gemini-1.5-flash-latest',
+  input: {schema: GenerateMusicalParametersInputSchema},
   output: {schema: GenerateMusicalParametersOutputSchema},
   prompt: `You are DreamTuner, an AI that translates human expression into musical concepts.
 
 {{#if isKidsMode}}
   {{! Kids Mode Specific Prompt }}
   You are in Kids Mode!
-  {{#if fileDetails.url}} {{! Child provided a drawing }}
+  {{#if hasKidsDrawing}} {{! Child provided a real drawing }}
     Analyze the following child's drawing. Focus on simple shapes, bright colors, the overall energy, and density of strokes.
     Image: {{media url=fileDetails.url}}
-  {{else}} {{! No drawing, might be voice-only }}
+  {{else}} {{! No real drawing, might be voice-only or empty canvas with only sounds }}
     {{#if voiceDescription}}
-      A child has provided a voice hint instead of a drawing.
+      A child has provided a voice hint{{#unless hasKidsDrawing}} instead of a drawing (or the drawing was empty){{/unless}}.
     {{else}}
-      Generate playful music parameters. {{! Fallback if somehow both drawing and voice are empty - frontend should prevent this }}
+      Generate playful music parameters. {{! Fallback if somehow drawing, voice are empty and sounds are also empty - frontend should prevent this }}
     {{/if}}
   {{/if}}
 
   {{#if voiceDescription}}
-    The child also provided this voice hint{{#if fileDetails.url}} about their drawing{{/if}}: "{{{voiceDescription}}}"
-    Use this hint as the primary source of inspiration if no drawing is provided, or to further understand the drawing's theme or mood if a drawing is present. Let it strongly influence the 'generatedIdea'.
+    The child also provided this voice hint{{#if hasKidsDrawing}} about their drawing{{/if}}: "{{{voiceDescription}}}"
+    Use this hint as the primary source of inspiration if no drawing is provided (or if the drawing was empty), or to further understand the drawing's theme or mood if a drawing is present. Let it strongly influence the 'generatedIdea'.
   {{else}}
-    {{#unless fileDetails.url}}
-      No drawing or voice hint was provided. Generate very simple, default playful music parameters.
+    {{#unless hasKidsDrawing}}
+      No drawing or voice hint was provided. Generate very simple, default playful music parameters based on any provided sound sequence, or just generally playful if no sounds either.
     {{/unless}}
   {{/if}}
 
   {{#if drawingSoundSequence}}
-    Additionally, as the child drew with different colors, this sequence of musical tones was played: {{{drawingSoundSequence}}}.
+    Additionally, as the child interacted (e.g. drew with different colors), this sequence of musical tones was played: {{{drawingSoundSequence}}}.
     Use these tones as a subtle inspirational cue for the melody, rhythm, or overall playful character of the music. For example, if the tones are generally ascending, it might suggest a more uplifting feel. If they are sparse, it might suggest a calmer rhythm.
   {{/if}}
 
-  Translate these visual elements (if drawing exists) and/or the voice hint into simple, playful, and melody-focused musical parameters.
+  Translate these visual elements (if drawing exists and is valid) and/or the voice hint (if exists) and/or sound sequence (if exists) into simple, playful, and melody-focused musical parameters.
   - keySignature: Use major keys primarily (e.g., "C major", "G major").
   - mode: Should be "major".
   - tempoBpm: Suggest moderate tempos (e.g., 90-130 BPM).
@@ -112,7 +112,7 @@ const prompt = ai.definePrompt({
   - harmonicComplexity: Keep very low (0.0 to 0.3).
   - targetValence: Should be positive (0.5 to 1.0).
   - targetArousal: Can be low to mid (-0.5 to 0.5).
-  - generatedIdea: A brief, fun, and imaginative textual description (maximum 20 words) inspired by the drawing{{#if voiceDescription}} and/or the voice hint{{/if}}{{#if drawingSoundSequence}} and accompanying sounds{{/if}}. If only a voice hint is present, the idea should be based solely on that {{#if drawingSoundSequence}}and the sounds{{/if}}.
+  - generatedIdea: A brief, fun, and imaginative textual description (maximum 20 words) inspired by the drawing (if valid){{#if voiceDescription}} and/or the voice hint{{/if}}{{#if drawingSoundSequence}} and accompanying sounds{{/if}}. If only a voice hint is present, the idea should be based solely on that {{#if drawingSoundSequence}}and the sounds{{/if}}. If only sounds, base it on the sounds.
 
   {{#if genre}}
   The user has also selected a musical genre: '{{{genre}}}'. Try to subtly incorporate this genre if it complements the playful nature, but prioritize the kid-friendly parameters above.
@@ -190,8 +190,9 @@ const generateMusicalParametersFlow = ai.defineFlow(
       isKidsMode: input.mode === 'kids',
       isInputVideo: input.fileDetails?.type?.startsWith('video/'),
       isInputAudio: input.fileDetails?.type?.startsWith('audio/'),
+      hasKidsDrawing: input.mode === 'kids' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64'),
     };
-    const {output} = await prompt(handlebarsContext); 
+    const {output} = await prompt(handlebarsContext);
     return output!;
   }
 );

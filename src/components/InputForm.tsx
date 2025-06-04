@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface InputFormProps {
-  onSubmit: (input: AppInput) => void;
+  onSubmit: (input: AppInput) => Promise<void> | void;
   isLoading: boolean;
   selectedGenre: string;
   onGenreChange: (genre: string) => void;
