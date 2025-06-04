@@ -15,8 +15,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
-// Correctly import SparklesIcon from its own file
 import { SparklesIcon as HeroSparklesIcon } from './icons/SparklesIcon';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 
 interface MusicOutputDisplayProps {
@@ -303,7 +303,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     let originalInputSummary = "";
     switch(params.originalInput.type) {
       case 'text': originalInputSummary = `Text: "${params.originalInput.content ? params.originalInput.content.substring(0, 100) : ''}${params.originalInput.content && params.originalInput.content.length > 100 ? '...' : ''}"`; break;
-      case 'image': originalInputSummary = `${params.originalInput.mode === 'kids' ? "Child's Drawing/Voice Input" : "Image"}: ${params.originalInput.fileDetails.name}`; 
+      case 'image': originalInputSummary = `${params.originalInput.mode === 'kids' ? "Child's Original Concept" : "Image"}: ${params.originalInput.fileDetails.name}`; 
         if (params.originalInput.mode === 'kids' && params.originalInput.voiceDescription) {
             originalInputSummary += `\nChild's Voice Hint: "${params.originalInput.voiceDescription}"`;
         }
@@ -355,7 +355,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         icon = <PhotographIcon className="w-6 h-6" />; 
         title = input.mode === 'kids' ? "Child's Original Concept" : "Original Input Image";
         content = (<>
-            {input.fileDetails.url && input.fileDetails.size > 0 ? // Check if there's actual image data
+            {input.fileDetails.url && input.fileDetails.size > 0 ? 
                 <>
                     <p className="text-muted-foreground text-sm italic">Drawing: {input.fileDetails.name}</p>
                     <Image src={input.fileDetails.url} alt={input.fileDetails.name} data-ai-hint={input.mode === 'kids' ? "kids drawing" : "abstract texture"} width={160} height={160} className="mt-2 rounded max-h-40 object-contain border border-slate-700"/>
@@ -392,11 +392,28 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         </CardHeader>
         <CardContent>{content}</CardContent>
         {params.selectedGenre && (
-          <CardFooter className="border-t border-slate-700 pt-4">
-             <div className="flex items-center text-stardust-blue">
-                <LibraryIcon className="w-5 h-5" /> <h5 className="ml-2 text-sm font-semibold">Selected Genre:</h5>
-             </div>
-            <p className="text-muted-foreground text-sm ml-2">{params.selectedGenre}</p>
+          <CardFooter className="border-t border-slate-700 pt-4 flex-col items-start">
+            {input.mode === 'kids' ? (
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="selected-genre" className="border-b-0">
+                  <AccordionTrigger className="py-1 hover:no-underline text-sm">
+                    <div className="flex items-center text-stardust-blue">
+                      <LibraryIcon className="w-5 h-5" /> 
+                      <h5 className="ml-2 text-sm font-semibold">Selected Genre (Tap to view)</h5>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-1 pb-0 pl-7">
+                    <p className="text-muted-foreground text-sm">{params.selectedGenre}</p>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            ) : (
+              <div className="flex items-center text-stardust-blue">
+                <LibraryIcon className="w-5 h-5" /> 
+                <h5 className="ml-2 text-sm font-semibold">Selected Genre:</h5>
+                <p className="text-muted-foreground text-sm ml-2">{params.selectedGenre}</p>
+              </div>
+            )}
           </CardFooter>
         )}
       </Card>
@@ -459,8 +476,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         <ParameterCardComponent title="Valence & Arousal" value={`V: ${params.targetValence.toFixed(2)}, A: ${params.targetArousal.toFixed(2)}`} icon={<LightningBoltIcon />} subText={getValenceArousalDescription(params.targetValence, params.targetArousal)} />
         <ParameterCardComponent title="Rhythmic Density" value={params.rhythmicDensity} icon={<ScaleIcon />} subText={getRhythmicDensityDescription(params.rhythmicDensity)} />
         <ParameterCardComponent title="Harmonic Complexity" value={params.harmonicComplexity} icon={<CogIcon />} subText={getHarmonicComplexityDescription(params.harmonicComplexity)} />
-        {/* Conditionally render Selected Genre card only if NOT in Kids Mode or if genre is not set (though it should be set if selected) */}
-        {params.selectedGenre && params.originalInput.mode !== 'kids' && (
+        {params.selectedGenre && params.originalInput.mode === 'standard' && (
           <ParameterCardComponent title="Selected Genre" value={params.selectedGenre} icon={<LibraryIcon />} />
         )}
       </div>
