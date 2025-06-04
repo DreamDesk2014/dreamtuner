@@ -1,6 +1,6 @@
 
 import type { GenerateMusicalParametersOutput as AIOutput, GenerateMusicalParametersInput as FlowInputTypeOriginal } from '@/ai/flows/generate-musical-parameters';
-import type { RenderKidsDrawingOutput } from '@/ai/flows/render-kids-drawing-flow';
+import type { RenderKidsDrawingOutput, RenderKidsDrawingInput as RenderKidsDrawingInputOriginal } from '@/ai/flows/render-kids-drawing-flow';
 
 export type InputType = 'text' | 'image' | 'video'; 
 
@@ -25,7 +25,6 @@ export type AppInput = BaseAppInput & (
 export interface MusicParameters extends AIOutput {
   originalInput: AppInput;
   selectedGenre?: string; 
-  // renderedDrawingDataUrl is removed as AI art is handled directly in page.tsx state for Kids Mode
 }
 
 export interface FlowInput extends FlowInputTypeOriginal {
@@ -50,6 +49,10 @@ export interface NewIdeaResponse {
   newIdea: string;
 }
 
+// Update RenderKidsDrawingInput to make drawingDataUri optional
+export interface RenderKidsDrawingInput extends Omit<RenderKidsDrawingInputOriginal, 'drawingDataUri'> {
+  drawingDataUri?: string; // Made optional
+}
 export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}
 
     

@@ -9,7 +9,7 @@ import { DrawingCanvas } from '@/components/DrawingCanvas';
 import { generateMusicParametersAction } from '@/app/actions/generateMusicParametersAction';
 import { regenerateMusicalIdeaAction } from '@/app/actions/regenerateMusicalIdeaAction';
 import { renderKidsDrawingAction } from '@/app/actions/renderKidsDrawingAction';
-import type { MusicParameters, AppInput, FilePreview } from '@/types';
+import type { MusicParameters, AppInput, FilePreview, RenderKidsDrawingInput } from '@/types';
 import { LogoIcon } from '@/components/icons/LogoIcon';
 import { Footer } from '@/components/Footer';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -34,7 +34,6 @@ export default function DreamTunerPage() {
   const [currentMode, setCurrentMode] = useState<'standard' | 'kids'>('standard');
   const [isClientMounted, setIsClientMounted] = useState(false);
 
-  // State for Kids Mode AI Art
   const [aiKidsArtUrl, setAiKidsArtUrl] = useState<string | null>(null);
   const [isRenderingAiKidsArt, setIsRenderingAiKidsArt] = useState<boolean>(false);
   const [aiKidsArtError, setAiKidsArtError] = useState<string | null>(null);
@@ -73,7 +72,7 @@ export default function DreamTunerPage() {
       drawingCanvasRef.current.clearCanvas();
     }
     resetKidsTranscript();
-    if (isListeningKids) { // Stop listening if active during mode change
+    if (isListeningKids) { 
         stopListeningKids();
     }
   };
@@ -84,8 +83,6 @@ export default function DreamTunerPage() {
     setError(null);
     setMusicParams(null);
     setShowWelcome(false);
-
-    // Ensure Kids Mode art is cleared if switching from Kids to Standard results
     setAiKidsArtUrl(null);
     setAiKidsArtError(null);
     setIsRenderingAiKidsArt(false);
@@ -110,92 +107,124 @@ export default function DreamTunerPage() {
   const handleDrawingSubmit = useCallback(async () => {
     if (!drawingCanvasRef.current) {
       setError("Drawing canvas is not ready.");
-      return;
-    }
-    const drawingDataURL = drawingCanvasRef.current.getDataURL();
-    if (!drawingDataURL || drawingDataURL === 'data:,') {
-        setError("Please draw something on the canvas first!");
-        toast({ variant: "destructive", title: "Empty Canvas", description: "Please draw something before tuning!" });
-        return;
-    }
-
-    const base64Content = drawingDataURL.split(',')[1];
-    if (!base64Content) {
-      setError("Failed to process drawing data.");
+      toast({ variant: "destructive", title: "Canvas Error", description: "Drawing canvas component is not available." });
       return;
     }
     
-    const fileDetails: FilePreview = {
-      name: "kids_drawing.png",
-      type: "image/png",
-      size: base64Content.length * 0.75, 
-      url: drawingDataURL,
-    };
+    const drawingDataURL = drawingCanvasRef.current.getDataURL();
+    const voiceTranscript = kidsVoiceTranscript.trim();
 
-    const kidsInput: AppInput = {
-      type: 'image',
-      content: base64Content, 
-      mimeType: 'image/png',
-      fileDetails: fileDetails, 
-      genre: selectedGenre,
-      mode: 'kids',
-      voiceDescription: kidsVoiceTranscript.trim() || undefined, 
-    };
+    const isCanvasEffectivelyEmpty = !drawingDataURL || drawingDataURL === 'data:,' || drawingDataURL === 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+    const hasVoice = voiceTranscript !== '';
+
+    if (isCanvasEffectivelyEmpty && !hasVoice) {
+      toast({ variant: "destructive", title: "Input Required", description: "Please draw something or record a voice hint to get music and art!" });
+      return;
+    }
 
     setIsLoadingMusic(true);
-    setIsRenderingAiKidsArt(true); // Start loading for AI art as well
+    setIsRenderingAiKidsArt(true); // Assume we'll try to render art if there's any input
     setError(null);
     setMusicParams(null);
     setAiKidsArtUrl(null);
     setAiKidsArtError(null);
     setShowWelcome(false);
 
+    let appInputForMusic: AppInput;
+    let renderArtInput: RenderKidsDrawingInput | null = null;
+
+    if (!isCanvasEffectivelyEmpty) {
+        const base64Content = drawingDataURL.split(',')[1];
+        if (!base64Content) {
+          setError("Failed to process drawing data.");
+          toast({ variant: "destructive", title: "Drawing Error", description: "Could not process the drawing data." });
+          setIsLoadingMusic(false); setIsRenderingAiKidsArt(false);
+          return;
+        }
+        const fileDetails: FilePreview = {
+            name: "kids_drawing.png",
+            type: "image/png",
+            size: base64Content.length * 0.75, 
+            url: drawingDataURL,
+        };
+        appInputForMusic = {
+            type: 'image',
+            content: base64Content, 
+            mimeType: 'image/png',
+            fileDetails: fileDetails, 
+            genre: selectedGenre,
+            mode: 'kids',
+            voiceDescription: hasVoice ? voiceTranscript : undefined, 
+        };
+        renderArtInput = { drawingDataUri: drawingDataURL, originalVoiceHint: hasVoice ? voiceTranscript : undefined };
+    } else if (hasVoice) { // Canvas empty, but voice present
+        // For music generation, we adapt to send what generateMusicalParameters expects for kids mode with voice
+        const dummyFileDetails: FilePreview = { name: "voice_input.png", type: "image/png", size: 0 /*, url is undefined */ };
+        appInputForMusic = {
+            type: 'image', // Still 'image' type for Kids Mode flow, but URL will be missing
+            content: '', 
+            mimeType: 'image/png',
+            fileDetails: dummyFileDetails,
+            genre: selectedGenre,
+            mode: 'kids',
+            voiceDescription: voiceTranscript,
+        };
+        renderArtInput = { originalVoiceHint: voiceTranscript }; // No drawingDataUri
+    } else {
+        // This case should be caught by the initial check, but as a fallback:
+        toast({ variant: "destructive", title: "Error", description: "Unexpected state: no input for Kids Mode." });
+        setIsLoadingMusic(false); setIsRenderingAiKidsArt(false);
+        return;
+    }
+
     let generatedMusicalIdea: string | undefined = undefined;
 
-    // Generate Music First
+    // 1. Generate Music
     try {
-      toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas for your drawing..." });
-      const musicResult = await generateMusicParametersAction(kidsInput);
+      toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas..." });
+      const musicResult = await generateMusicParametersAction(appInputForMusic);
       if ('error' in musicResult) {
         setError(musicResult.error);
         setMusicParams(null);
+        // Even if music fails, if we have input for art, we might still try art.
       } else {
         setMusicParams(musicResult);
         generatedMusicalIdea = musicResult.generatedIdea;
-        // Don't toast success for music yet, wait for art
       }
     } catch (err) {
-      console.error("Error in music generation for drawing:", err);
+      console.error("Error in music generation for drawing/voice:", err);
       setError(err instanceof Error ? `Music generation failed: ${err.message}.` : "Unknown music generation error.");
       setMusicParams(null);
     } finally {
-      setIsLoadingMusic(false); // Music part is done
+      setIsLoadingMusic(false);
     }
 
-    // Then Render AI Art, regardless of music success, if drawingDataURL exists
-    if (drawingDataURL) {
+    // 2. Render AI Art (if there's input for it)
+    if (renderArtInput) {
+        renderArtInput.originalMusicalIdea = generatedMusicalIdea; // Add musical idea context
         try {
-            toast({ title: "AI Artist at Work 🎨", description: "Reimagining your awesome drawing..." });
-            const renderResult = await renderKidsDrawingAction(drawingDataURL, kidsInput.voiceDescription, generatedMusicalIdea);
-            if ('error' in renderResult) {
-                setAiKidsArtError(renderResult.error);
-                toast({ variant: "destructive", title: "AI Artist Hiccup", description: `Couldn't render the drawing: ${renderResult.error}` });
-            } else if (renderResult.renderedDrawingDataUrl) {
-                setAiKidsArtUrl(renderResult.renderedDrawingDataUrl);
-                toast({ title: "Artwork Ready!", description: "Your drawing has been reimagined!" });
+            toast({ title: "AI Artist at Work 🎨", description: "Reimagining your concept..." });
+            const artResult = await renderKidsDrawingAction(renderArtInput.drawingDataUri, renderArtInput.originalVoiceHint, renderArtInput.originalMusicalIdea);
+            if ('error' in artResult) {
+                setAiKidsArtError(artResult.error);
+                toast({ variant: "destructive", title: "AI Artist Hiccup", description: `Couldn't create art: ${artResult.error}` });
+            } else if (artResult.renderedDrawingDataUrl) {
+                setAiKidsArtUrl(artResult.renderedDrawingDataUrl);
+                toast({ title: "Artwork Ready!", description: "Your AI art has been created!" });
             }
         } catch (err) {
             console.error("Error rendering AI art:", err);
             setAiKidsArtError(err instanceof Error ? `AI art rendering failed: ${err.message}` : "Unknown AI art rendering error.");
             toast({ variant: "destructive", title: "AI Artist Error", description: "Something went wrong while creating the art." });
         } finally {
-            setIsRenderingAiKidsArt(false); // Art part is done
+            setIsRenderingAiKidsArt(false);
         }
     } else {
-        setIsRenderingAiKidsArt(false); // No drawing data URL, so stop art rendering
+        // No input for art (e.g., if music failed and also no valid drawing/voice)
+        setIsRenderingAiKidsArt(false);
     }
 
-  }, [selectedGenre, kidsVoiceTranscript]);
+  }, [selectedGenre, kidsVoiceTranscript, drawingCanvasRef]);
 
   const handleKidsVoiceInputToggle = () => {
     if (isListeningKids) {
@@ -238,7 +267,7 @@ export default function DreamTunerPage() {
   
   const mainTitle = currentMode === 'kids' ? "DreamTuner Kids!" : "DreamTuner";
   const mainSubtitle = currentMode === 'kids' 
-    ? "Draw a picture, add a voice hint, and hear its music & see it reimagined!"
+    ? "Draw a picture, add a voice hint (or both!), and hear its music & see it reimagined!"
     : "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
 
   return (
@@ -278,7 +307,7 @@ export default function DreamTunerPage() {
             <Card className="bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
               <CardHeader>
                 <CardTitle className="text-center text-2xl font-semibold text-stardust-blue">Draw Your Music!</CardTitle>
-                <CardDescription className="text-center text-sm text-slate-300">Sketch something, add a voice hint if you like, and see what music it makes and how AI sees your art!</CardDescription>
+                <CardDescription className="text-center text-sm text-slate-300">Sketch something, add a voice hint, or both! Then see what music it makes and how AI sees your creation!</CardDescription>
               </CardHeader>
               <CardContent className="p-6 sm:p-10 space-y-6">
                 <DrawingCanvas ref={drawingCanvasRef} width={500} height={300} />
@@ -292,7 +321,7 @@ export default function DreamTunerPage() {
                       type="button"
                       variant="outline"
                       onClick={handleKidsVoiceInputToggle}
-                      disabled={isLoadingMusic || isRenderingAiKidsArt} // Corrected: Remove isListeningKids
+                      disabled={isLoadingMusic || isRenderingAiKidsArt } 
                       className="w-full text-sm border-slate-600 hover:bg-slate-700 flex items-center justify-center"
                     >
                       {isListeningKids ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
@@ -303,14 +332,15 @@ export default function DreamTunerPage() {
                   ) : null }
                   {isListeningKids && (
                     <p className="text-sm text-slate-300 text-center p-2 bg-slate-700/50 rounded-md">
-                      Listening: <em className="text-galaxy-white">{kidsVoiceTranscript}{kidsInterimTranscript}</em>
+                      Listening: <em className="text-galaxy-white">{kidsInterimTranscript}</em> {/* Show only interim while listening */}
                     </p>
                   )}
-                  {!isListeningKids && kidsVoiceTranscript && (
+                   {/* Display final transcript when not listening, or combined if actively listening */}
+                  {(!isListeningKids && kidsVoiceTranscript) || (isListeningKids && kidsVoiceTranscript) ? (
                      <p className="text-sm text-slate-300 text-center p-2 bg-slate-700/50 rounded-md">
-                      Your hint: <em className="text-galaxy-white">{kidsVoiceTranscript}</em>
+                      Your hint: <em className="text-galaxy-white">{kidsVoiceTranscript} {isListeningKids && kidsInterimTranscript}</em>
                     </p>
-                  )}
+                  ) : null}
                   {speechErrorKids && <p className="mt-1 text-xs text-red-400 text-center">{speechErrorKids}</p>}
                 </div>
 
@@ -337,7 +367,7 @@ export default function DreamTunerPage() {
                   className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-gradient-to-r from-stardust-blue to-green-400 hover:from-sky-500 hover:to-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-nebula-dark focus:ring-stardust-blue disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
                   size="lg"
                 >
-                  {(isLoadingMusic && !isRenderingAiKidsArt) || (isLoadingMusic && isRenderingAiKidsArt) ? ( // Combined loading for music phase
+                  {isLoadingMusic ? (
                     <>
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-primary-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -345,24 +375,24 @@ export default function DreamTunerPage() {
                       </svg>
                       Tuning Music...
                     </>
-                  ) : !isLoadingMusic && isRenderingAiKidsArt ? ( // Art rendering phase (music is done)
+                  ) : isRenderingAiKidsArt ? ( 
                      <>
                       <LucideImage className="animate-pulse -ml-1 mr-3 h-5 w-5 text-primary-foreground" />
-                      AI Painting Your Sketch...
+                      AI Creating Your Art...
                     </>
-                  ) : ( // Idle
+                  ) : ( 
                     <>
                       <SparklesIcon className="w-5 h-5 mr-2 text-yellow-300 group-hover:scale-110 transition-transform" />
-                      Tune My Drawing!
+                      Tune My Creation!
                     </>
                   )}
                 </Button>
 
                 {/* AI Rendered Art Section - Directly under "Tune My Drawing!" button */}
-                {isRenderingAiKidsArt && !aiKidsArtUrl && ( // Show loading for art only if not yet loaded
+                {isRenderingAiKidsArt && !aiKidsArtUrl && ( 
                   <div className="mt-6 text-center">
                     <LoadingSpinner />
-                    <p className="mt-2 text-sm text-stardust-blue animate-pulse-subtle">AI is reimagining your drawing...</p>
+                    <p className="mt-2 text-sm text-stardust-blue animate-pulse-subtle">AI is creating your masterpiece...</p>
                   </div>
                 )}
                 {aiKidsArtError && (
@@ -378,8 +408,8 @@ export default function DreamTunerPage() {
                     <CardContent className="flex flex-col items-center space-y-4">
                       <Image 
                         src={aiKidsArtUrl} 
-                        alt="AI Rendered Sketch of Kid's Drawing" 
-                        data-ai-hint="illustration drawing"
+                        alt="AI Rendered Sketch of Kid's Drawing or Voice Hint" 
+                        data-ai-hint="illustration drawing kids"
                         width={400} 
                         height={250} 
                         className="rounded-md max-h-64 object-contain border border-slate-500 shadow-lg"
@@ -396,9 +426,7 @@ export default function DreamTunerPage() {
           </TabsContent>
         </Tabs>
         
-        {/* Display area for general loading (Standard Mode), errors, welcome, or music results */}
-        {/* General Loading for Standard Mode (music only) */}
-        {isLoadingMusic && !musicParams && currentMode === 'standard' && (
+        {isLoadingMusic && currentMode === 'standard' && !musicParams && (
           <div className="mt-10 text-center">
             <LoadingSpinner />
             <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
@@ -407,24 +435,21 @@ export default function DreamTunerPage() {
           </div>
         )}
         
-        {/* Loading for Kids Mode Music Generation (if AI art hasn't started/finished yet) */}
-        {isLoadingMusic && currentMode === 'kids' && !musicParams && !aiKidsArtUrl && !isRenderingAiKidsArt && (
+        {isLoadingMusic && currentMode === 'kids' && !musicParams && (
            <div className="mt-10 text-center">
             <LoadingSpinner />
             <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
-                DreamTuning music for your awesome drawing...
+                DreamTuning music for your creation...
             </p>
           </div>
         )}
 
-        {/* General Error Display (if not loading) */}
         {error && !isLoadingMusic && !isRenderingAiKidsArt && (
           <div className="mt-10">
             <ErrorMessage message={error} />
           </div>
         )}
         
-        {/* Welcome Message */}
         {showWelcome && !isLoadingMusic && !error && !musicParams && !aiKidsArtUrl && (
           <Card className="mt-10 text-center p-6 bg-nebula-gray/80 rounded-lg border-slate-700">
             <CardHeader>
@@ -434,15 +459,14 @@ export default function DreamTunerPage() {
               <p className="text-slate-300">
                 {currentMode === 'standard' 
                   ? "Enter text (or speak!), upload an image, or specify a video concept. Select a genre, and DreamTuner will unveil its musical soul."
-                  : "Sketch on the canvas, optionally add a voice hint or genre, and click 'Tune My Drawing!' to see and hear the magic!"
+                  : "Sketch on the canvas, record a voice hint, or do both! Select a genre if you like, and click 'Tune My Creation!' to see and hear the magic!"
                 }
               </p>
             </CardContent>
           </Card>
         )}
 
-        {/* Music Output Display - Now separate from AI Art in Kids Mode */}
-        {musicParams && !isLoadingMusic && ( // Show music params if they exist and music is no longer loading
+        {musicParams && !isLoadingMusic && ( 
           <Card className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
             <CardContent className="p-6 sm:p-10">
               <MusicOutputDisplay 
