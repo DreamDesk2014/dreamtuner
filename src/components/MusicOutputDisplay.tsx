@@ -2,6 +2,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Tone from 'tone';
+import { Midi } from 'tone'; // Import Midi class directly
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
@@ -94,7 +95,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     hiHat?: Tone.MetalSynth,
     parts?: Tone.Part[]
   }>({});
-  const progressIntervalRef = useRef<number | null>(null);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize Tone.js synths
   useEffect(() => {
@@ -107,14 +108,13 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       hiHat: new Tone.MetalSynth({ frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -15 }).toDestination(),
       parts: []
     };
-    // Adjust synth parameters for better distinction if needed
-    if(synthsRef.current.bass) synthsRef.current.bass.set({ oscillator: {type: "fmsine"}, detune: -1200 }); // Lower octave for bass
+    if(synthsRef.current.bass) synthsRef.current.bass.set({ oscillator: {type: "fmsine"}, detune: -1200 }); 
     
     return () => {
       Tone.Transport.cancel();
-      Tone.Transport.clear(0);
+      Tone.Transport.clear(0); // Clear all scheduled events
       Object.values(synthsRef.current).forEach(synthOrParts => {
-        if (Array.isArray(synthOrParts)) { // It's the parts array
+        if (Array.isArray(synthOrParts)) { 
             synthOrParts.forEach(part => part.dispose());
         } else if (synthOrParts && typeof (synthOrParts as any).dispose === 'function') {
             (synthOrParts as any).dispose();
@@ -130,7 +130,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   // Load and schedule MIDI when params change
   useEffect(() => {
     const loadAndScheduleMidi = async () => {
-      if (!params || !Object.keys(synthsRef.current).length) return;
+      if (!params || !Object.keys(synthsRef.current).length || !synthsRef.current.melody) return; // Check if synths are initialized
 
       setIsLoadingTone(true);
       setToneError(null);
@@ -138,7 +138,6 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       setPlaybackProgress(0);
       setCurrentMidiDuration(0);
       
-      // Stop and clear previous transport events
       Tone.Transport.stop();
       Tone.Transport.cancel(0);
       Tone.Transport.position = 0;
@@ -148,43 +147,32 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
       try {
         const midiDataUri = generateMidiFile(params);
+        console.log("Generated MIDI Data URI for playback:", midiDataUri);
         if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
-          throw new Error("Failed to generate valid MIDI data for Tone.js.");
+          throw new Error("Failed to generate valid MIDI data for Tone.js. URI was: " + (midiDataUri ? midiDataUri.substring(0,100) + "..." : "undefined/null"));
         }
 
-        const midi = await Tone.Midi.fromUrl(midiDataUri);
-        setCurrentMidiDuration(midi.duration);
+        const parsedMidi = await Midi.fromUrl(midiDataUri); // Use imported Midi
+        setCurrentMidiDuration(parsedMidi.duration);
         Tone.Transport.bpm.value = params.tempoBpm;
 
         const newParts: Tone.Part[] = [];
 
-        midi.tracks.forEach((track, trackIndex) => {
+        parsedMidi.tracks.forEach((track, trackIndex) => {
           let synth: Tone.Synth | Tone.PolySynth | Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
           
-          // Basic instrument mapping (can be expanded based on track.instrument.name or trackIndex)
-          if (track.channel === 9) { // Drum channel
-            // Drum tracks are handled differently, notes are scheduled individually
-          } else if (trackIndex === 0 && synthsRef.current.melody) { // Crude: first non-drum track is melody
-            synth = synthsRef.current.melody;
-          } else if (trackIndex === 1 && synthsRef.current.bass) { // Crude: second non-drum track is bass
-            synth = synthsRef.current.bass;
-          } else if (synthsRef.current.chords) { // Fallback for other pitched tracks
-            synth = synthsRef.current.chords;
-          }
-          
-          if (track.channel === 9) { // Drum track
+          if (track.channel === 9) { 
             track.notes.forEach(note => {
                 let drumSynth: Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
                 let pitchToPlay: string | number | undefined = undefined;
 
-                // Simplified drum mapping
-                if (note.midi === 35 || note.midi === 36) { // Kick
+                if (note.midi === 35 || note.midi === 36) { 
                     drumSynth = synthsRef.current.kick;
-                } else if (note.midi === 38 || note.midi === 40) { // Snare
+                } else if (note.midi === 38 || note.midi === 40) { 
                     drumSynth = synthsRef.current.snare;
-                } else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { // Hi-hat
+                } else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { 
                     drumSynth = synthsRef.current.hiHat;
-                    pitchToPlay = note.midi === 46 ? 400 : 250; // Slightly different pitch for open hi-hat
+                    pitchToPlay = note.midi === 46 ? 400 : 250; 
                 }
 
                 if (drumSynth) {
@@ -196,11 +184,17 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                     newParts.push(part);
                 }
             });
-          } else if (synth) { // Pitched instrument tracks
-            const part = new Tone.Part((time, value) => {
-              (synth as Tone.PolySynth).triggerAttackRelease(value.name, value.duration, time, value.velocity);
-            }, track.notes.map(n => ({ time: n.time, name: n.name, duration: n.duration, velocity: n.velocity }))).start(0);
-            newParts.push(part);
+          } else { 
+            if (trackIndex === 0 && synthsRef.current.melody) synth = synthsRef.current.melody;
+            else if (trackIndex === 1 && synthsRef.current.bass) synth = synthsRef.current.bass;
+            else if (synthsRef.current.chords) synth = synthsRef.current.chords;
+            
+            if (synth) {
+              const part = new Tone.Part((time, value) => {
+                (synth as Tone.PolySynth).triggerAttackRelease(value.name, value.duration, time, value.velocity);
+              }, track.notes.map(n => ({ time: n.time, name: n.name, duration: n.duration, velocity: n.velocity }))).start(0);
+              newParts.push(part);
+            }
           }
         });
         synthsRef.current.parts = newParts;
@@ -225,7 +219,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     } else if (Tone.Transport.state !== "started") {
        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
        progressIntervalRef.current = null;
-       if(playbackProgress > 99 && playbackProgress < 100.1 && !isPlaying) { // ensure it hits 100 if very close
+       if(playbackProgress > 99 && playbackProgress < 100.1 && !isPlaying) { 
          setPlaybackProgress(100);
        }
     }
@@ -240,7 +234,6 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
        progressIntervalRef.current = null;
     };
 
-    // Listen for 'stop' event to catch when transport naturally ends
     Tone.Transport.on('stop', endOfTransportHandler);
     
     return () => {
@@ -265,15 +258,15 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       } else {
-        if (playbackProgress >= 100 && currentMidiDuration > 0) { // If at end, restart
+        if (playbackProgress >= 100 && currentMidiDuration > 0) { 
              Tone.Transport.position = 0;
              setPlaybackProgress(0);
-             synthsRef.current.parts?.forEach(part => part.start(0)); // Re-start parts from beginning
+             synthsRef.current.parts?.forEach(part => part.start(0)); 
         }
         Tone.Transport.start();
         setIsPlaying(true);
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = setInterval(updateProgress, 100) as unknown as number;
+        progressIntervalRef.current = setInterval(updateProgress, 100);
       }
     } catch (error) {
       console.error("Tone.js play/pause error:", error);
@@ -285,14 +278,12 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   const handleStop = async () => {
     try {
       if (Tone.context.state !== 'running') {
-        await Tone.start(); // Ensure context is running before stopping transport
+        await Tone.start(); 
       }
       Tone.Transport.stop();
-      Tone.Transport.position = 0; // Reset position
-      synthsRef.current.parts?.forEach(part => { // Ensure parts are also stopped/reset
+      Tone.Transport.position = 0; 
+      synthsRef.current.parts?.forEach(part => { 
         part.stop(0); 
-        // For next play, parts need to be re-added or restarted from 0.
-        // Restarting them from 0 when play is hit again if progress was 100.
       });
 
       setIsPlaying(false);
@@ -731,4 +722,3 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     </div>
   );
 };
-
