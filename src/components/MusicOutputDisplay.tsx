@@ -2,7 +2,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Tone from 'tone';
-import { Midi as MidiFileParser } from '@tonejs/midi'; // Use specialized MIDI parser
+import { Midi as MidiFileParser } from '@tonejs/midi';
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
@@ -12,7 +12,7 @@ import {
   MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon,
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
   LibraryIcon, PlayIcon, PauseIcon, StopIcon
-} from './icons/HeroIcons';
+} from './icons/HeroIcons'; // Corrected path
 import { Share2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,17 +71,109 @@ const ParameterCardComponent: React.FC<ParameterCardProps> = ({ title, value, ic
   );
 };
 
-const MIN_TIME_GAP = 0.00001;
+const MIN_TIME_GAP = 0.00001; // Epsilon for ensuring strictly increasing times
 
-function ensureStrictlyIncreasingTimes<T extends { time: number }>(events: T[]): T[] {
+interface EventTime { time: number; [key: string]: any; }
+
+function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[]): T[] {
   let lastTime = -Infinity;
   return events.map((e) => {
-    const originalEventTime = e.time; // Keep original for reference if needed, but use adjusted for scheduling
-    const time = originalEventTime <= lastTime ? lastTime + MIN_TIME_GAP : originalEventTime;
+    // Ensure e.time is a number before comparison
+    const currentTime = typeof e.time === 'number' ? e.time : parseFloat(e.time as any);
+    if (isNaN(currentTime)) {
+        console.warn("Invalid time in event, skipping adjustment:", e);
+        return e; // Or handle error appropriately
+    }
+    const time = currentTime <= lastTime ? lastTime + MIN_TIME_GAP : currentTime;
     lastTime = time;
-    return { ...e, time }; // Return a new object with the potentially adjusted time
+    return { ...e, time };
   });
 }
+
+interface SynthConfigurations {
+  melody: Partial<Tone.SynthOptions>;
+  bass: Partial<Tone.SynthOptions>;
+  chords: Partial<Tone.SynthOptions>;
+  kick: Partial<Tone.MembraneSynthOptions>;
+  snare: Partial<Tone.NoiseSynthOptions>;
+  hiHat: Partial<Tone.MetalSynthOptions>;
+}
+
+
+const getSynthConfigurations = (
+  instrumentHints: string[] = [],
+  genre: string = '',
+  isKidsMode: boolean = false
+): SynthConfigurations => {
+  const hintsLower = instrumentHints.map(h => h.toLowerCase());
+  const genreLower = genre.toLowerCase();
+
+  // Default configurations
+  let configs: SynthConfigurations = {
+    melody: { oscillator: { type: 'fatsawtooth', count: 3, spread: 20 }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.4 }, volume: -3 },
+    bass: { oscillator: { type: 'fatsine', count: 2, spread: 10 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.5 }, volume: -6 }, // detune applied in PolySynth constructor
+    chords: { oscillator: { type: 'amtriangle', harmonicity: 0.5 }, volume: -12, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1.0 } },
+    kick: { pitchDecay: 0.05, octaves: 10, oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: 'exponential' }, volume: 0 },
+    snare: { noise: { type: 'pink' }, volume: -8, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } },
+    hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -20 },
+  };
+
+  if (isKidsMode) {
+    configs.melody = { oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.3 }, volume: -3 };
+    configs.bass = { oscillator: { type: 'sine' }, envelope: { attack: 0.02, decay: 0.3, sustain: 0.5, release: 0.4 }, volume: -6 };
+    configs.chords = { oscillator: { type: 'triangle' }, volume: -15, envelope: { attack: 0.1, decay: 0.4, sustain: 0.5, release: 0.8 } };
+    configs.kick.pitchDecay = 0.1;
+    configs.snare.noise.type = 'white'; configs.snare.envelope.decay = 0.1;
+    configs.hiHat.frequency = 300; configs.hiHat.envelope.decay = 0.03;
+  } else { // Genre and Hint based adjustments for non-kids mode
+    if (genreLower.includes('electronic')) {
+      configs.melody.oscillator.type = 'pulse';
+      configs.bass.oscillator.type = 'fatsquare'; configs.bass.volume = -3;
+      configs.chords.oscillator.type = 'pwm'; configs.chords.oscillator.modulationFrequency = 0.5; configs.chords.volume = -10;
+    } else if (genreLower.includes('ambient')) {
+      configs.melody.envelope = { attack: 0.5, decay: 0.2, sustain: 0.8, release: 2.0 }; configs.melody.volume = -6;
+      configs.bass.envelope = { attack: 0.6, decay: 0.3, sustain: 0.9, release: 2.5 }; configs.bass.volume = -9;
+      configs.chords.oscillator.type = 'fatsine'; configs.chords.volume = -12;
+      configs.chords.envelope = { attack: 1.0, decay: 0.5, sustain: 0.9, release: 3.0 };
+    } else if (genreLower.includes('rock') || genreLower.includes('metal')) {
+      configs.melody.oscillator.type = 'fatsawtooth'; configs.melody.volume = 0;
+      configs.bass.oscillator.type = 'fatsquare'; configs.bass.volume = -3;
+      configs.chords.oscillator.type = 'fatsawtooth'; configs.chords.volume = -9;
+      configs.kick.octaves = 8; configs.kick.envelope.decay = 0.3;
+      configs.snare.envelope.decay = 0.1; configs.snare.volume = -6;
+    } else if (genreLower.includes('jazz')) {
+      configs.melody = { oscillator: { type: 'fmsine', harmonicity: 1.5, modulationIndex: 5 }, envelope: { attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.2 }, volume: -3 }; // Piano-like
+      configs.bass = { oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.4, sustain: 0.1, release: 0.3 }, volume: -6 }; // Acoustic bass-like
+      configs.chords = { oscillator: { type: 'fmtriangle', harmonicity: 2, modulationIndex: 3 }, volume: -15, envelope: { attack: 0.02, decay: 0.6, sustain: 0.3, release: 0.5 } }; // Smoother chords
+    }
+
+    hintsLower.forEach(hint => {
+      if (hint.includes('piano')) {
+        configs.melody = { oscillator: { type: 'fmsine', harmonicity: 2.1, modulationIndex: 10, detune: 2 }, envelope: { attack: 0.005, decay: 0.7, sustain: 0.05, release: 0.4 }, volume: -3 };
+        if (!genreLower.includes('jazz')) configs.chords = { oscillator: { type: 'fmsine', harmonicity: 2.5, modulationIndex: 8 }, volume: -12, envelope: { attack: 0.01, decay: 0.8, sustain: 0.1, release: 0.5 } };
+      } else if (hint.includes('strings') || hint.includes('pad') && !hint.includes('synth pad')) {
+        configs.melody = { oscillator: { type: 'fatsawtooth', count: 5, spread: 30 }, envelope: { attack: 0.3, decay: 0.1, sustain: 0.9, release: 1.2 }, volume: -6 };
+        configs.chords = { oscillator: { type: 'fatsawtooth', count: 7, spread: 50 }, volume: -10, envelope: { attack: 0.5, decay: 0.2, sustain: 0.9, release: 1.5 } };
+      } else if (hint.includes('synth lead') && !isKidsMode) {
+        configs.melody = { oscillator: { type: 'pwm', modulationFrequency: 0.3 }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.7, release: 0.6 }, volume: 0 };
+      } else if (hint.includes('acoustic guitar')) {
+         configs.melody = { oscillator: { type: 'fmtriangle', harmonicity: 1.2, modulationIndex: 12 }, envelope: { attack: 0.01, decay: 0.25, sustain: 0.01, release: 0.15}, volume: -4 };
+         configs.chords = { oscillator: { type: 'fmtriangle', harmonicity: 1.5, modulationIndex: 10 }, volume: -10, envelope: { attack: 0.02, decay: 0.4, sustain: 0.05, release: 0.25} };
+      } else if (hint.includes('flute')) {
+        configs.melody = { oscillator: { type: 'triangle8' }, envelope: { attack: 0.06, decay: 0.15, sustain: 0.6, release: 0.35 }, volume: -5 };
+      } else if (hint.includes('bell') || hint.includes('xylophone')) {
+        configs.melody = { oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.5, sustain: 0.01, release: 0.3, attackCurve: 'exponential' }, volume: -3 };
+      }
+      // Bass hints
+      if (hint.includes('synth bass')) configs.bass = { oscillator: {type: 'fatsquare', count: 3, spread: 15}, envelope: {attack: 0.01, decay: 0.1, sustain: 0.8, release: 0.3}, volume: -3};
+      else if (hint.includes('acoustic bass') && !genreLower.includes('jazz')) configs.bass = { oscillator: {type: 'sine'}, envelope: {attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.3}, volume: -6};
+      // Pad hints (for chords primarily)
+      if (hint.includes('synth pad')) configs.chords = {oscillator: {type: 'fatsawtooth', count: 4, spread: 60}, volume: -12, envelope: {attack: 0.4, decay: 0.1, sustain: 0.9, release: 1.2}};
+    });
+  }
+
+  return configs;
+};
 
 
 export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, onRegenerateIdea, isRegeneratingIdea, standardModeArtUrl }) => {
@@ -110,13 +202,14 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    // Initial synth creation - will be configured dynamically later
     synthsRef.current = {
-      melody: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsawtooth' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.5 } }).toDestination(),
-      bass: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.5, release: 0.5 }, detune: -1200 }).toDestination(),
-      chords: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'amtriangle', harmonicity: 0.5 }, volume: -8, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1 } }).toDestination(),
-      kick: new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 10, oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: 'exponential' } }).toDestination(),
-      snare: new Tone.NoiseSynth({ noise: { type: 'pink' }, volume: -5, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } }).toDestination(),
-      hiHat: new Tone.MetalSynth({ frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -15 }).toDestination(),
+      melody: new Tone.PolySynth(Tone.Synth).toDestination(),
+      bass: new Tone.PolySynth(Tone.Synth, { detune: -1200 }).toDestination(), // Keep detune for bass
+      chords: new Tone.PolySynth(Tone.Synth).toDestination(),
+      kick: new Tone.MembraneSynth().toDestination(),
+      snare: new Tone.NoiseSynth().toDestination(),
+      hiHat: new Tone.MetalSynth().toDestination(),
       parts: []
     };
     
@@ -129,7 +222,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
             (synthOrParts as any).dispose();
         }
       });
-      synthsRef.current = { parts: [] };
+      synthsRef.current = { parts: [] }; // Clear refs
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
@@ -155,6 +248,21 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       synthsRef.current.parts = [];
 
       try {
+        // Apply dynamic synth configurations
+        const synthConfigs = getSynthConfigurations(
+          params.instrumentHints,
+          params.selectedGenre,
+          params.originalInput.mode === 'kids'
+        );
+
+        if (synthsRef.current.melody) synthsRef.current.melody.set(synthConfigs.melody);
+        if (synthsRef.current.bass) synthsRef.current.bass.set(synthConfigs.bass);
+        if (synthsRef.current.chords) synthsRef.current.chords.set(synthConfigs.chords);
+        if (synthsRef.current.kick) synthsRef.current.kick.set(synthConfigs.kick);
+        if (synthsRef.current.snare) synthsRef.current.snare.set(synthConfigs.snare);
+        if (synthsRef.current.hiHat) synthsRef.current.hiHat.set(synthConfigs.hiHat);
+
+
         const midiDataUri = generateMidiFile(params);
         if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
           throw new Error("Failed to generate valid MIDI data.");
@@ -165,8 +273,9 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         Tone.Transport.bpm.value = params.tempoBpm;
 
         const newParts: (Tone.Part | Tone.Sequence)[] = [];
-        
-        const drumEvents: { kick: any[], snare: any[], hiHat: any[] } = { kick: [], snare: [], hiHat: [] };
+        const drumEvents: { kick: EventTime[], snare: EventTime[], hiHat: EventTime[] } = { kick: [], snare: [], hiHat: [] };
+        const lastDrumEventTimes = { kick: -Infinity, snare: -Infinity, hiHat: -Infinity };
+        const epsilon = 0.0001;
         
         parsedMidi.tracks.forEach((track, trackIndex) => {
           if (track.channel === 9) { // Drum track
@@ -187,17 +296,22 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                 else if (note.midi === 38 || note.midi === 40) { drumType = 'snare'; }
                 else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { 
                     drumType = 'hiHat'; 
-                    pitchToPlay = note.midi === 46 ? 400 : 250; // Frequency for MetalSynth
+                    pitchToPlay = note.midi === 46 ? 400 : 250; 
                 }
 
                 if (drumType) {
-                    const event = { time: noteTime, duration: noteDuration, velocity: noteVelocity, pitch: pitchToPlay };
+                    let eventTime = noteTime;
+                    if (eventTime <= lastDrumEventTimes[drumType]) {
+                        eventTime = lastDrumEventTimes[drumType] + epsilon;
+                    }
+                    lastDrumEventTimes[drumType] = eventTime;
+                    const event: EventTime = { time: eventTime, duration: noteDuration, velocity: noteVelocity, pitch: pitchToPlay };
                     if (drumType === 'kick') drumEvents.kick.push(event);
                     else if (drumType === 'snare') drumEvents.snare.push(event);
                     else if (drumType === 'hiHat') drumEvents.hiHat.push(event);
                 }
             });
-          } else { // Pitched instrument tracks
+          } else { 
             let synth: Tone.PolySynth | undefined;
             if (trackIndex === 0 && synthsRef.current.melody) synth = synthsRef.current.melody;
             else if (trackIndex === 1 && synthsRef.current.bass) synth = synthsRef.current.bass;
@@ -212,7 +326,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                   return { time: noteTime, name: n.name, duration: noteDuration, velocity: noteVelocity };
                 }
                 return null;
-              }).filter(e => e !== null) as { time: number; name: string; duration: number; velocity: number }[];
+              }).filter(e => e !== null) as EventTime[];
 
               if (trackEvents.length > 0) {
                 const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents);
@@ -228,21 +342,21 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         });
 
         if (drumEvents.kick.length > 0 && synthsRef.current.kick) {
-            const correctedKickEvents = ensureStrictlyIncreasingTimes(drumEvents.kick);
+            const correctedKickEvents = ensureStrictlyIncreasingTimes(drumEvents.kick.sort((a,b) => a.time - b.time));
             const kickPart = new Tone.Part(((time, value) => {
                 if (value.pitch && synthsRef.current.kick) synthsRef.current.kick.triggerAttackRelease(value.pitch as string, value.duration, time, value.velocity);
             }) as any, correctedKickEvents);
             newParts.push(kickPart);
         }
         if (drumEvents.snare.length > 0 && synthsRef.current.snare) {
-             const correctedSnareEvents = ensureStrictlyIncreasingTimes(drumEvents.snare);
+             const correctedSnareEvents = ensureStrictlyIncreasingTimes(drumEvents.snare.sort((a,b) => a.time - b.time));
             const snarePart = new Tone.Part(((time, value) => {
                  if (synthsRef.current.snare) synthsRef.current.snare.triggerAttackRelease(value.duration, time, value.velocity);
             }) as any, correctedSnareEvents);
             newParts.push(snarePart);
         }
         if (drumEvents.hiHat.length > 0 && synthsRef.current.hiHat) {
-            const correctedHiHatEvents = ensureStrictlyIncreasingTimes(drumEvents.hiHat);
+            const correctedHiHatEvents = ensureStrictlyIncreasingTimes(drumEvents.hiHat.sort((a,b) => a.time - b.time));
             const hiHatPart = new Tone.Part(((time, value) => {
                 if (typeof value.pitch === 'number' && synthsRef.current.hiHat) synthsRef.current.hiHat.frequency.setValueAtTime(value.pitch, time);
                 if (synthsRef.current.hiHat) synthsRef.current.hiHat.triggerAttackRelease(value.duration, time, value.velocity);
@@ -383,7 +497,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       case 'video': 
         const fileTypeLabel = params.originalInput.fileDetails.type.startsWith('video/') ? 'Video' :
                               params.originalInput.fileDetails.type.startsWith('audio/') ? 'Audio' : 'Media';
-        originalInputSummary = `${fileTypeLabel} Concept: ${params.originalInput.fileDetails.name}`;
+        originalInputSummary = `${fileTypeDisplay} Concept: ${params.originalInput.fileDetails.name}`;
         if (params.originalInput.additionalContext) {
           originalInputSummary += `\\nAdditional Context: "${params.originalInput.additionalContext}"`;
         }
