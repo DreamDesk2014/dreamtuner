@@ -2,6 +2,8 @@
 // @ts-nocheck - Disabling TypeScript checks for this file due to midi-writer-js typings
 import MidiWriter from 'midi-writer-js';
 import type { MusicParameters, AppInput } from '@/types';
+import { TARGET_TOTAL_MIDI_SECONDS, MIN_SONG_BODY_SECONDS_FOR_CALC } from '@/lib/constants';
+
 
 const PITCH_CLASSES: { [key: string]: number } = {
     'C': 0, 'B#': 0, 'BS': 0,
@@ -185,8 +187,8 @@ function getChordProgressionWithDetails(
              chordMidiNumbers = [normalizedRootMidiPitch, normalizedRootMidiPitch + thirdInterval, normalizedRootMidiPitch + fifthInterval];
         } else if (harmonicComplexity > 0.6) {
             let seventhInterval: number | null = null;
-            if (quality === 'major') seventhInterval = 10; 
-            else if (quality === 'minor') seventhInterval = 10; 
+            if (quality === 'major') seventhInterval = 10; // Major 7th for Imaj7, IVmaj7. Dominant 7th (10) for V7.
+            else if (quality === 'minor') seventhInterval = 10; // Minor 7th for ii7, vi7, iii7
             if (seventhInterval !== null) {
                 chordMidiNumbers.push(normalizedRootMidiPitch + seventhInterval);
             }
@@ -361,12 +363,15 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const measuresInBaseProgression = 4; 
     const secondsPerBaseProgression = measuresInBaseProgression * secondsPerMeasure;
     
-    const MAX_MIDI_SECONDS = isKidsMode ? 20 : 30;
-    let numProgressionCycles = Math.max(1, Math.floor(MAX_MIDI_SECONDS / secondsPerBaseProgression));
-    if (numProgressionCycles * secondsPerBaseProgression < (isKidsMode ? 3 : 5) && MAX_MIDI_SECONDS > (isKidsMode ? 3 : 5)) {
-      numProgressionCycles = Math.max(numProgressionCycles, Math.ceil((isKidsMode ? 3 : 5) / secondsPerBaseProgression));
-    }
-    if (numProgressionCycles === 0) numProgressionCycles = 1;
+    const outroDurationMeasures = 2; // 2 measures for sustained chords/notes
+    const outroDurationSeconds = outroDurationMeasures * secondsPerMeasure;
+
+    let targetSongBodySeconds = TARGET_TOTAL_MIDI_SECONDS - outroDurationSeconds;
+    // Ensure targetSongBodySeconds is not too short, especially if outro is long due to slow tempo
+    targetSongBodySeconds = Math.max(targetSongBodySeconds, Math.max(MIN_SONG_BODY_SECONDS_FOR_CALC, secondsPerBaseProgression));
+
+
+    let numProgressionCycles = Math.max(1, Math.round(targetSongBodySeconds / secondsPerBaseProgression));
     
     const progression = getChordProgressionWithDetails(params.keySignature, params.mode, numProgressionCycles, chordOctave, params.harmonicComplexity, isKidsMode);
     
@@ -569,7 +574,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
                 let snareVel = calculateDynamicVelocity(85, 60, 110, 15);
                 let hiHatBaseVel = 60 + targetArousal * 20; 
 
-                if (isFillMeasure && beat === beatsPerMeasure - 1 && params.rhythmicDensity > 0.3) {
+                if (isFillMeasure && beat === beatsPerMeasure - 1 && params.rhythmicDensity > 0.3 && measureIndex !== progression.length - 1) { // Ensure fill not on last measure of progression
                     for(let f=0; f<4; f++) {
                         drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '16', velocity: calculateDynamicVelocity(70 + f*5, 50, 100, 5), channel: 10, tick: beatStartTick + f * Math.floor(TPQN/4) }));
                     }
@@ -630,14 +635,13 @@ export const generateMidiFile = (params: MusicParameters): string => {
     // 1. Final Sustained Chord (Pad Track)
     if (!isKidsMode || params.harmonicComplexity > 0.2) {
         const finalPadOctave = isKidsMode ? 3 : 2;
-        // Use buildChord directly to construct the final tonic triad
         const finalTonicChordForPad = getChordProgressionWithDetails(tonicKeyName, finalModeIsMinor ? 'minor' : 'major', 1, finalPadOctave, 0.1, isKidsMode)[0];
 
         if (finalTonicChordForPad && finalTonicChordForPad.notes.length > 0) {
             const finalPadVelocity = calculateDynamicVelocity(isKidsMode ? 30 : 40, 20, isKidsMode ? 55 : 65, 5);
             chordsPadTrack.addEvent(new MidiWriter.NoteEvent({
                 pitch: finalTonicChordForPad.notes,
-                duration: '0.5', // Sustain for 2 measures
+                duration: '0.5', 
                 velocity: finalPadVelocity
             }));
         }
@@ -669,13 +673,11 @@ export const generateMidiFile = (params: MusicParameters): string => {
         }
     }
     
-    // Arpeggio track simply ends after its main body loop.
-
     // 4. Final Cymbal Crash (Drum Track)
     const finalDrumVelocity = calculateDynamicVelocity(isKidsMode ? 70 : 90, 50, isKidsMode ? 90 : 110, 10);
     drumTrack.addEvent(new MidiWriter.NoteEvent({
         pitch: [crashCymbal],
-        duration: '1', // Ring for 1 measure
+        duration: '1', 
         velocity: finalDrumVelocity,
         channel: 10
     }));
@@ -698,3 +700,4 @@ export const generateMidiFile = (params: MusicParameters): string => {
         return fallbackWriter.dataUri();
     }
 };
+

@@ -40,6 +40,9 @@ export const MUSIC_GENRES = [
   "Reggae", "Country", "Metal", "Funk", "Soul"
 ].sort();
 
-export const SOUND_LOADING_TIMEOUT_MS = 40000; // Increased from 20000
+export const SOUND_LOADING_TIMEOUT_MS = 40000; 
 export const SOUNDFONT_URL = 'https://storage.googleapis.com/magentadata/js/soundfonts/sgm_plus/';
+
+export const TARGET_TOTAL_MIDI_SECONDS = 35; // Target overall MIDI duration
+export const MIN_SONG_BODY_SECONDS_FOR_CALC = 10; // Minimum seconds for song body if outro is very long
 
