@@ -21,7 +21,7 @@ import { NavigationBar } from '@/components/NavigationBar';
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image'; // For displaying AI art
 import { Button } from '@/components/ui/button';
-import { Download, Share2 } from 'lucide-react';
+import { Download, Share2, ListMusic, Album } from 'lucide-react';
 import { dataURLtoFile } from '@/lib/utils';
 import { generateMidiFile } from '@/lib/midiService';
 
@@ -32,7 +32,7 @@ export default function DreamTunerPage() {
   const [isRegeneratingIdea, setIsRegeneratingIdea] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState<boolean>(true);
-  const [currentMode, setCurrentMode] = useState<'standard' | 'kids'>('standard');
+  const [currentMode, setCurrentMode] = useState<'standard' | 'kids' | 'comingSoon'>('standard');
   const [isClientMounted, setIsClientMounted] = useState(false);
 
   // Kids Mode Art State
@@ -64,13 +64,15 @@ export default function DreamTunerPage() {
     setIsRenderingStandardModeAiArt(false);
   };
 
-  const handleModeChange = (newMode: 'standard' | 'kids') => {
+  const handleModeChange = (newMode: 'standard' | 'kids' | 'comingSoon') => {
     setCurrentMode(newMode);
     setMusicParams(null);
     setError(null);
     resetAllArtStates();
-    setShowWelcome(true);
-    setSelectedGenre(MUSIC_GENRES[0] || '');
+    setShowWelcome(newMode !== 'comingSoon'); // Don't show welcome for "Coming Soon"
+    if (newMode !== 'comingSoon') {
+      setSelectedGenre(MUSIC_GENRES[0] || '');
+    }
     setCurrentKidsMusicParams(null);
   };
 
@@ -82,8 +84,6 @@ export default function DreamTunerPage() {
     resetAllArtStates();
     setCurrentKidsMusicParams(null);
 
-    // let generatedMusicParams: MusicParameters | null = null; // Not needed here with current structure
-
     try {
       toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas..." });
       const musicResult = await generateMusicParametersAction(input);
@@ -92,10 +92,8 @@ export default function DreamTunerPage() {
         setMusicParams(null);
       } else {
         setMusicParams(musicResult);
-        // generatedMusicParams = musicResult; // Store for art generation
         setError(null);
 
-        // Now attempt to generate AI art for standard mode
         if (musicResult.generatedIdea) {
           setIsRenderingStandardModeAiArt(true);
           setStandardModeAiArtError(null);
@@ -104,7 +102,7 @@ export default function DreamTunerPage() {
 
           try {
             const artResult = await renderStandardInputArtAction(
-              musicResult.originalInput, // Pass the original AppInput
+              musicResult.originalInput,
               musicResult.generatedIdea
             );
             if ('error' in artResult) {
@@ -146,7 +144,6 @@ export default function DreamTunerPage() {
     setCurrentKidsMusicParams(null);
     setAiKidsArtUrl(null);
     setAiKidsArtError(null);
-    // Also reset standard mode art if switching from standard mode outputs
     setStandardModeAiArtUrl(null);
     setStandardModeAiArtError(null);
     setIsRenderingStandardModeAiArt(false);
@@ -233,11 +230,10 @@ export default function DreamTunerPage() {
           if (!prevParams) return null;
           const updatedParams = { ...prevParams, generatedIdea: result.newIdea };
 
-          // If in standard mode and an idea is regenerated, also re-render standard art
           if (currentMode === 'standard' && updatedParams.originalInput) {
             setIsRenderingStandardModeAiArt(true);
             setStandardModeAiArtError(null);
-            setStandardModeAiArtUrl(null); // Clear old art
+            setStandardModeAiArtUrl(null); 
             toast({ title: "AI Artist at Work 🎨", description: "Reimagining visual for new idea..." });
 
             renderStandardInputArtAction(updatedParams.originalInput, result.newIdea)
@@ -343,9 +339,12 @@ export default function DreamTunerPage() {
   };
 
 
-  const mainSubtitle = currentMode === 'kids'
-    ? "Draw, make sounds, add voice hints! Hear music & see AI art!"
-    : "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
+  let mainSubtitle = "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
+  if (currentMode === 'kids') {
+    mainSubtitle = "Draw, make sounds, add voice hints! Hear music & see AI art!";
+  } else if (currentMode === 'comingSoon') {
+    mainSubtitle = "Exciting new features are on the way!";
+  }
 
   const isLoadingOverall = isLoadingMusic || isRenderingStandardModeAiArt || isRenderingAiKidsArt;
 
@@ -375,10 +374,11 @@ export default function DreamTunerPage() {
       </header>
 
       <main className="w-full max-w-3xl">
-        <Tabs value={currentMode} onValueChange={(value) => handleModeChange(value as 'standard' | 'kids')} className="w-full mb-8">
-          <TabsList className="grid w-full grid-cols-2 bg-nebula-gray/80 border border-slate-700">
+        <Tabs value={currentMode} onValueChange={(value) => handleModeChange(value as 'standard' | 'kids' | 'comingSoon')} className="w-full mb-8">
+          <TabsList className="grid w-full grid-cols-3 bg-nebula-gray/80 border border-slate-700">
             <TabsTrigger value="standard" className="data-[state=active]:bg-cosmic-purple data-[state=active]:text-primary-foreground">Standard Mode</TabsTrigger>
             <TabsTrigger value="kids" className="data-[state=active]:bg-stardust-blue data-[state=active]:text-primary-foreground">Kids Mode</TabsTrigger>
+            <TabsTrigger value="comingSoon" className="data-[state=active]:bg-slate-600 data-[state=active]:text-primary-foreground">Coming Soon!</TabsTrigger>
           </TabsList>
 
           <TabsContent value="standard" className="mt-6">
@@ -404,9 +404,54 @@ export default function DreamTunerPage() {
               currentMusicParamsFromPage={currentKidsMusicParams}
             />
           </TabsContent>
+
+          <TabsContent value="comingSoon" className="mt-6">
+            <Card className="bg-nebula-gray shadow-xl rounded-xl border-slate-700">
+              <CardHeader className="text-center">
+                <CardTitle className="text-2xl font-semibold text-stardust-blue mb-2 font-headline">
+                  <ListMusic className="inline-block w-7 h-7 mr-2 -mt-1" />
+                  Your DreamTuner Collections
+                </CardTitle>
+                <CardDescription className="text-slate-300">
+                  This is where your saved musical dreams and their artistic impressions will live!
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 text-center space-y-6">
+                <div className="flex flex-col items-center space-y-4 p-6 bg-nebula-gray/50 rounded-lg border border-dashed border-slate-600">
+                  <Album className="w-24 h-24 text-slate-500" />
+                  <h3 className="text-xl font-semibold text-slate-400">Feature Coming Soon!</h3>
+                  <p className="text-sm text-slate-400 max-w-md">
+                    Imagine a gallery of all your creations! Each entry will feature an "album cover" generated by AI,
+                    your unique musical idea, and the MIDI file. You'll be able to browse, replay, and re-share your favorite DreamTuner moments.
+                  </p>
+                  <p className="text-xs text-slate-500">Stay tuned for updates!</p>
+                </div>
+                 <div className="mt-4 p-4 bg-slate-800/30 rounded-md border border-slate-700">
+                    <h4 className="text-lg font-medium text-stardust-blue mb-3">Example: "Cosmic Lullaby"</h4>
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                        <Image
+                            src="https://placehold.co/150x150.png"
+                            alt="Placeholder Album Art"
+                            data-ai-hint="space nebula stars"
+                            width={150}
+                            height={150}
+                            className="rounded-md border border-slate-600 shadow-md object-cover"
+                        />
+                        <div className="text-left space-y-1 text-sm">
+                            <p><strong className="text-slate-300">Title:</strong> Cosmic Lullaby</p>
+                            <p><strong className="text-slate-300">Genre:</strong> Ambient</p>
+                            <p><strong className="text-slate-300">Date Created:</strong> Sometime in the Future!</p>
+                            <p className="text-slate-400 italic">"A gentle journey through starry skies..."</p>
+                            <Button variant="outline" size="sm" className="mt-2 border-slate-500 text-slate-300" disabled>Play (Placeholder)</Button>
+                        </div>
+                    </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
-        {isLoadingMusic && !musicParams && (
+        {currentMode !== 'comingSoon' && isLoadingMusic && !musicParams && (
           <div className="mt-10 text-center">
             <LoadingSpinner />
             <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
@@ -414,7 +459,7 @@ export default function DreamTunerPage() {
             </p>
           </div>
         )}
-        {isRenderingStandardModeAiArt && currentMode === 'standard' && musicParams && (
+        {currentMode === 'standard' && isRenderingStandardModeAiArt && musicParams && (
              <div className="mt-10 text-center">
                 <LoadingSpinner />
                 <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
@@ -424,13 +469,13 @@ export default function DreamTunerPage() {
         )}
 
 
-        {error && !isLoadingOverall && (
+        {currentMode !== 'comingSoon' && error && !isLoadingOverall && (
           <div className="mt-10">
             <ErrorMessage message={error} />
           </div>
         )}
 
-        {showWelcome && !isLoadingOverall && !error && !musicParams && !aiKidsArtUrl && !standardModeAiArtUrl && (
+        {currentMode !== 'comingSoon' && showWelcome && !isLoadingOverall && !error && !musicParams && !aiKidsArtUrl && !standardModeAiArtUrl && (
           <Card className="mt-10 text-center p-6 bg-nebula-gray/80 rounded-lg border-slate-700">
             <CardHeader>
               <CardTitle className="text-2xl font-semibold text-stardust-blue mb-3 font-headline">Welcome to DreamTuner</CardTitle>
@@ -446,7 +491,7 @@ export default function DreamTunerPage() {
           </Card>
         )}
 
-        {musicParams && !isLoadingMusic && (
+        {currentMode !== 'comingSoon' && musicParams && !isLoadingMusic && (
           <Card className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
             <CardContent className="p-6 sm:p-10">
               <MusicOutputDisplay
@@ -459,7 +504,6 @@ export default function DreamTunerPage() {
           </Card>
         )}
 
-        {/* Standard Mode AI Art Display */}
         {currentMode === 'standard' && standardModeAiArtError && !isRenderingStandardModeAiArt && (
           <div className="mt-6">
             <ErrorMessage message={`Standard Mode AI Artist Error: ${standardModeAiArtError}`} />
@@ -485,7 +529,6 @@ export default function DreamTunerPage() {
                     <Download className="w-4 h-4 mr-2" />
                     Download Art
                 </Button>
-                {/* Share button is now inside MusicOutputDisplay to handle combined sharing */}
               </div>
               {shareStandardArtError && <p className="text-red-400 text-xs text-center mt-2">{`Share Error: ${shareStandardArtError}`}</p>}
             </CardContent>
@@ -497,5 +540,4 @@ export default function DreamTunerPage() {
     </div>
   );
 }
-
     
