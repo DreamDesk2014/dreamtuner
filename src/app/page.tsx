@@ -7,7 +7,8 @@ import { ErrorMessage } from '@/components/ErrorMessage';
 import { generateMusicParametersAction } from '@/app/actions/generateMusicParametersAction';
 import { regenerateMusicalIdeaAction } from '@/app/actions/regenerateMusicalIdeaAction';
 import { renderKidsDrawingAction } from '@/app/actions/renderKidsDrawingAction';
-import type { MusicParameters, AppInput, RenderKidsDrawingInput, RenderedDrawingResponse } from '@/types';
+import { renderStandardInputArtAction } from '@/app/actions/renderStandardInputArtAction'; // New action
+import type { MusicParameters, AppInput, RenderKidsDrawingInput, RenderedDrawingResponse, RenderedStandardArtResponse } from '@/types';
 import { LogoIcon } from '@/components/icons/LogoIcon';
 import { Footer } from '@/components/Footer';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -18,6 +19,11 @@ import { toast } from '@/hooks/use-toast';
 import { MUSIC_GENRES } from '@/lib/constants';
 import { NavigationBar } from '@/components/NavigationBar';
 import { Badge } from "@/components/ui/badge";
+import Image from 'next/image'; // For displaying AI art
+import { Button } from '@/components/ui/button';
+import { Download, Share2 } from 'lucide-react';
+import { dataURLtoFile } from '@/lib/utils';
+import { generateMidiFile } from '@/lib/midiService';
 
 
 export default function DreamTunerPage() {
@@ -29,26 +35,42 @@ export default function DreamTunerPage() {
   const [currentMode, setCurrentMode] = useState<'standard' | 'kids'>('standard');
   const [isClientMounted, setIsClientMounted] = useState(false);
 
+  // Kids Mode Art State
   const [aiKidsArtUrl, setAiKidsArtUrl] = useState<string | null>(null);
   const [isRenderingAiKidsArt, setIsRenderingAiKidsArt] = useState<boolean>(false);
   const [aiKidsArtError, setAiKidsArtError] = useState<string | null>(null);
-  
-  const [selectedGenre, setSelectedGenre] = useState<string>(MUSIC_GENRES[0] || '');
   const [currentKidsMusicParams, setCurrentKidsMusicParams] = useState<MusicParameters | null>(null);
+
+  // Standard Mode Art State
+  const [standardModeAiArtUrl, setStandardModeAiArtUrl] = useState<string | null>(null);
+  const [isRenderingStandardModeAiArt, setIsRenderingStandardModeAiArt] = useState<boolean>(false);
+  const [standardModeAiArtError, setStandardModeAiArtError] = useState<string | null>(null);
+  const [isSharingStandardArt, setIsSharingStandardArt] = useState<boolean>(false);
+  const [shareStandardArtError, setShareStandardArtError] = useState<string | null>(null);
+
+  const [selectedGenre, setSelectedGenre] = useState<string>(MUSIC_GENRES[0] || '');
 
 
   useEffect(() => {
     setIsClientMounted(true);
   }, []);
-  
+
+  const resetAllArtStates = () => {
+    setAiKidsArtUrl(null);
+    setAiKidsArtError(null);
+    setIsRenderingAiKidsArt(false);
+    setStandardModeAiArtUrl(null);
+    setStandardModeAiArtError(null);
+    setIsRenderingStandardModeAiArt(false);
+  };
+
   const handleModeChange = (newMode: 'standard' | 'kids') => {
     setCurrentMode(newMode);
     setMusicParams(null);
     setError(null);
-    setAiKidsArtUrl(null);
-    setAiKidsArtError(null);
+    resetAllArtStates();
     setShowWelcome(true);
-    setSelectedGenre(MUSIC_GENRES[0] || ''); 
+    setSelectedGenre(MUSIC_GENRES[0] || '');
     setCurrentKidsMusicParams(null);
   };
 
@@ -57,20 +79,51 @@ export default function DreamTunerPage() {
     setError(null);
     setMusicParams(null);
     setShowWelcome(false);
-    setAiKidsArtUrl(null); 
-    setAiKidsArtError(null);
-    setIsRenderingAiKidsArt(false);
+    resetAllArtStates();
     setCurrentKidsMusicParams(null);
 
+    // let generatedMusicParams: MusicParameters | null = null; // Not needed here with current structure
 
     try {
+      toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas..." });
       const musicResult = await generateMusicParametersAction(input);
       if ('error' in musicResult) {
         setError(musicResult.error);
         setMusicParams(null);
       } else {
         setMusicParams(musicResult);
+        // generatedMusicParams = musicResult; // Store for art generation
         setError(null);
+
+        // Now attempt to generate AI art for standard mode
+        if (musicResult.generatedIdea) {
+          setIsRenderingStandardModeAiArt(true);
+          setStandardModeAiArtError(null);
+          setStandardModeAiArtUrl(null);
+          toast({ title: "AI Artist at Work 🎨", description: "Crafting visual representation..." });
+
+          try {
+            const artResult = await renderStandardInputArtAction(
+              musicResult.originalInput, // Pass the original AppInput
+              musicResult.generatedIdea
+            );
+            if ('error' in artResult) {
+              setStandardModeAiArtError(artResult.error);
+              toast({ variant: "destructive", title: "Standard Art Hiccup", description: `Couldn't create art: ${artResult.error}` });
+            } else if (artResult.renderedArtDataUrl) {
+              setStandardModeAiArtUrl(artResult.renderedArtDataUrl);
+              setStandardModeAiArtError(null);
+              toast({ title: "Standard Artwork Ready!", description: "Your AI art has been created!" });
+            }
+          } catch (artErr) {
+            console.error("Error rendering standard mode AI art:", artErr);
+            const specificArtError = artErr instanceof Error ? `AI art rendering failed: ${artErr.message}` : "Unknown AI art rendering error.";
+            setStandardModeAiArtError(specificArtError);
+            toast({ variant: "destructive", title: "Standard Art Error", description: "Something went wrong while creating the art." });
+          } finally {
+            setIsRenderingStandardModeAiArt(false);
+          }
+        }
       }
     } catch (err) {
       console.error("Error in standard submission process:", err);
@@ -82,17 +135,21 @@ export default function DreamTunerPage() {
   }, []);
 
   const handleKidsModeTuneCreation = useCallback(async (
-    musicInput: AppInput, 
+    musicInput: AppInput,
     artInput: RenderKidsDrawingInput | null
   ): Promise<{ musicError?: string; artError?: string; musicParamsResult?: MusicParameters, artUrlResult?: string }> => {
-    
+
     setIsLoadingMusic(true);
     if (artInput) setIsRenderingAiKidsArt(true);
     setError(null);
     setMusicParams(null);
-    setCurrentKidsMusicParams(null); 
+    setCurrentKidsMusicParams(null);
     setAiKidsArtUrl(null);
     setAiKidsArtError(null);
+    // Also reset standard mode art if switching from standard mode outputs
+    setStandardModeAiArtUrl(null);
+    setStandardModeAiArtError(null);
+    setIsRenderingStandardModeAiArt(false);
     setShowWelcome(false);
 
     let generatedMusicalIdea: string | undefined = undefined;
@@ -106,12 +163,12 @@ export default function DreamTunerPage() {
       const musicResult = await generateMusicParametersAction(musicInput);
       if ('error' in musicResult) {
         musicGenError = musicResult.error;
-        setError(musicResult.error); 
+        setError(musicResult.error);
         setMusicParams(null);
       } else {
         musicParametersResult = musicResult;
         setMusicParams(musicResult);
-        setCurrentKidsMusicParams(musicResult); 
+        setCurrentKidsMusicParams(musicResult);
         generatedMusicalIdea = musicResult.generatedIdea;
         setError(null);
       }
@@ -126,12 +183,12 @@ export default function DreamTunerPage() {
     }
 
     if (artInput) {
-      artInput.originalMusicalIdea = generatedMusicalIdea; 
+      artInput.originalMusicalIdea = generatedMusicalIdea;
       try {
         toast({ title: "AI Artist at Work 🎨", description: "Reimagining your concept..." });
         const artResult = await renderKidsDrawingAction(
-            artInput.drawingDataUri, 
-            artInput.originalVoiceHint, 
+            artInput.drawingDataUri,
+            artInput.originalVoiceHint,
             artInput.originalMusicalIdea,
             artInput.drawingSoundSequence
         );
@@ -157,7 +214,7 @@ export default function DreamTunerPage() {
     } else {
         setIsRenderingAiKidsArt(false);
     }
-    
+
     return { musicError: musicGenError, artError: artRenderError, musicParamsResult: musicParametersResult, artUrlResult: artRenderUrl };
 
   }, []);
@@ -166,13 +223,44 @@ export default function DreamTunerPage() {
   const handleRegenerateIdea = useCallback(async () => {
     if (!musicParams) return;
     setIsRegeneratingIdea(true);
-    setError(null); 
+    setError(null);
     try {
       const result = await regenerateMusicalIdeaAction(musicParams);
       if ('error' in result) {
         setError(result.error);
       } else {
-        setMusicParams(prevParams => prevParams ? { ...prevParams, generatedIdea: result.newIdea } : null);
+        setMusicParams(prevParams => {
+          if (!prevParams) return null;
+          const updatedParams = { ...prevParams, generatedIdea: result.newIdea };
+
+          // If in standard mode and an idea is regenerated, also re-render standard art
+          if (currentMode === 'standard' && updatedParams.originalInput) {
+            setIsRenderingStandardModeAiArt(true);
+            setStandardModeAiArtError(null);
+            setStandardModeAiArtUrl(null); // Clear old art
+            toast({ title: "AI Artist at Work 🎨", description: "Reimagining visual for new idea..." });
+
+            renderStandardInputArtAction(updatedParams.originalInput, result.newIdea)
+              .then(artResult => {
+                if ('error' in artResult) {
+                  setStandardModeAiArtError(artResult.error);
+                  toast({ variant: "destructive", title: "Standard Art Hiccup", description: `Couldn't update art: ${artResult.error}` });
+                } else if (artResult.renderedArtDataUrl) {
+                  setStandardModeAiArtUrl(artResult.renderedArtDataUrl);
+                  setStandardModeAiArtError(null);
+                  toast({ title: "Standard Artwork Updated!", description: "AI art for new idea is ready!" });
+                }
+              })
+              .catch(artErr => {
+                console.error("Error re-rendering standard mode AI art:", artErr);
+                setStandardModeAiArtError(artErr instanceof Error ? artErr.message : "Unknown error updating art.");
+              })
+              .finally(() => {
+                setIsRenderingStandardModeAiArt(false);
+              });
+          }
+          return updatedParams;
+        });
       }
     } catch (err) {
       console.error("Error regenerating idea:", err);
@@ -180,19 +268,93 @@ export default function DreamTunerPage() {
     } finally {
       setIsRegeneratingIdea(false);
     }
-  }, [musicParams]);
-  
+  }, [musicParams, currentMode]);
 
-  const mainSubtitle = currentMode === 'kids' 
+
+  const handleDownloadStandardArt = () => {
+    if (standardModeAiArtUrl) {
+      const link = document.createElement('a');
+      link.href = standardModeAiArtUrl;
+      link.download = 'dreamtuner_standard_art.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handleShareStandardCreation = async () => {
+    setShareStandardArtError(null);
+    if (!navigator.share) {
+      toast({ variant: "destructive", title: "Share Not Supported", description: "Web Share API is not available." });
+      setShareStandardArtError("Web Share API not supported.");
+      return;
+    }
+    if (!standardModeAiArtUrl && !musicParams) {
+        toast({ variant: "destructive", title: "Nothing to Share", description: "Please generate music and art first." });
+        return;
+    }
+
+    setIsSharingStandardArt(true);
+    const filesToShareAttempt: (File | null)[] = [];
+    let shareText = "Check out what I made with DreamTuner!";
+    if (musicParams?.generatedIdea) {
+        shareText += `\nMusical Idea: "${musicParams.generatedIdea}"`;
+    }
+
+    try {
+        if (standardModeAiArtUrl) {
+            const artFile = dataURLtoFile(standardModeAiArtUrl, "dreamtuner_standard_art.png");
+            if (artFile) filesToShareAttempt.push(artFile);
+        }
+        if (musicParams) {
+            const midiDataUri = generateMidiFile(musicParams);
+            if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
+                let baseFileName = 'dreamtuner_standard_music';
+                if (musicParams.generatedIdea) {
+                    baseFileName = musicParams.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0, 25);
+                }
+                const midiFile = dataURLtoFile(midiDataUri, `${baseFileName}.mid`);
+                if (midiFile) filesToShareAttempt.push(midiFile);
+            } else {
+                 console.warn("Could not generate MIDI for standard mode sharing or MIDI data was invalid.");
+            }
+        }
+        const validFilesToShare = filesToShareAttempt.filter(f => f !== null) as File[];
+        if (validFilesToShare.length === 0) {
+           throw new Error("No shareable content could be prepared.");
+        }
+
+        await navigator.share({
+            title: "My DreamTuner Creation!",
+            text: shareText,
+            files: validFilesToShare,
+        });
+        toast({ title: "Shared Creation Successfully!" });
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            toast({ title: "Share Cancelled", variant: "default" });
+        } else {
+            toast({ variant: "destructive", title: "Share Failed", description: error.message || "Could not share." });
+        }
+        setShareStandardArtError(error.message || "Failed to share creation.");
+    } finally {
+        setIsSharingStandardArt(false);
+    }
+  };
+
+
+  const mainSubtitle = currentMode === 'kids'
     ? "Draw, make sounds, add voice hints! Hear music & see AI art!"
     : "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
+
+  const isLoadingOverall = isLoadingMusic || isRenderingStandardModeAiArt || isRenderingAiKidsArt;
 
   return (
     <div className="min-h-screen bg-gradient-to-tr from-gradient-blue-dark to-gradient-blue-light/65 text-galaxy-white flex flex-col items-center p-4 sm:p-8 font-body">
       <NavigationBar />
       <header className="w-full max-w-3xl mb-8 text-center">
         <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2">
-          <LogoIcon className="w-10 h-10 sm:w-12 sm:h-12" /> 
+          <LogoIcon className="w-10 h-10 sm:w-12 sm:h-12" />
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight font-headline">
             {currentMode === 'kids' ? (
               <>
@@ -218,23 +380,23 @@ export default function DreamTunerPage() {
             <TabsTrigger value="standard" className="data-[state=active]:bg-cosmic-purple data-[state=active]:text-primary-foreground">Standard Mode</TabsTrigger>
             <TabsTrigger value="kids" className="data-[state=active]:bg-stardust-blue data-[state=active]:text-primary-foreground">Kids Mode</TabsTrigger>
           </TabsList>
-        
+
           <TabsContent value="standard" className="mt-6">
             <StandardModeTab
               onSubmit={handleStandardModeSubmit}
-              isLoading={isLoadingMusic}
+              isLoading={isLoadingMusic || isRenderingStandardModeAiArt} 
               selectedGenre={selectedGenre}
               onGenreChange={setSelectedGenre}
             />
           </TabsContent>
-          
+
           <TabsContent value="kids" className="mt-6">
             <KidsModeTab
-              key={`kids-mode-tab-${currentMode}`} 
+              key={`kids-mode-tab-${currentMode}`}
               onTuneCreation={handleKidsModeTuneCreation}
               isLoadingMusic={isLoadingMusic}
               isRenderingArt={isRenderingAiKidsArt}
-              aiKidsArtUrlProp={aiKidsArtUrl} 
+              aiKidsArtUrlProp={aiKidsArtUrl}
               aiKidsArtErrorProp={aiKidsArtError}
               selectedGenre={selectedGenre}
               onGenreChange={setSelectedGenre}
@@ -243,41 +405,40 @@ export default function DreamTunerPage() {
             />
           </TabsContent>
         </Tabs>
-        
-        {isLoadingMusic && currentMode === 'standard' && !musicParams && (
+
+        {isLoadingMusic && !musicParams && (
           <div className="mt-10 text-center">
             <LoadingSpinner />
             <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
-              DreamTuning your input...
+              {currentMode === 'standard' ? 'DreamTuning your input... (Art will follow)' : 'DreamTuning music for your creation... (AI art will follow!)'}
             </p>
           </div>
         )}
-        
-         {isLoadingMusic && currentMode === 'kids' && !musicParams && !aiKidsArtUrl && (
-           <div className="mt-10 text-center">
-            <LoadingSpinner />
-            <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
-                DreamTuning music for your creation... (AI art will follow!)
-            </p>
-          </div>
+        {isRenderingStandardModeAiArt && currentMode === 'standard' && musicParams && (
+             <div className="mt-10 text-center">
+                <LoadingSpinner />
+                <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
+                    AI Artist is painting your vision...
+                </p>
+            </div>
         )}
 
 
-        {error && !isLoadingMusic && !isRenderingAiKidsArt && (
+        {error && !isLoadingOverall && (
           <div className="mt-10">
             <ErrorMessage message={error} />
           </div>
         )}
-        
-        {showWelcome && !isLoadingMusic && !isRenderingAiKidsArt && !error && !musicParams && !aiKidsArtUrl && (
+
+        {showWelcome && !isLoadingOverall && !error && !musicParams && !aiKidsArtUrl && !standardModeAiArtUrl && (
           <Card className="mt-10 text-center p-6 bg-nebula-gray/80 rounded-lg border-slate-700">
             <CardHeader>
               <CardTitle className="text-2xl font-semibold text-stardust-blue mb-3 font-headline">Welcome to DreamTuner</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-slate-300">
-                {currentMode === 'standard' 
-                  ? "Enter text (or speak!), upload an image, or specify a video/audio concept. Select a genre, and DreamTuner will unveil its musical soul."
+                {currentMode === 'standard'
+                  ? "Enter text (or speak!), upload an image, or specify a video/audio concept. Select a genre, and DreamTuner will unveil its musical soul and an AI artistic impression."
                   : "Sketch on the canvas (hear notes as you pick colors!), record a voice hint, or do both! Select a genre if you like, and click 'Tune My Creation!' to see and hear the magic!"
                 }
               </p>
@@ -285,20 +446,56 @@ export default function DreamTunerPage() {
           </Card>
         )}
 
-        {musicParams && !isLoadingMusic && ( 
+        {musicParams && !isLoadingMusic && (
           <Card className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
             <CardContent className="p-6 sm:p-10">
-              <MusicOutputDisplay 
-                params={musicParams} 
+              <MusicOutputDisplay
+                params={musicParams}
                 onRegenerateIdea={handleRegenerateIdea}
                 isRegeneratingIdea={isRegeneratingIdea}
+                standardModeArtUrl={standardModeAiArtUrl} 
               />
             </CardContent>
           </Card>
         )}
+
+        {/* Standard Mode AI Art Display */}
+        {currentMode === 'standard' && standardModeAiArtError && !isRenderingStandardModeAiArt && (
+          <div className="mt-6">
+            <ErrorMessage message={`Standard Mode AI Artist Error: ${standardModeAiArtError}`} />
+          </div>
+        )}
+        {currentMode === 'standard' && standardModeAiArtUrl && !isRenderingStandardModeAiArt && (
+          <Card className="mt-6 bg-nebula-gray/70 border-slate-600">
+            <CardHeader>
+              <CardTitle className="text-center text-xl font-semibold text-stardust-blue">AI's Artistic Rendition</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center space-y-4">
+              <Image
+                src={standardModeAiArtUrl}
+                alt="AI Rendered Art for Standard Input"
+                data-ai-hint="abstract artistic"
+                width={500}
+                height={300}
+                className="rounded-md max-h-80 object-contain border border-slate-500 shadow-lg"
+                unoptimized
+              />
+               <div className="flex space-x-2">
+                <Button onClick={handleDownloadStandardArt} variant="outline" className="border-stardust-blue text-stardust-blue hover:bg-stardust-blue/10">
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Art
+                </Button>
+                {/* Share button is now inside MusicOutputDisplay to handle combined sharing */}
+              </div>
+              {shareStandardArtError && <p className="text-red-400 text-xs text-center mt-2">{`Share Error: ${shareStandardArtError}`}</p>}
+            </CardContent>
+          </Card>
+        )}
+
       </main>
       <Footer />
     </div>
   );
 }
 
+    

@@ -27,6 +27,7 @@ interface MusicOutputDisplayProps {
   params: MusicParameters;
   onRegenerateIdea: () => Promise<void>;
   isRegeneratingIdea: boolean;
+  standardModeArtUrl?: string | null; // Added for sharing standard mode art
 }
 
 interface ParameterCardProps {
@@ -69,7 +70,7 @@ const ParameterCardComponent: React.FC<ParameterCardProps> = ({ title, value, ic
   );
 };
 
-export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, onRegenerateIdea, isRegeneratingIdea }) => {
+export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, onRegenerateIdea, isRegeneratingIdea, standardModeArtUrl }) => {
   const [midiError, setMidiError] = useState<string | null>(null);
   const [isGeneratingMidiForDownload, setIsGeneratingMidiForDownload] = useState<boolean>(false);
   const [isCopied, setIsCopied] = useState<boolean>(false);
@@ -98,7 +99,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       if (event.name === 'End of File') {
         setIsPlaying(false);
         setPlaybackProgress(100);
-        setIsPlaybackReady(false); 
+        setIsPlaybackReady(false);
       }
       if (event.name === 'Playing' || event.name === 'playbackStart') {
         if (soundLoadingTimeoutRef.current) {
@@ -173,7 +174,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     return () => {
       if (midiPlayerRef.current) {
         midiPlayerRef.current.stop();
-        midiPlayerRef.current = null; 
+        midiPlayerRef.current = null;
       }
       if (soundLoadingTimeoutRef.current) {
         clearTimeout(soundLoadingTimeoutRef.current);
@@ -188,10 +189,10 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         clearTimeout(soundLoadingTimeoutRef.current);
         soundLoadingTimeoutRef.current = null;
       }
-      player.stop(); 
+      player.stop();
       setPlayerError(null);
-      setMidiFileStructLoaded(false); 
-      setPlaybackProgress(0); 
+      setMidiFileStructLoaded(false);
+      setPlaybackProgress(0);
       totalMidiTicksRef.current = 0;
 
 
@@ -202,7 +203,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
           setMidiFileStructLoaded(false);
           return;
         }
-        player.loadDataUri(midiDataUri); 
+        player.loadDataUri(midiDataUri);
       } catch (error) {
         setPlayerError(error instanceof Error ? error.message : "Failed to prepare MIDI for playback.");
         setMidiFileStructLoaded(false);
@@ -212,8 +213,8 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
           clearTimeout(soundLoadingTimeoutRef.current);
           soundLoadingTimeoutRef.current = null;
         }
-        player.stop(); 
-        setMidiFileStructLoaded(false); 
+        player.stop();
+        setMidiFileStructLoaded(false);
     }
   }, [params]);
 
@@ -229,29 +230,29 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     const performPlayAction = () => {
         if (player.isPlaying()) {
             if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
-            player.pause(); 
+            player.pause();
         } else {
             if (playbackProgress >= 99) {
                  player.skipToSeconds(0);
-                 setPlaybackProgress(0); 
+                 setPlaybackProgress(0);
             }
             setIsPlayerLoadingSounds(true);
             setPlayerError(null);
-            setIsPlaybackReady(false); 
+            setIsPlaybackReady(false);
 
             if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
             soundLoadingTimeoutRef.current = setTimeout(() => {
-              const currentPlayer = midiPlayerRef.current; 
-              if (currentPlayer && isPlayerLoadingSoundsRef.current) { 
+              const currentPlayer = midiPlayerRef.current;
+              if (currentPlayer && isPlayerLoadingSoundsRef.current) {
                  setPlayerError("Sound loading timed out. Check connection or try a different genre.");
-                 currentPlayer.stop(); 
-                 setIsPlayerLoadingSounds(false); 
-                 setIsPlaying(false); 
-                 setIsPlaybackReady(false); 
+                 currentPlayer.stop();
+                 setIsPlayerLoadingSounds(false);
+                 setIsPlaying(false);
+                 setIsPlaybackReady(false);
               }
-              soundLoadingTimeoutRef.current = null; 
+              soundLoadingTimeoutRef.current = null;
             }, SOUND_LOADING_TIMEOUT_MS);
-            player.play(); 
+            player.play();
         }
     };
 
@@ -274,12 +275,12 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       clearTimeout(soundLoadingTimeoutRef.current);
       soundLoadingTimeoutRef.current = null;
     }
-    
+
     setIsPlayerLoadingSounds(false);
     setIsPlaying(false);
     setIsPlaybackReady(false);
     setPlaybackProgress(0);
-    setPlayerError(null); 
+    setPlayerError(null);
 
     player.stop();
   }, []);
@@ -309,7 +310,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     let originalInputSummary = "";
     switch(params.originalInput.type) {
       case 'text': originalInputSummary = `Text: "${params.originalInput.content ? params.originalInput.content.substring(0, 100) : ''}${params.originalInput.content && params.originalInput.content.length > 100 ? '...' : ''}"`; break;
-      case 'image': originalInputSummary = `${params.originalInput.mode === 'kids' ? "Child's Original Concept" : "Image"}: ${params.originalInput.fileDetails.name}`; 
+      case 'image': originalInputSummary = `${params.originalInput.mode === 'kids' ? "Child's Original Concept" : "Image"}: ${params.originalInput.fileDetails.name}`;
         if (params.originalInput.mode === 'kids' && params.originalInput.voiceDescription) {
             originalInputSummary += `\nChild's Voice Hint: "${params.originalInput.voiceDescription}"`;
         }
@@ -318,9 +319,9 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         }
         break;
       case 'video': // Covers both video and audio concepts
-        const fileTypeLabel = params.originalInput.fileDetails.type.startsWith('video/') ? 'Video' : 
+        const fileTypeLabel = params.originalInput.fileDetails.type.startsWith('video/') ? 'Video' :
                               params.originalInput.fileDetails.type.startsWith('audio/') ? 'Audio' : 'Media';
-        originalInputSummary = `${fileTypeLabel} Concept: ${params.originalInput.fileDetails.name}`; 
+        originalInputSummary = `${fileTypeLabel} Concept: ${params.originalInput.fileDetails.name}`;
         if (params.originalInput.additionalContext) {
           originalInputSummary += `\nAdditional Context: "${params.originalInput.additionalContext}"`;
         }
@@ -367,38 +368,42 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
 
     setIsSharing(true);
     try {
+      const filesToShareAttempt: (File | null)[] = [];
+      let shareText = `Check out this musical idea from DreamTuner: "${params.generatedIdea}"`;
+      
+      // MIDI File
       const midiDataUri = generateMidiFile(params);
-      if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
-        throw new Error("Generated MIDI data was invalid for sharing.");
-      }
-      
-      let baseFileName = 'dreamtuner_music';
-      if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
-      else if (params.originalInput.type === 'text' && params.originalInput.content) baseFileName = params.originalInput.content.substring(0,30).replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
-      else if ((params.originalInput.type === 'image' || params.originalInput.type === 'video') && params.originalInput.fileDetails) baseFileName = params.originalInput.fileDetails.name.split('.')[0].replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
-      const midiFileName = `${baseFileName || 'dreamtuner_output'}.mid`;
-      
-      const midiFile = dataURLtoFile(midiDataUri, midiFileName);
-      
-      const filesToShare: File[] = [];
-      if (midiFile) {
-        filesToShare.push(midiFile);
+      if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
+        let baseFileName = 'dreamtuner_music';
+        if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
+        const midiFile = dataURLtoFile(midiDataUri, `${baseFileName}.mid`);
+        if (midiFile) filesToShareAttempt.push(midiFile);
+        else console.warn("Could not convert MIDI data to a shareable file.");
       } else {
-        console.warn("Could not convert MIDI data to a shareable file.");
-        // Optionally, inform the user that MIDI file couldn't be prepared for sharing
+        console.warn("Generated MIDI data was invalid for sharing.");
       }
 
-      if (filesToShare.length === 0) {
-        throw new Error("No shareable content could be prepared.");
+      // Standard Mode AI Art File (if available and in standard mode)
+      if (params.originalInput.mode === 'standard' && standardModeArtUrl) {
+        const artFile = dataURLtoFile(standardModeArtUrl, "dreamtuner_standard_art.png");
+        if (artFile) filesToShareAttempt.push(artFile);
+        else console.warn("Could not convert Standard Mode AI art to a shareable file.");
+        shareText += "\nIt also inspired this AI artwork!";
+      }
+      // Note: Kids mode art sharing is handled in KidsModeTab.tsx as it's generated and displayed there.
+
+      const validFilesToShare = filesToShareAttempt.filter(file => file !== null) as File[];
+
+      if (validFilesToShare.length === 0) {
+        throw new Error("No shareable content could be prepared from MusicOutputDisplay.");
       }
 
       const shareData: ShareData = {
-        title: `DreamTuner Music: "${params.generatedIdea}"`,
-        text: `Check out this musical idea from DreamTuner!\nIdea: ${params.generatedIdea}\nKey: ${params.keySignature} ${params.mode}, Tempo: ${params.tempoBpm} BPM.`,
-        files: filesToShare,
+        title: `DreamTuner Creation: "${params.generatedIdea}"`,
+        text: shareText,
+        files: validFilesToShare,
       };
-      
-      console.log("Attempting to share:", shareData);
+
       await navigator.share(shareData);
       toast({ title: "Shared Successfully!" });
 
@@ -409,7 +414,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         toast({
           variant: "destructive",
           title: "Share Permission Denied",
-          description: "Your browser or OS denied the share permission. This might be due to site settings or because the action wasn't recognized as directly user-initiated.",
+          description: "Browser or OS denied share permission.",
         });
       } else {
         toast({
@@ -419,7 +424,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         });
       }
       setShareError(error.message || "Failed to share.");
-      console.error("Share error:", error);
+      console.error("Share error from MusicOutputDisplay:", error);
     } finally {
       setIsSharing(false);
     }
@@ -436,12 +441,11 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
       case 'text':
         icon = <DocumentTextIcon className="w-6 h-6" />;
         title = "Original Text & Generated Core";
-        
+
         const originalTextContent = input.content || "";
         const lines = originalTextContent.split('\n');
         const renderedElements: React.ReactNode[] = [];
 
-        const notePatternRegex = /^\s*([CDEFGABcdefgab][#b♭♯]?[0-9]?)(\s*[-–—]\s*([CDEFGABcdefgab][#b♭♯]?[0-9]?))*\s*$/;
         const isClearlyNoteLine = (line: string): boolean => {
           const trimmedLine = line.trim();
           if (!trimmedLine) return false;
@@ -462,9 +466,9 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         };
 
         for (let i = 0; i < lines.length; i++) {
-          const currentLine = lines[i]; 
+          const currentLine = lines[i];
           if (!currentLine.trim() && i > 0 && i < lines.length -1 && lines[i-1].trim() && lines[i+1].trim()) {
-             renderedElements.push(<div key={`spacer-${i}`} className="h-1"></div>); 
+             renderedElements.push(<div key={`spacer-${i}`} className="h-1"></div>);
           } else if (currentLine.trim()) {
              renderedElements.push(
               <p key={`lyric-${i}`} className="text-muted-foreground text-sm whitespace-pre-wrap">
@@ -479,12 +483,12 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
                     {nextLine}
                   </p>
                 );
-                i++; 
+                i++;
               }
             }
           }
         }
-        
+
         contentDisplay = (
           <>
             <ScrollArea className="h-auto max-h-80 mb-3 pr-3">
@@ -523,16 +527,16 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         );
 
       case 'image':
-        icon = <PhotographIcon className="w-6 h-6" />; 
+        icon = <PhotographIcon className="w-6 h-6" />;
         title = input.mode === 'kids' ? "Child's Original Concept" : "Original Input Image";
         contentDisplay = (<>
-            {input.fileDetails.url && input.fileDetails.size > 0 ? 
+            {input.fileDetails.url && input.fileDetails.size > 0 ?
                 <>
-                    <p className="text-muted-foreground text-sm italic">Drawing: {input.fileDetails.name}</p>
+                    <p className="text-muted-foreground text-sm italic">{input.mode === 'kids' ? 'Drawing:' : 'Image:'} {input.fileDetails.name}</p>
                     <Image src={input.fileDetails.url} alt={input.fileDetails.name} data-ai-hint={input.mode === 'kids' ? "kids drawing" : "abstract texture"} width={160} height={160} className="mt-2 rounded max-h-40 object-contain border border-slate-700"/>
                 </>
-                : input.mode === 'kids' && input.voiceDescription ? 
-                <p className="text-muted-foreground text-sm italic">Input was voice-only.</p> 
+                : input.mode === 'kids' && input.voiceDescription ?
+                <p className="text-muted-foreground text-sm italic">Input was voice-only.</p>
                 :  <p className="text-muted-foreground text-sm italic">Filename: {input.fileDetails.name}</p>
             }
              {input.mode === 'kids' && input.voiceDescription && (
@@ -545,7 +549,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         break;
       case 'video': // Covers both video and audio concepts
         icon = <VideoCameraIcon className="w-6 h-6" />; title = "Original Input Video/Audio Concept";
-        const fileTypeDisplay = input.fileDetails.type.startsWith('video/') ? 'Video' : 
+        const fileTypeDisplay = input.fileDetails.type.startsWith('video/') ? 'Video' :
                                 input.fileDetails.type.startsWith('audio/') ? 'Audio' : 'Media';
         contentDisplay = <>
             <p className="text-muted-foreground text-sm italic">{fileTypeDisplay} Concept: {input.fileDetails.name} (Analyzed conceptually)</p>
@@ -560,7 +564,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     if (params.selectedGenre && (input.type !== 'text' || input.mode === 'kids')) {
       const genreDisplay = (
         <div className="flex items-center text-stardust-blue">
-          <LibraryIcon className="w-5 h-5" /> 
+          <LibraryIcon className="w-5 h-5" />
           <h5 className="ml-2 text-sm font-semibold">Selected Genre:</h5>
           <p className="text-muted-foreground text-sm ml-2">{params.selectedGenre}</p>
         </div>
@@ -571,7 +575,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
             <AccordionItem value="selected-genre-kids" className="border-b-0">
               <AccordionTrigger className="py-1 hover:no-underline text-sm">
                 <div className="flex items-center text-stardust-blue">
-                  <LibraryIcon className="w-5 h-5" /> 
+                  <LibraryIcon className="w-5 h-5" />
                   <h5 className="ml-2 text-sm font-semibold">Selected Genre (Tap to view)</h5>
                 </div>
               </AccordionTrigger>
@@ -623,7 +627,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   const player = midiPlayerRef.current;
   const playButtonDisabled = !player ||
                              (!midiFileStructLoaded && !isPlayerLoadingSounds && !isPlaying) ||
-                             (isPlayerLoadingSounds && !isPlaying); 
+                             (isPlayerLoadingSounds && !isPlaying);
   const showLoadingSpinnerInPlayButton = isPlayerLoadingSounds && !isPlaying;
 
   let statusMessage = "";
@@ -690,20 +694,23 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         <Button onClick={handleCopyDetails} disabled={isCopied} variant="outline" className="w-full sm:w-auto border-slate-500 text-slate-200 hover:bg-slate-700 hover:text-slate-100">
            {isCopied ? <><ClipboardCopyIcon className="w-5 h-5 mr-2 text-green-400" />Copied!</> : <><ClipboardCopyIcon className="w-5 h-5 mr-2 group-hover:scale-110" />Copy Details</>}
         </Button>
-        <Button onClick={handleShare} disabled={isSharing} variant="outline" className="w-full sm:w-auto border-green-500 text-green-400 hover:bg-green-500/10 hover:text-green-300">
-          {isSharing ? <><svg className="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" fill="currentColor"></path></svg>Sharing...</> : <><Share2 className="w-5 h-5 mr-2 group-hover:scale-110" />Share</>}
+        <Button 
+          onClick={handleShare} 
+          disabled={isSharing || (params.originalInput.mode === 'standard' && !standardModeArtUrl && !params) || (params.originalInput.mode === 'kids' && !params) } 
+          variant="outline" 
+          className="w-full sm:w-auto border-green-500 text-green-400 hover:bg-green-500/10 hover:text-green-300"
+        >
+          {isSharing ? <><svg className="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" fill="currentColor"></path></svg>Sharing...</> : <><Share2 className="w-5 h-5 mr-2 group-hover:scale-110" />Share Creation</>}
         </Button>
       </div>
-      <div className="text-center mt-2 h-4"> 
+      <div className="text-center mt-2 h-4">
         {midiError && <p className="text-red-400 text-sm">{`MIDI Download Error: ${midiError}`}</p>}
         {copyError && <p className="text-red-400 text-sm">{copyError}</p>}
         {shareError && <p className="text-red-400 text-sm">{`Share Error: ${shareError}`}</p>}
       </div>
-      
+
       {params.originalInput && renderOriginalInputInfo(params.originalInput)}
-      
+
     </div>
   );
 };
-
-  

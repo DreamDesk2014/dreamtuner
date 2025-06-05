@@ -1,14 +1,17 @@
 
 import type { GenerateMusicalParametersOutput as AIOutput, GenerateMusicalParametersInput as FlowInputTypeOriginal } from '@/ai/flows/generate-musical-parameters';
 import type { RenderKidsDrawingOutput, RenderKidsDrawingInput as RenderKidsDrawingInputOriginal } from '@/ai/flows/render-kids-drawing-flow';
+// Added for standard mode art generation
+import type { RenderStandardInputArtOutput as StandardArtOutput, RenderStandardInputArtInput as StandardArtInputOriginal } from '@/ai/flows/render-standard-input-art-flow';
 
-export type InputType = 'text' | 'image' | 'video'; 
+
+export type InputType = 'text' | 'image' | 'video';
 
 export interface FilePreview {
   name: string;
-  type: string; 
-  url?: string; 
-  size: number; 
+  type: string;
+  url?: string;
+  size: number;
 }
 
 export interface BaseAppInput {
@@ -21,21 +24,21 @@ export interface BaseAppInput {
 
 export type AppInput = BaseAppInput & (
   | { type: 'text'; content: string; }
-  | { 
-      type: 'image'; 
-      content: string; 
-      mimeType: string; 
-      fileDetails: FilePreview; 
-      voiceDescription?: string; 
-      additionalContext?: string; 
+  | {
+      type: 'image';
+      content: string; // Base64 content for image
+      mimeType: string;
+      fileDetails: FilePreview; // Includes URL for image
+      voiceDescription?: string; // Primarily for Kids Mode
+      additionalContext?: string; // For Standard Mode image/video
       drawingSoundSequence?: string; // For Kids Mode drawing sounds
-    } 
-  | { type: 'video'; fileDetails: FilePreview; additionalContext?: string; }
+    }
+  | { type: 'video'; fileDetails: FilePreview; additionalContext?: string; } // Video/Audio, no direct content upload
 );
 
 export interface MusicParameters extends AIOutput {
   originalInput: AppInput;
-  selectedGenre?: string; 
+  selectedGenre?: string;
 }
 
 export interface FlowInput extends FlowInputTypeOriginal {
@@ -69,3 +72,6 @@ export interface RenderKidsDrawingInput extends Omit<RenderKidsDrawingInputOrigi
 }
 export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}
 
+// Types for Standard Mode AI Art Generation
+export interface RenderStandardInputArtInput extends StandardArtInputOriginal {}
+export interface RenderedStandardArtResponse extends StandardArtOutput {}
