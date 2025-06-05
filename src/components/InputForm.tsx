@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useId, useEffect, useRef } from 'react';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { DocumentTextIcon, PhotographIcon, VideoCameraIcon, XCircleIcon, UploadCloudIcon } from './icons/HeroIcons';
-import { Mic, MicOff, RotateCcw, Camera, CameraOff } from 'lucide-react';
+import { Mic, MicOff, RotateCcw, Camera, CameraOff, AudioLines, StopCircle } from 'lucide-react';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
 import type { InputType as StandardInputType, AppInput, FilePreview } from '@/types';
 import { MAX_IMAGE_FILE_SIZE_BYTES, MAX_IMAGE_FILE_SIZE_MB, MUSIC_GENRES } from '@/lib/constants';
@@ -69,9 +69,18 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isProcessingCamera, setIsProcessingCamera] = useState<boolean>(false);
-  const [cameraFeedReady, setCameraFeedReady] = useState<boolean>(false); // New state
+  const [cameraFeedReady, setCameraFeedReady] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null); 
+
+  // Audio Recording State
+  const [isRecordingAudio, setIsRecordingAudio] = useState<boolean>(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [hasMicrophonePermission, setHasMicrophonePermission] = useState<boolean | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -139,7 +148,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           await videoRef.current.play().catch(playError => {
             console.warn('Video play() promise rejected:', playError);
             setCameraError(`Failed to play camera feed. ${playError.message}`);
-            setHasCameraPermission(false); // Treat as a failure if play is rejected
+            setHasCameraPermission(false); 
             setCameraFeedReady(false);
           });
         }
@@ -163,28 +172,29 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       }
     };
 
-    const stopLocalStream = () => {
-      const streamToStop = currentStreamForCleanup || streamRef.current;
-      if (streamToStop) {
-        streamToStop.getTracks().forEach(track => track.stop());
+    const stopLocalStream = (streamToStopRef: React.MutableRefObject<MediaStream | null>, videoElementRef?: React.RefObject<HTMLVideoElement>) => {
+      if (streamToStopRef.current) {
+        streamToStopRef.current.getTracks().forEach(track => track.stop());
+        streamToStopRef.current = null;
       }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-        videoRef.current.onplaying = null;
-        videoRef.current.onstalled = null;
+      if (videoElementRef?.current) {
+        videoElementRef.current.srcObject = null;
+        videoElementRef.current.onplaying = null;
+        videoElementRef.current.onstalled = null;
       }
-      streamRef.current = null; 
-      setCameraFeedReady(false);
+      if (videoElementRef === videoRef) setCameraFeedReady(false);
     };
 
     if (showCameraPreview && (currentStandardInputType === 'image' || currentStandardInputType === 'video')) {
       startCameraStream();
     } else {
-      stopLocalStream();
+      stopLocalStream(streamRef, videoRef);
     }
 
+    // Cleanup for audio stream when component unmounts or input type changes
     return () => { 
-      stopLocalStream();
+      stopLocalStream(streamRef, videoRef);
+      stopLocalStream(audioStreamRef); // Ensure audio stream is also cleaned up
     };
   }, [showCameraPreview, currentStandardInputType]); 
 
@@ -192,13 +202,13 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const handleToggleCameraPreview = () => {
     if (showCameraPreview) {
       setShowCameraPreview(false); 
-      // cameraFeedReady will be reset by the useEffect cleanup or stopLocalStream
     } else {
       setFilePreview(null); 
       setFileError(null);
+      setIsRecordingAudio(false); // Ensure audio recording is off
       setHasCameraPermission(null); 
       setCameraError(null);
-      setCameraFeedReady(false); // Explicitly reset here
+      setCameraFeedReady(false);
       setShowCameraPreview(true); 
     }
   };
@@ -267,7 +277,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     setIsProcessingCamera(true);
     setFilePreview({
       name: 'live_camera_capture.mp4', 
-      type: 'video/mp4',
+      type: 'video/mp4', // This will be interpreted as a video concept
       size: 0, 
     });
     setShowCameraPreview(false); 
@@ -284,13 +294,114 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     }
   };
 
-  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (showCameraPreview) { 
-      setShowCameraPreview(false); 
+  const handleToggleAudioRecording = async () => {
+    setAudioError(null);
+    setFileError(null);
+    if (showCameraPreview) setShowCameraPreview(false);
+    if (filePreview) setFilePreview(null);
+
+
+    if (isRecordingAudio) {
+      // Stop recording
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+      setIsRecordingAudio(false);
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach(track => track.stop());
+        audioStreamRef.current = null;
+      }
+      return;
     }
+
+    // Start recording
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setAudioError('Audio recording is not supported by your browser.');
+      toast({ variant: 'destructive', title: 'Audio Error', description: 'Not supported.' });
+      setHasMicrophonePermission(false);
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      setHasMicrophonePermission(true);
+      audioChunksRef.current = [];
+      
+      const options = { mimeType: 'audio/webm' }; // prefer webm, browser will fallback if not supported
+      let recorder;
+      try {
+        recorder = new MediaRecorder(stream, options);
+      } catch (e) {
+        console.warn("audio/webm not supported, trying default");
+        try {
+            recorder = new MediaRecorder(stream); // try with default
+        } catch (e2) {
+            setAudioError(`MediaRecorder error: ${e2.message}. Your browser might not support common audio recording formats.`);
+            toast({ variant: 'destructive', title: 'Recording Error', description: `MediaRecorder error. ${e2.message}` });
+            stream.getTracks().forEach(track => track.stop());
+            audioStreamRef.current = null;
+            return;
+        }
+      }
+      mediaRecorderRef.current = recorder;
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/wav' });
+        const audioDataUrl = await readFileAsDataURL(audioBlob);
+        
+        setFilePreview({
+          name: `live_audio_recording.${audioBlob.type.split('/')[1] || 'wav'}`,
+          type: audioBlob.type || 'audio/wav',
+          size: audioBlob.size,
+          url: audioDataUrl,
+        });
+        setIsRecordingAudio(false);
+        toast({ title: "Audio Recorded!", description: "Your audio has been captured." });
+         // Stop the tracks on the audioStreamRef explicitly here after processing
+        if (audioStreamRef.current) {
+            audioStreamRef.current.getTracks().forEach(track => track.stop());
+            audioStreamRef.current = null;
+        }
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecordingAudio(true);
+      toast({ title: "Recording Audio...", description: "Speak into your microphone." });
+
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      let msg = 'Could not access the microphone.';
+      if (err instanceof Error) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          msg = 'Microphone permission denied. Please enable it in your browser settings.';
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          msg = 'No microphone found. Please ensure a microphone is connected and enabled.';
+        } else {
+          msg = `Error accessing microphone: ${err.message}`;
+        }
+      }
+      setAudioError(msg);
+      toast({ variant: 'destructive', title: 'Microphone Error', description: msg });
+      setHasMicrophonePermission(false);
+      setIsRecordingAudio(false);
+    }
+  };
+
+
+  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (showCameraPreview) setShowCameraPreview(false); 
+    if (isRecordingAudio) handleToggleAudioRecording(); // Stop recording if active
+
     const file = event.target.files?.[0];
     if (file) {
-      setFileError(null);
+      setFileError(null); setAudioError(null);
       const fileDetails: FilePreview = {
         name: file.name,
         type: file.type,
@@ -320,23 +431,28 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           setFilePreview(null);
           event.target.value = '';
         }
-      } else if (currentStandardInputType === 'video') { 
+      } else if (currentStandardInputType === 'video') { // This tab handles both video and audio files
          if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
           setFileError('Invalid file type. Please select a video or audio file.');
           setFilePreview(null);
           event.target.value = '';
           return;
         }
+        // For uploaded audio files, we can also generate a data URL if we want to send content
+        // For now, following existing pattern: only data URL for images. Audio file uploads are conceptual.
+        // If file.type.startsWith('audio/'), we could potentially read it as data URL too for AI analysis.
+        // This would require changing how `fileDetails.url` is populated for audio.
+        // For consistency with video, currently uploaded audio is conceptual. Live recorded audio WILL have data URL.
         setFilePreview(fileDetails);
       }
     } else {
       setFilePreview(null);
     }
-  }, [currentStandardInputType, showCameraPreview]);
+  }, [currentStandardInputType, showCameraPreview, isRecordingAudio]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading || isListening || isProcessingCamera) return; 
+    if (isLoading || isListening || isProcessingCamera || isRecordingAudio) return; 
 
     let appInputPartial: Omit<AppInput, 'mode' | 'genre' | 'userEnergy' | 'userPositivity'> | null = null;
 
@@ -352,13 +468,28 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         type: 'image', 
         content: base64Content, 
         mimeType: filePreview.type,
-        fileDetails: {...filePreview, url: filePreview.url },
+        fileDetails: {...filePreview, url: filePreview.url }, // Pass full data URI in url
         additionalContext: additionalContext.trim() || undefined,
       };
     } else if (currentStandardInputType === 'video' && filePreview) { 
+        // This now handles:
+        // 1. Uploaded video (conceptual, no URL in filePreview sent to AI unless we change logic)
+        // 2. Uploaded audio (conceptual, no URL in filePreview sent to AI unless we change logic)
+        // 3. Live camera video concept (no URL)
+        // 4. Live audio recording (filePreview.url WILL contain data URI)
+      let contentForFlow: string | undefined = undefined;
+      let mimeTypeForFlow: string | undefined = undefined;
+
+      if (filePreview.url && filePreview.type.startsWith('audio/')) { // It's our live recording
+        contentForFlow = filePreview.url.split(',')[1];
+        mimeTypeForFlow = filePreview.type;
+      }
+
       appInputPartial = { 
-        type: 'video', 
-        fileDetails: filePreview,
+        type: 'video', // Keep type 'video' as flow handles audio subtypes
+        fileDetails: filePreview, // url will contain data URI for recorded audio
+        content: contentForFlow, // Pass base64 audio if available
+        mimeType: mimeTypeForFlow, // Pass mimeType if audio data
         additionalContext: additionalContext.trim() || undefined,
       };
     }
@@ -374,14 +505,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       onSubmit(finalAppInput); 
     } else {
       if (currentStandardInputType === 'text') setFileError("Please enter some text or use voice input.");
-      else setFileError("Please select a file or use the camera.");
+      else setFileError("Please select a file, use the camera, or record audio.");
     }
   };
   
-  const isSubmitDisabled = isLoading || isListening || isProcessingCamera ||
+  const isSubmitDisabled = isLoading || isListening || isProcessingCamera || isRecordingAudio ||
     (currentStandardInputType === 'text' && !text.trim()) ||
     ((currentStandardInputType === 'image' || currentStandardInputType === 'video') && !filePreview && !showCameraPreview) || 
-    !!fileError;
+    !!fileError || !!audioError;
 
   const inputOptions: { type: StandardInputType, label: string, icon: React.FC<any> }[] = [
     { type: 'text', label: 'Text', icon: DocumentTextIcon },
@@ -389,15 +520,25 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     { type: 'video', label: 'Video/Audio', icon: VideoCameraIcon },
   ];
 
-  const resetFileInputAndCamera = () => {
+  const resetAllMediaInputs = () => {
     setFilePreview(null);
     setFileError(null);
+    setAudioError(null);
     const fileInput = document.getElementById(fileInputId) as HTMLInputElement;
     if (fileInput) fileInput.value = '';
-    if (showCameraPreview) {
-        setShowCameraPreview(false); 
-        // cameraFeedReady will be reset by useEffect cleanup
+    
+    if (showCameraPreview) setShowCameraPreview(false); // This will trigger camera stream stop via useEffect
+
+    if (isRecordingAudio) { // Stop audio recording if active
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop(); // This will trigger onstop, which cleans up audioStreamRef
+      }
+      setIsRecordingAudio(false);
+    } else if (audioStreamRef.current) { // If not recording but stream exists
+        audioStreamRef.current.getTracks().forEach(track => track.stop());
+        audioStreamRef.current = null;
     }
+    setHasMicrophonePermission(null);
   };
 
   const handleInputTypeChange = (newType: StandardInputType) => {
@@ -406,7 +547,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     setAdditionalContext('');
     resetTranscript();
     if (isListening) stopListening();
-    resetFileInputAndCamera();
+    resetAllMediaInputs();
   };
 
   const resetEnergySlider = () => setEnergySlider(50);
@@ -419,6 +560,8 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   } else {
     cameraButtonText = 'Close Camera';
   }
+
+  const showRecordAudioButton = currentStandardInputType === 'video' && !filePreview && !showCameraPreview;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -436,7 +579,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               className={`flex-1 p-3 text-sm font-medium flex items-center justify-center transition-all duration-150 min-w-[100px] 
                 ${currentStandardInputType === opt.type ? 'bg-primary text-primary-foreground shadow-md' : 'text-slate-300 hover:bg-nebula-gray'}`}
               aria-pressed={currentStandardInputType === opt.type}
-              disabled={isLoading || isProcessingCamera}
+              disabled={isLoading || isProcessingCamera || isRecordingAudio}
             >
               <opt.icon className={`w-5 h-5 mr-2 ${currentStandardInputType === opt.type ? 'text-primary-foreground' : 'text-stardust-blue'}`} />
               {opt.label}
@@ -457,7 +600,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                 variant="outline"
                 size="sm"
                 onClick={handleVoiceInputToggle}
-                disabled={isLoading || isProcessingCamera}
+                disabled={isLoading || isProcessingCamera || isRecordingAudio}
                 className="text-sm border-slate-600 hover:bg-slate-700"
               >
                 {isListening ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
@@ -472,7 +615,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
             placeholder={isListening ? "Listening..." : "A lonely star in a cold, dark night..."}
             rows={6}
             className="w-full p-4 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
-            disabled={isLoading || isListening || isProcessingCamera}
+            disabled={isLoading || isListening || isProcessingCamera || isRecordingAudio}
           />
           {speechError && <p className="mt-1 text-xs text-red-400">{speechError}</p>}
           {isClientMounted && !hasRecognitionSupport && <p className="mt-1 text-xs text-muted-foreground">Voice input not supported in your browser.</p>}
@@ -484,64 +627,86 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
       {(currentStandardInputType === 'image' || currentStandardInputType === 'video') && (
         <div className="space-y-4">
-            {isClientMounted && navigator.mediaDevices && ( 
-                <div className="mb-4">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleToggleCameraPreview}
-                        disabled={isLoading || isProcessingCamera}
-                        className="w-full border-stardust-blue text-stardust-blue hover:bg-stardust-blue/10"
-                    >
-                        {showCameraPreview ? <CameraOff className="w-5 h-5 mr-2" /> : <Camera className="w-5 h-5 mr-2" />}
-                        {cameraButtonText}
-                    </Button>
-                </div>
-            )}
+          {/* Camera Button - common for image & video */}
+          {isClientMounted && navigator.mediaDevices?.getUserMedia && ( 
+              <div className="mb-2">
+                  <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleToggleCameraPreview}
+                      disabled={isLoading || isProcessingCamera || isRecordingAudio}
+                      className="w-full border-stardust-blue text-stardust-blue hover:bg-stardust-blue/10"
+                  >
+                      {showCameraPreview ? <CameraOff className="w-5 h-5 mr-2" /> : <Camera className="w-5 h-5 mr-2" />}
+                      {cameraButtonText}
+                  </Button>
+              </div>
+          )}
 
-            {showCameraPreview && (
-                <Card className="bg-nebula-gray/70 border-slate-600 p-4">
-                    <video ref={videoRef} className="w-full aspect-video rounded-md bg-slate-800 border border-slate-500" autoPlay muted playsInline />
-                    
-                    {hasCameraPermission === null && !cameraError && ( 
-                        <Alert variant="default" className="mt-3 bg-slate-700 border-slate-600 text-slate-300">
-                            <AlertTitle>Camera Access</AlertTitle>
-                            <AlertDescription>Requesting camera permission... Please allow access in your browser.</AlertDescription>
-                        </Alert>
-                    )}
-                    {hasCameraPermission === true && !cameraFeedReady && !cameraError && (
-                        <p className="text-sm text-stardust-blue text-center mt-2 animate-pulse">Loading video feed...</p>
-                    )}
-                    {hasCameraPermission === false && cameraError && (
-                        <Alert variant="destructive" className="mt-3">
-                            <AlertTitle>Camera Error</AlertTitle>
-                            <AlertDescription>{cameraError}</AlertDescription>
-                        </Alert>
-                    )}
-                    {hasCameraPermission && currentStandardInputType === 'image' && (
-                        <Button
-                            type="button"
-                            onClick={handleTakePhoto}
-                            disabled={isProcessingCamera || isLoading || !hasCameraPermission || !cameraFeedReady}
-                            className="w-full mt-3 bg-green-600 hover:bg-green-700 text-primary-foreground disabled:opacity-60"
-                        >
-                            {isProcessingCamera ? 'Processing...' : 'Take Photo'}
-                        </Button>
-                    )}
-                    {hasCameraPermission && currentStandardInputType === 'video' && (
-                        <Button
-                            type="button"
-                            onClick={handleUseLiveVideoConcept}
-                            disabled={isProcessingCamera || isLoading || !hasCameraPermission || !cameraFeedReady}
-                            className="w-full mt-3 bg-sky-600 hover:bg-sky-700 text-primary-foreground disabled:opacity-60"
-                        >
-                            {isProcessingCamera ? 'Processing...' : 'Use Live Video Concept'}
-                        </Button>
-                    )}
-                </Card>
-            )}
+          {/* Audio Recording Button - specific to 'video' (audio concept) type */}
+          {currentStandardInputType === 'video' && isClientMounted && navigator.mediaDevices?.getUserMedia && !showCameraPreview && (
+            <div className="mb-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleToggleAudioRecording}
+                disabled={isLoading || isProcessingCamera || showCameraPreview}
+                className={`w-full ${isRecordingAudio ? 'border-red-500 text-red-400 hover:bg-red-500/10' : 'border-green-500 text-green-400 hover:bg-green-500/10'}`}
+              >
+                {isRecordingAudio ? <StopCircle className="w-5 h-5 mr-2" /> : <AudioLines className="w-5 h-5 mr-2" />}
+                {isRecordingAudio ? 'Stop Recording Audio' : 'Record Live Audio'}
+              </Button>
+              {audioError && <p className="mt-1 text-xs text-red-400">{audioError}</p>}
+               {hasMicrophonePermission === false && !audioError && <p className="mt-1 text-xs text-muted-foreground">Microphone permission needed.</p>}
+            </div>
+          )}
 
-          {!showCameraPreview && (
+
+          {/* Camera Preview */}
+          {showCameraPreview && (
+              <Card className="bg-nebula-gray/70 border-slate-600 p-4">
+                  <video ref={videoRef} className="w-full aspect-video rounded-md bg-slate-800 border border-slate-500" autoPlay muted playsInline />
+                  
+                  {hasCameraPermission === null && !cameraError && ( 
+                      <Alert variant="default" className="mt-3 bg-slate-700 border-slate-600 text-slate-300">
+                          <AlertTitle>Camera Access</AlertTitle>
+                          <AlertDescription>Requesting camera permission... Please allow access in your browser.</AlertDescription>
+                      </Alert>
+                  )}
+                  {hasCameraPermission === true && !cameraFeedReady && !cameraError && (
+                      <p className="text-sm text-stardust-blue text-center mt-2 animate-pulse">Loading video feed...</p>
+                  )}
+                  {hasCameraPermission === false && cameraError && (
+                      <Alert variant="destructive" className="mt-3">
+                          <AlertTitle>Camera Error</AlertTitle>
+                          <AlertDescription>{cameraError}</AlertDescription>
+                      </Alert>
+                  )}
+                  {hasCameraPermission && currentStandardInputType === 'image' && (
+                      <Button
+                          type="button"
+                          onClick={handleTakePhoto}
+                          disabled={isProcessingCamera || isLoading || !hasCameraPermission || !cameraFeedReady || isRecordingAudio}
+                          className="w-full mt-3 bg-green-600 hover:bg-green-700 text-primary-foreground disabled:opacity-60"
+                      >
+                          {isProcessingCamera ? 'Processing...' : 'Take Photo'}
+                      </Button>
+                  )}
+                  {hasCameraPermission && currentStandardInputType === 'video' && (
+                      <Button
+                          type="button"
+                          onClick={handleUseLiveVideoConcept}
+                          disabled={isProcessingCamera || isLoading || !hasCameraPermission || !cameraFeedReady || isRecordingAudio}
+                          className="w-full mt-3 bg-sky-600 hover:bg-sky-700 text-primary-foreground disabled:opacity-60"
+                      >
+                          {isProcessingCamera ? 'Processing...' : 'Use Live Video Concept'}
+                      </Button>
+                  )}
+              </Card>
+          )}
+
+          {/* File Upload - common for image & video/audio, hidden if camera/recording active */}
+          {!showCameraPreview && !isRecordingAudio && (
             <div>
                 <Label htmlFor={fileInputId} className="block text-sm font-medium text-stardust-blue mb-1">
                 Upload {currentStandardInputType === 'image' ? 'Image' : 'Video/Audio'} File:
@@ -553,41 +718,49 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                     accept={currentStandardInputType === 'image' ? 'image/png, image/jpeg, image/gif, image/webp' : 'video/*, audio/*'}
                     onChange={handleFileChange}
                     className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
-                    disabled={isLoading || isProcessingCamera}
+                    disabled={isLoading || isProcessingCamera || isRecordingAudio || showCameraPreview}
                 />
                 <UploadCloudIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
                 </div>
-                {currentStandardInputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Note: Video/audio content is not uploaded. Music parameters are based on file name & conceptual analysis.</p>}
+                {currentStandardInputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Upload a video or audio file (content analyzed conceptually), or record live audio below.</p>}
                 {currentStandardInputType === 'image' && <p className="mt-2 text-xs text-muted-foreground">Max file size: {MAX_IMAGE_FILE_SIZE_MB}MB. Supported formats: JPEG, PNG, GIF, WEBP.</p>}
             </div>
           )}
 
-            {fileError && (
-              <p className="mt-2 text-sm text-red-400 flex items-center">
-                <XCircleIcon className="w-5 h-5 mr-1"/> {fileError}
-              </p>
-            )}
+          {fileError && (
+            <p className="mt-2 text-sm text-red-400 flex items-center">
+              <XCircleIcon className="w-5 h-5 mr-1"/> {fileError}
+            </p>
+          )}
 
-            {filePreview && !showCameraPreview && ( 
-               <Card className="mt-4 bg-nebula-gray border-slate-600">
-                <CardHeader className="p-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-sm font-medium text-galaxy-white">{filePreview.name}</CardTitle>
-                      <p className="text-xs text-muted-foreground">{filePreview.type} - {(filePreview.size / 1024).toFixed(1)} KB</p>
-                    </div>
-                    <Button type="button" variant="ghost" size="icon" onClick={resetFileInputAndCamera} className="text-red-400 hover:text-red-300" aria-label="Remove file">
-                       <XCircleIcon className="w-6 h-6"/>
-                    </Button>
+          {filePreview && !showCameraPreview && ( 
+              <Card className="mt-4 bg-nebula-gray border-slate-600">
+              <CardHeader className="p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-medium text-galaxy-white">{filePreview.name}</CardTitle>
+                    <p className="text-xs text-muted-foreground">{filePreview.type} - {(filePreview.size / 1024).toFixed(1)} KB</p>
                   </div>
-                </CardHeader>
-                {currentStandardInputType === 'image' && filePreview.url && (
-                  <CardContent className="p-3 pt-0">
-                    <img src={filePreview.url} alt="Preview" data-ai-hint="abstract texture" className="mt-2 rounded-md max-h-40 object-contain border border-slate-700" />
-                  </CardContent>
-                )}
-              </Card>
-            )}
+                  <Button type="button" variant="ghost" size="icon" onClick={resetAllMediaInputs} className="text-red-400 hover:text-red-300" aria-label="Remove file">
+                      <XCircleIcon className="w-6 h-6"/>
+                  </Button>
+                </div>
+              </CardHeader>
+              {currentStandardInputType === 'image' && filePreview.url && filePreview.type.startsWith('image/') && (
+                <CardContent className="p-3 pt-0">
+                  <img src={filePreview.url} alt="Preview" data-ai-hint="abstract texture" className="mt-2 rounded-md max-h-40 object-contain border border-slate-700" />
+                </CardContent>
+              )}
+              {filePreview.url && filePreview.type.startsWith('audio/') && (
+                <CardContent className="p-3 pt-0">
+                  <audio controls src={filePreview.url} className="w-full mt-2" />
+                  <p className="text-xs text-muted-foreground mt-1">Preview of your live audio recording.</p>
+                </CardContent>
+              )}
+            </Card>
+          )}
+
+          {/* Additional Context - common for image & video/audio */}
           {!showCameraPreview && (
             <div>
                 <Label htmlFor={additionalContextId} className="block text-sm font-medium text-stardust-blue">
@@ -597,13 +770,13 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                 id={additionalContextId}
                 value={additionalContext}
                 onChange={(e) => setAdditionalContext(e.target.value)}
-                placeholder={`Describe the ${currentStandardInputType === 'image' ? 'image' : 'video/audio concept'} or highlight specific elements...`}
+                placeholder={`Describe the ${currentStandardInputType === 'image' ? 'image' : (filePreview?.type.startsWith('audio/') ? 'live audio recording' : 'video/audio concept')} or highlight specific elements...`}
                 rows={3}
                 className="w-full p-3 mt-1 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
-                disabled={isLoading || isProcessingCamera}
+                disabled={isLoading || isProcessingCamera || isRecordingAudio || showCameraPreview}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                Help the AI understand your {currentStandardInputType === 'image' ? 'image' : 'video/audio concept'} better.
+                Help the AI understand your input better.
                 </p>
             </div>
           )}
@@ -636,7 +809,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               value={[energySlider ?? 50]}
               onValueChange={(value) => setEnergySlider(value[0])}
               className="w-full [&>span>span]:bg-stardust-blue [&>span]:bg-slate-600"
-              disabled={isLoading || isProcessingCamera}
+              disabled={isLoading || isProcessingCamera || isRecordingAudio}
             />
             <div className="flex justify-between text-xs text-muted-foreground mt-1 px-1">
               <span>Low</span>
@@ -662,7 +835,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               value={[positivitySlider ?? 50]}
               onValueChange={(value) => setPositivitySlider(value[0])}
               className="w-full [&>span>span]:bg-primary [&>span]:bg-slate-600"
-              disabled={isLoading || isProcessingCamera}
+              disabled={isLoading || isProcessingCamera || isRecordingAudio}
             />
              <div className="flex justify-between text-xs text-muted-foreground mt-1 px-1">
               <span>Negative</span>
@@ -679,7 +852,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         <Label htmlFor={genreSelectId + "-standard"} className="block text-lg font-medium text-stardust-blue mb-3">
           3. Select Music Genre (Optional):
         </Label>
-        <Select value={selectedGenre} onValueChange={onGenreChange} disabled={isLoading || isProcessingCamera}>
+        <Select value={selectedGenre} onValueChange={onGenreChange} disabled={isLoading || isProcessingCamera || isRecordingAudio}>
           <SelectTrigger id={genreSelectId + "-standard"} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-150 text-galaxy-white">
             <SelectValue placeholder="Select a genre" />
           </SelectTrigger>
@@ -714,6 +887,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
             Processing Camera...
+            </>
+        ) : isRecordingAudio ? (
+             <>
+             <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-primary-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Finalizing Audio...
             </>
         ) : (
           <>

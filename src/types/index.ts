@@ -5,12 +5,12 @@ import type { RenderKidsDrawingOutput, RenderKidsDrawingInput as RenderKidsDrawi
 import type { RenderStandardInputArtOutput as StandardArtOutput, RenderStandardInputArtInput as StandardArtInputOriginal } from '@/ai/flows/render-standard-input-art-flow';
 
 
-export type InputType = 'text' | 'image' | 'video';
+export type InputType = 'text' | 'image' | 'video'; // 'video' also serves for 'audio' concepts/data
 
 export interface FilePreview {
   name: string;
   type: string;
-  url?: string;
+  url?: string; // Can be data URI for images or recorded audio
   size: number;
 }
 
@@ -28,12 +28,18 @@ export type AppInput = BaseAppInput & (
       type: 'image';
       content: string; // Base64 content for image
       mimeType: string;
-      fileDetails: FilePreview; // Includes URL for image
+      fileDetails: FilePreview; // Includes URL for image data URI
       voiceDescription?: string; // Primarily for Kids Mode
       additionalContext?: string; // For Standard Mode image/video
       drawingSoundSequence?: string; // For Kids Mode drawing sounds
     }
-  | { type: 'video'; fileDetails: FilePreview; additionalContext?: string; } // Video/Audio, no direct content upload
+  | { 
+      type: 'video'; // Also used for audio file concepts AND recorded audio data
+      fileDetails: FilePreview; // If url is present and type is audio/*, it's recorded audio data URI
+      content?: string; // Base64 part of the audio data URI, if it's a recording
+      mimeType?: string; // Mime type of the recorded audio e.g. "audio/wav"
+      additionalContext?: string; 
+    }
 );
 
 export interface MusicParameters extends AIOutput {
@@ -41,12 +47,14 @@ export interface MusicParameters extends AIOutput {
   selectedGenre?: string;
 }
 
+// Ensure FlowInput can receive the audio data URI via fileDetails.url
 export interface FlowInput extends FlowInputTypeOriginal {
   voiceDescription?: string;
   additionalContext?: string;
   drawingSoundSequence?: string;
   userEnergy?: number;
   userPositivity?: number;
+  // fileDetails.url can now also be an audio data URI
 }
 
 export interface GeminiMusicParamsResponse {
@@ -75,3 +83,4 @@ export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}
 // Types for Standard Mode AI Art Generation
 export interface RenderStandardInputArtInput extends StandardArtInputOriginal {}
 export interface RenderedStandardArtResponse extends StandardArtOutput {}
+

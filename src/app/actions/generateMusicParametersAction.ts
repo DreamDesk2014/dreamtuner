@@ -14,14 +14,15 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
     if (input.type === 'text') {
       flowInput.content = input.content;
     } else if (input.type === 'image') {
-      flowInput.content = input.content; 
-      flowInput.mimeType = input.mimeType;
-      flowInput.fileDetails = {
+      // content is base64 for image, mimeType is also present
+      // fileDetails.url will contain the data URI for the image
+      flowInput.fileDetails = { // Pass the full fileDetails for images
         name: input.fileDetails.name,
         type: input.fileDetails.type,
         size: input.fileDetails.size,
         url: input.fileDetails.url, 
       };
+      // These are specific to image type in this block based on original structure
       if (input.voiceDescription) { 
         flowInput.voiceDescription = input.voiceDescription;
       }
@@ -31,8 +32,17 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
       if (input.drawingSoundSequence && input.mode === 'kids') {
         flowInput.drawingSoundSequence = input.drawingSoundSequence;
       }
-    } else if (input.type === 'video') {
-      flowInput.fileDetails = input.fileDetails;
+    } else if (input.type === 'video') { // This now handles uploaded video/audio concepts AND live recorded audio
+      flowInput.fileDetails = input.fileDetails; // name, type, size, and URL (if live audio recording)
+      // For live audio recordings, input.content (base64) and input.mimeType are also passed from InputForm
+      // The flow expects audio data URI in fileDetails.url
+      if (input.fileDetails.url && input.fileDetails.type.startsWith('audio/')) {
+        // This means fileDetails.url is a data URI of recorded audio.
+        // The flow's prompt will use {{media url=fileDetails.url}}
+      }
+      // No need to explicitly pass input.content or input.mimeType to flowInput
+      // if the data URI is correctly in flowInput.fileDetails.url
+
       if (input.additionalContext) { 
         flowInput.additionalContext = input.additionalContext;
       }
@@ -67,7 +77,7 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
       return { error: "Gemini API request failed: Service not available in your region." };
     }
     if (errorMessage.toLowerCase().includes("size") || errorMessage.toLowerCase().includes("request payload")){
-        return { error: "Gemini API request failed: Input data (e.g. image) might be too large."};
+        return { error: "Gemini API request failed: Input data (e.g. image or audio) might be too large."};
     }
     if (errorMessage.includes("Handlebars")) {
       return { error: `AI prompt template error: ${errorMessage}` };

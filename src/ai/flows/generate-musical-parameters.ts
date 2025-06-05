@@ -15,16 +15,16 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const GenerateMusicalParametersInputSchema = z.object({
-  type: z.enum(['text', 'image', 'video']), // 'video' type covers video and audio concepts
-  content: z.string().optional(),
-  mimeType: z.string().optional(),
+  type: z.enum(['text', 'image', 'video']), // 'video' type covers video file concepts, audio file concepts, and actual audio data
+  content: z.string().optional(), // Text content, or base64 for images (though image data is now preferred via fileDetails.url)
+  mimeType: z.string().optional(), // Mime type for images or audio (if content is direct base64)
   fileDetails: z
     .object({
       name: z.string(),
-      type: z.string(), // Will be e.g., 'video/mp4' or 'audio/mpeg'
+      type: z.string(), // Will be e.g., 'image/png', 'video/mp4', 'audio/mpeg', 'audio/wav'
       size: z.number(),
       url: z.string().optional().describe(
-        "The image content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+        "The image or audio content as a data URI. Expected format: 'data:<mimetype>;base64,<encoded_data>'. For video/audio file concepts (not data), this will be absent."
       ),
     })
     .optional(),
@@ -126,20 +126,28 @@ const prompt = ai.definePrompt({
 
 {{else}}
   {{! Standard Mode Prompt }}
-  {{#if fileDetails.url}} {{! This is for image input with URL }}
+  {{#if isInputImageWithData}} {{! This is for image input with URL }}
     Analyze the following image and generate a detailed set of musical parameters that capture its essence (colors, mood, objects, composition).
     Image: {{media url=fileDetails.url}}
     {{#if additionalContext}}
     Additional context from user: "{{{additionalContext}}}"
     Consider this context when generating parameters.
     {{/if}}
-  {{else}} {{! This block is for text input OR video/audio concept }}
-    {{#if fileDetails}} {{! This means it's video/audio concept (no URL) }}
-      {{#if isInputVideo}}
-      Conceptually analyze the video (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Video{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
+  {{else if isInputAudioWithData}} {{! This is for live recorded audio input with data URL }}
+    Analyze the following live audio recording and generate a detailed set of musical parameters that capture its essence (sounds, rhythm, mood, implied environment).
+    Audio Recording: {{media url=fileDetails.url}}
+    Filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Live Audio Recording{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}audio/wav{{/if}}'
+    {{#if additionalContext}}
+    Additional context from user: "{{{additionalContext}}}"
+    Consider this context when generating parameters.
+    {{/if}}
+  {{else}} {{! This block is for text input OR video/audio file concept (no data URL) }}
+    {{#if fileDetails}} {{! This means it's a video/audio file concept (no data URL, or URL is not for image/audio data) }}
+      {{#if isInputVideoFileConcept}}
+      Conceptually analyze the video file (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Video{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
       Generate a detailed set of musical parameters that capture its conceptual essence (e.g., theme, pacing, visual mood, implied narrative).
-      {{else if isInputAudio}}
-      Conceptually analyze the audio (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Audio{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
+      {{else if isInputAudioFileConcept}}
+      Conceptually analyze the audio file (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Audio File{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
       Generate a detailed set of musical parameters that capture its conceptual essence (e.g., theme, rhythm, sonic texture, implied mood).
       {{else}} {{! Fallback for other file types if they somehow get here }}
       Conceptually analyze the media file (filename: '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown File{{/if}}', MIME type: '{{#if fileDetails.type}}{{{fileDetails.type}}}{{else}}unknown{{/if}}').
@@ -150,19 +158,19 @@ const prompt = ai.definePrompt({
       Additional context from user: "{{{additionalContext}}}"
       Consider this context when generating parameters.
       {{/if}}
-    {{else}} {{! This means it's text input (no fileDetails or no fileDetails.url) }}
+    {{else}} {{! This means it's text input (no fileDetails) }}
       {{#if content}}
         Analyze the following text and generate a detailed set of musical parameters that capture its essence.
         The text is: {{{content}}}
       {{else}}
-        No specific input type (text, image with URL, or video/audio details) was clearly identified. Please generate musical parameters based on any general information available or indicate the need for clearer input.
+        No specific input type (text, image/audio data, or video/audio file details) was clearly identified. Please generate musical parameters based on any general information available or indicate the need for clearer input.
       {{/if}}
     {{/if}}
   {{/if}}
 
   {{#if genre}}
   The user has specified a musical genre: '{{{genre}}}'.
-  Please ensure the generated musical parameters are stylistically appropriate for this genre, while still reflecting the core essence of the primary input (text, image, or video/audio concept).
+  Please ensure the generated musical parameters are stylistically appropriate for this genre, while still reflecting the core essence of the primary input (text, image, audio data, or video/audio file concept).
   {{/if}}
 
   {{#if userEnergy}}
@@ -201,9 +209,11 @@ const generateMusicalParametersFlow = ai.defineFlow(
     const handlebarsContext = {
       ...input,
       isKidsMode: input.mode === 'kids',
-      isInputVideo: input.fileDetails?.type?.startsWith('video/'),
-      isInputAudio: input.fileDetails?.type?.startsWith('audio/'),
-      hasKidsDrawing: input.mode === 'kids' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64'),
+      hasKidsDrawing: input.mode === 'kids' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
+      isInputImageWithData: input.type === 'image' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
+      isInputAudioWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('audio/'),
+      isInputVideoFileConcept: input.type === 'video' && input.fileDetails && !input.fileDetails.url?.includes('base64') && input.fileDetails.type?.startsWith('video/'),
+      isInputAudioFileConcept: input.type === 'video' && input.fileDetails && !input.fileDetails.url?.includes('base64') && input.fileDetails.type?.startsWith('audio/'),
     };
     const {output} = await prompt(handlebarsContext);
     return output!;
