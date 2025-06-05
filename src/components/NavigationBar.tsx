@@ -37,8 +37,14 @@ export const NavigationBar: React.FC = () => {
             <p>
               In Kids Mode, it offers a playful experience where drawings and voice hints become the inspiration for both music and AI-generated art.
             </p>
+            <p>
+              DreamTuner is generally offered as a <strong>free app</strong>, designed for <strong>fun and to provide basic educational insights</strong> into music creation for both kids and adults.
+            </p>
+            <p>
+              Please note that the <strong>quality of the MIDI playback is an area under active development</strong>, so it might be basic at times as we refine the music generation process.
+            </p>
             <p className="font-semibold text-amber-400 pt-2">
-              DreamTuner is currently in Beta. We appreciate your feedback as we continue to improve!
+              DreamTuner is currently in <strong>Beta</strong>. We appreciate your feedback as we continue to improve!
             </p>
           </div>
           <DialogFooter className="mt-2">
