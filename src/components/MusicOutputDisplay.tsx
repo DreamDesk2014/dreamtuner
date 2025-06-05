@@ -1,18 +1,18 @@
 
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import MidiPlayer from 'midi-player-js';
+import * as Tone from 'tone';
 import type { MusicParameters, AppInput } from '@/types';
-import { getValenceArousalDescription, SOUNDFONT_URL, SOUND_LOADING_TIMEOUT_MS } from '@/lib/constants';
+import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
-import { dataURLtoFile } from '@/lib/utils'; // Import the helper
+import { dataURLtoFile } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import {
   MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon,
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
   LibraryIcon, PlayIcon, PauseIcon, StopIcon
 } from './icons/HeroIcons';
-import { Share2 } from 'lucide-react'; // Import Share icon
+import { Share2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -27,7 +27,7 @@ interface MusicOutputDisplayProps {
   params: MusicParameters;
   onRegenerateIdea: () => Promise<void>;
   isRegeneratingIdea: boolean;
-  standardModeArtUrl?: string | null; // Added for sharing standard mode art
+  standardModeArtUrl?: string | null;
 }
 
 interface ParameterCardProps {
@@ -78,213 +78,235 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   const [isSharing, setIsSharing] = useState<boolean>(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
-  const midiPlayerRef = useRef<any>(null);
-  const [isPlayerLoadingSounds, setIsPlayerLoadingSounds] = useState<boolean>(false);
-  const [isPlaybackReady, setIsPlaybackReady] = useState<boolean>(false);
+  // Tone.js specific state
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [playerError, setPlayerError] = useState<string | null>(null);
+  const [isLoadingTone, setIsLoadingTone] = useState<boolean>(false);
+  const [toneError, setToneError] = useState<string | null>(null);
   const [playbackProgress, setPlaybackProgress] = useState<number>(0);
-  const totalMidiTicksRef = useRef<number>(0);
-  const [midiFileStructLoaded, setMidiFileStructLoaded] = useState<boolean>(false);
-  const soundLoadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [currentMidiDuration, setCurrentMidiDuration] = useState<number>(0);
+  
+  const synthsRef = useRef<{ 
+    melody?: Tone.PolySynth, 
+    bass?: Tone.PolySynth, 
+    chords?: Tone.PolySynth,
+    kick?: Tone.MembraneSynth,
+    snare?: Tone.NoiseSynth,
+    hiHat?: Tone.MetalSynth,
+    parts?: Tone.Part[]
+  }>({});
+  const progressIntervalRef = useRef<number | null>(null);
 
-  const isPlayerLoadingSoundsRef = useRef(isPlayerLoadingSounds);
+  // Initialize Tone.js synths
   useEffect(() => {
-    isPlayerLoadingSoundsRef.current = isPlayerLoadingSounds;
-  }, [isPlayerLoadingSounds]);
-
-  useEffect(() => {
-    MidiPlayer.Player.SOUNDFONT_URL = SOUNDFONT_URL;
-    const player = new MidiPlayer.Player((event: any) => {
-      if (event.name === 'End of File') {
-        setIsPlaying(false);
-        setPlaybackProgress(100);
-        setIsPlaybackReady(false);
-      }
-      if (event.name === 'Playing' || event.name === 'playbackStart') {
-        if (soundLoadingTimeoutRef.current) {
-          clearTimeout(soundLoadingTimeoutRef.current);
-          soundLoadingTimeoutRef.current = null;
-        }
-        setIsPlayerLoadingSounds(false);
-        setIsPlaybackReady(true);
-        setIsPlaying(true);
-        setPlayerError(null);
-      }
-      if (event.name === 'playbackPause') setIsPlaying(false);
-      if (event.name === 'playbackStop') {
-        if (soundLoadingTimeoutRef.current) {
-          clearTimeout(soundLoadingTimeoutRef.current);
-          soundLoadingTimeoutRef.current = null;
-        }
-        setIsPlayerLoadingSounds(false);
-        setIsPlaying(false);
-        setIsPlaybackReady(false);
-        setPlaybackProgress(0);
-      }
-      if (event.name === 'playing' && event.tick !== undefined) {
-        if (totalMidiTicksRef.current > 0) {
-          const progress = (event.tick / totalMidiTicksRef.current) * 100;
-          setPlaybackProgress(progress);
-        }
-      }
-    });
-
-    player.on('fileLoaded', () => {
-       totalMidiTicksRef.current = player.getTotalTicks();
-       setMidiFileStructLoaded(true);
-    });
-
-    player.on('soundfontLoaded', () => {
-      if (soundLoadingTimeoutRef.current) {
-        clearTimeout(soundLoadingTimeoutRef.current);
-        soundLoadingTimeoutRef.current = null;
-      }
-      setIsPlayerLoadingSounds(false);
-    });
-
-    player.on('soundfontError', (err: any) => {
-      if (soundLoadingTimeoutRef.current) {
-        clearTimeout(soundLoadingTimeoutRef.current);
-        soundLoadingTimeoutRef.current = null;
-      }
-      const errorMessage = err?.message || err?.error || "Soundfont loading error.";
-      setPlayerError(`SoundFont Error: ${String(errorMessage)}`);
-      setIsPlayerLoadingSounds(false);
-      setIsPlaybackReady(false);
-      setIsPlaying(false);
-    });
-
-    player.on('error', (err: any) => {
-      if (soundLoadingTimeoutRef.current) {
-        clearTimeout(soundLoadingTimeoutRef.current);
-        soundLoadingTimeoutRef.current = null;
-      }
-      const errorMessage = err?.message || err?.error || err || "An unknown player error occurred.";
-      setPlayerError(String(errorMessage));
-      setIsPlayerLoadingSounds(false);
-      setIsPlaybackReady(false);
-      setIsPlaying(false);
-      setMidiFileStructLoaded(false);
-      setPlaybackProgress(0);
-    });
-
-    midiPlayerRef.current = player;
-
+    synthsRef.current = {
+      melody: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsawtooth' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.5 } }).toDestination(),
+      bass: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.5, release: 0.5 } }).toDestination(),
+      chords: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'amtriangle', harmonicity: 0.5 }, volume: -8, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1 } }).toDestination(),
+      kick: new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 10, oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: 'exponential' } }).toDestination(),
+      snare: new Tone.NoiseSynth({ noise: { type: 'pink' }, volume: -5, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } }).toDestination(),
+      hiHat: new Tone.MetalSynth({ frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -15 }).toDestination(),
+      parts: []
+    };
+    // Adjust synth parameters for better distinction if needed
+    if(synthsRef.current.bass) synthsRef.current.bass.set({ oscillator: {type: "fmsine"}, detune: -1200 }); // Lower octave for bass
+    
     return () => {
-      if (midiPlayerRef.current) {
-        midiPlayerRef.current.stop();
-        midiPlayerRef.current = null;
-      }
-      if (soundLoadingTimeoutRef.current) {
-        clearTimeout(soundLoadingTimeoutRef.current);
+      Tone.Transport.cancel();
+      Tone.Transport.clear(0);
+      Object.values(synthsRef.current).forEach(synthOrParts => {
+        if (Array.isArray(synthOrParts)) { // It's the parts array
+            synthOrParts.forEach(part => part.dispose());
+        } else if (synthOrParts && typeof (synthOrParts as any).dispose === 'function') {
+            (synthOrParts as any).dispose();
+        }
+      });
+      synthsRef.current = {};
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
       }
     };
   }, []);
 
+  // Load and schedule MIDI when params change
   useEffect(() => {
-    const player = midiPlayerRef.current;
-    if (params && player) {
-      if (soundLoadingTimeoutRef.current) {
-        clearTimeout(soundLoadingTimeoutRef.current);
-        soundLoadingTimeoutRef.current = null;
-      }
-      player.stop();
-      setPlayerError(null);
-      setMidiFileStructLoaded(false);
+    const loadAndScheduleMidi = async () => {
+      if (!params || !Object.keys(synthsRef.current).length) return;
+
+      setIsLoadingTone(true);
+      setToneError(null);
+      setIsPlaying(false);
       setPlaybackProgress(0);
-      totalMidiTicksRef.current = 0;
+      setCurrentMidiDuration(0);
+      
+      // Stop and clear previous transport events
+      Tone.Transport.stop();
+      Tone.Transport.cancel(0);
+      Tone.Transport.position = 0;
+      synthsRef.current.parts?.forEach(part => part.dispose());
+      synthsRef.current.parts = [];
 
 
       try {
         const midiDataUri = generateMidiFile(params);
-        console.log("Generated MIDI Data URI for playback:", midiDataUri); 
         if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
-          setPlayerError("Failed to generate valid MIDI data. URI was: " + (midiDataUri ? midiDataUri.substring(0,100) + "..." : "undefined/null"));
-          setMidiFileStructLoaded(false);
-          return;
+          throw new Error("Failed to generate valid MIDI data for Tone.js.");
         }
-        player.loadDataUri(midiDataUri);
+
+        const midi = await Tone.Midi.fromUrl(midiDataUri);
+        setCurrentMidiDuration(midi.duration);
+        Tone.Transport.bpm.value = params.tempoBpm;
+
+        const newParts: Tone.Part[] = [];
+
+        midi.tracks.forEach((track, trackIndex) => {
+          let synth: Tone.Synth | Tone.PolySynth | Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
+          
+          // Basic instrument mapping (can be expanded based on track.instrument.name or trackIndex)
+          if (track.channel === 9) { // Drum channel
+            // Drum tracks are handled differently, notes are scheduled individually
+          } else if (trackIndex === 0 && synthsRef.current.melody) { // Crude: first non-drum track is melody
+            synth = synthsRef.current.melody;
+          } else if (trackIndex === 1 && synthsRef.current.bass) { // Crude: second non-drum track is bass
+            synth = synthsRef.current.bass;
+          } else if (synthsRef.current.chords) { // Fallback for other pitched tracks
+            synth = synthsRef.current.chords;
+          }
+          
+          if (track.channel === 9) { // Drum track
+            track.notes.forEach(note => {
+                let drumSynth: Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
+                let pitchToPlay: string | number | undefined = undefined;
+
+                // Simplified drum mapping
+                if (note.midi === 35 || note.midi === 36) { // Kick
+                    drumSynth = synthsRef.current.kick;
+                } else if (note.midi === 38 || note.midi === 40) { // Snare
+                    drumSynth = synthsRef.current.snare;
+                } else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { // Hi-hat
+                    drumSynth = synthsRef.current.hiHat;
+                    pitchToPlay = note.midi === 46 ? 400 : 250; // Slightly different pitch for open hi-hat
+                }
+
+                if (drumSynth) {
+                    const part = new Tone.Part((time, value) => {
+                        if (drumSynth instanceof Tone.MembraneSynth && value.pitch) drumSynth.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
+                        else if (drumSynth instanceof Tone.NoiseSynth) drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
+                        else if (drumSynth instanceof Tone.MetalSynth) drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
+                    }, [{ time: note.time, duration: note.duration, velocity: note.velocity, pitch: pitchToPlay }]).start(0);
+                    newParts.push(part);
+                }
+            });
+          } else if (synth) { // Pitched instrument tracks
+            const part = new Tone.Part((time, value) => {
+              (synth as Tone.PolySynth).triggerAttackRelease(value.name, value.duration, time, value.velocity);
+            }, track.notes.map(n => ({ time: n.time, name: n.name, duration: n.duration, velocity: n.velocity }))).start(0);
+            newParts.push(part);
+          }
+        });
+        synthsRef.current.parts = newParts;
+
       } catch (error) {
-        setPlayerError(error instanceof Error ? error.message : "Failed to prepare MIDI for playback.");
-        setMidiFileStructLoaded(false);
+        console.error("Tone.js MIDI loading/scheduling error:", error);
+        setToneError(error instanceof Error ? error.message : "Error loading or scheduling MIDI with Tone.js");
+      } finally {
+        setIsLoadingTone(false);
       }
-    } else if (!params && player) {
-        if (soundLoadingTimeoutRef.current) {
-          clearTimeout(soundLoadingTimeoutRef.current);
-          soundLoadingTimeoutRef.current = null;
-        }
-        player.stop();
-        setMidiFileStructLoaded(false);
-    }
-  }, [params]);
-
-  const handlePlayPause = useCallback(() => {
-    const player = midiPlayerRef.current;
-    if (!player) { setPlayerError("Player not available."); return; }
-
-    if (!midiFileStructLoaded && !player.isPlaying() && !isPlayerLoadingSoundsRef.current){
-        setPlayerError("MIDI data not ready. Please wait."); return;
-    }
-
-    const audioContext = player.audioContext;
-    const performPlayAction = () => {
-        if (player.isPlaying()) {
-            if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
-            player.pause();
-        } else {
-            if (playbackProgress >= 99) {
-                 player.skipToSeconds(0);
-                 setPlaybackProgress(0);
-            }
-            setIsPlayerLoadingSounds(true);
-            setPlayerError(null);
-            setIsPlaybackReady(false);
-
-            if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
-            soundLoadingTimeoutRef.current = setTimeout(() => {
-              const currentPlayer = midiPlayerRef.current;
-              if (currentPlayer && isPlayerLoadingSoundsRef.current) {
-                 setPlayerError("Sound loading timed out. Check connection or try a different genre.");
-                 currentPlayer.stop();
-                 setIsPlayerLoadingSounds(false);
-                 setIsPlaying(false);
-                 setIsPlaybackReady(false);
-              }
-              soundLoadingTimeoutRef.current = null;
-            }, SOUND_LOADING_TIMEOUT_MS);
-            player.play();
-        }
     };
 
-    if (audioContext && audioContext.state === 'suspended') {
-      audioContext.resume().then(performPlayAction).catch((e: Error) => {
-        setPlayerError(`Audio system error: ${e.message}. Please interact with the page and try again.`);
-        if (soundLoadingTimeoutRef.current) clearTimeout(soundLoadingTimeoutRef.current);
-        setIsPlayerLoadingSounds(false);
-      });
-    } else {
-      performPlayAction();
+    loadAndScheduleMidi();
+
+  }, [params]);
+
+
+  const updateProgress = useCallback(() => {
+    if (Tone.Transport.state === "started" && currentMidiDuration > 0) {
+      const progress = (Tone.Transport.seconds / currentMidiDuration) * 100;
+      setPlaybackProgress(Math.min(progress, 100));
+    } else if (Tone.Transport.state !== "started") {
+       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+       progressIntervalRef.current = null;
+       if(playbackProgress > 99 && playbackProgress < 100.1 && !isPlaying) { // ensure it hits 100 if very close
+         setPlaybackProgress(100);
+       }
     }
-  }, [playbackProgress, midiFileStructLoaded]);
+  }, [currentMidiDuration, isPlaying, playbackProgress]);
 
-  const handleStop = useCallback(() => {
-    const player = midiPlayerRef.current;
-    if (!player) return;
 
-    if (soundLoadingTimeoutRef.current) {
-      clearTimeout(soundLoadingTimeoutRef.current);
-      soundLoadingTimeoutRef.current = null;
-    }
+  useEffect(() => {
+    const endOfTransportHandler = () => {
+      setIsPlaying(false);
+      setPlaybackProgress(100);
+       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+       progressIntervalRef.current = null;
+    };
 
-    setIsPlayerLoadingSounds(false);
-    setIsPlaying(false);
-    setIsPlaybackReady(false);
-    setPlaybackProgress(0);
-    setPlayerError(null);
-
-    player.stop();
+    // Listen for 'stop' event to catch when transport naturally ends
+    Tone.Transport.on('stop', endOfTransportHandler);
+    
+    return () => {
+      Tone.Transport.off('stop', endOfTransportHandler);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+    };
   }, []);
+
+
+  const handlePlayPause = async () => {
+    setToneError(null);
+    try {
+      if (Tone.context.state !== 'running') {
+        await Tone.start();
+      }
+
+      if (Tone.Transport.state === 'started') {
+        Tone.Transport.pause();
+        setIsPlaying(false);
+        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      } else {
+        if (playbackProgress >= 100 && currentMidiDuration > 0) { // If at end, restart
+             Tone.Transport.position = 0;
+             setPlaybackProgress(0);
+             synthsRef.current.parts?.forEach(part => part.start(0)); // Re-start parts from beginning
+        }
+        Tone.Transport.start();
+        setIsPlaying(true);
+        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = setInterval(updateProgress, 100) as unknown as number;
+      }
+    } catch (error) {
+      console.error("Tone.js play/pause error:", error);
+      setToneError(error instanceof Error ? error.message : "Playback error");
+      setIsPlaying(false);
+    }
+  };
+
+  const handleStop = async () => {
+    try {
+      if (Tone.context.state !== 'running') {
+        await Tone.start(); // Ensure context is running before stopping transport
+      }
+      Tone.Transport.stop();
+      Tone.Transport.position = 0; // Reset position
+      synthsRef.current.parts?.forEach(part => { // Ensure parts are also stopped/reset
+        part.stop(0); 
+        // For next play, parts need to be re-added or restarted from 0.
+        // Restarting them from 0 when play is hit again if progress was 100.
+      });
+
+      setIsPlaying(false);
+      setPlaybackProgress(0);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+    } catch (error) {
+      console.error("Tone.js stop error:", error);
+      setToneError(error instanceof Error ? error.message : "Stop error");
+    }
+  };
+
 
   const handleDownloadMidi = () => {
     setMidiError(null); setIsGeneratingMidiForDownload(true);
@@ -294,9 +316,9 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       const link = document.createElement('a');
       link.href = midiDataUri;
       let baseFileName = 'dreamtuner_music';
-      if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
-      else if (params.originalInput.type === 'text' && params.originalInput.content) baseFileName = params.originalInput.content.substring(0,30).replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
-      else if ((params.originalInput.type === 'image' || params.originalInput.type === 'video') && params.originalInput.fileDetails) baseFileName = params.originalInput.fileDetails.name.split('.')[0].replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
+      if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\\w\\s]/gi, '').replace(/\\s+/g, '_').slice(0,30);
+      else if (params.originalInput.type === 'text' && params.originalInput.content) baseFileName = params.originalInput.content.substring(0,30).replace(/[^\\w\\s]/gi, '').replace(/\\s+/g, '_');
+      else if ((params.originalInput.type === 'image' || params.originalInput.type === 'video') && params.originalInput.fileDetails) baseFileName = params.originalInput.fileDetails.name.split('.')[0].replace(/[^\\w\\s]/gi, '').replace(/\\s+/g, '_').slice(0,30);
       link.download = `${baseFileName || 'dreamtuner_output'}.mid`;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
     } catch (error) {
@@ -313,22 +335,22 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       case 'text': originalInputSummary = `Text: "${params.originalInput.content ? params.originalInput.content.substring(0, 100) : ''}${params.originalInput.content && params.originalInput.content.length > 100 ? '...' : ''}"`; break;
       case 'image': originalInputSummary = `${params.originalInput.mode === 'kids' ? "Child's Original Concept" : "Image"}: ${params.originalInput.fileDetails.name}`;
         if (params.originalInput.mode === 'kids' && params.originalInput.voiceDescription) {
-            originalInputSummary += `\nChild's Voice Hint: "${params.originalInput.voiceDescription}"`;
+            originalInputSummary += `\\nChild's Voice Hint: "${params.originalInput.voiceDescription}"`;
         }
         if (params.originalInput.additionalContext) {
-          originalInputSummary += `\nAdditional Context: "${params.originalInput.additionalContext}"`;
+          originalInputSummary += `\\nAdditional Context: "${params.originalInput.additionalContext}"`;
         }
         break;
-      case 'video': // Covers both video and audio concepts
+      case 'video': 
         const fileTypeLabel = params.originalInput.fileDetails.type.startsWith('video/') ? 'Video' :
                               params.originalInput.fileDetails.type.startsWith('audio/') ? 'Audio' : 'Media';
         originalInputSummary = `${fileTypeLabel} Concept: ${params.originalInput.fileDetails.name}`;
         if (params.originalInput.additionalContext) {
-          originalInputSummary += `\nAdditional Context: "${params.originalInput.additionalContext}"`;
+          originalInputSummary += `\\nAdditional Context: "${params.originalInput.additionalContext}"`;
         }
         break;
     }
-    if (params.selectedGenre) originalInputSummary += `\nGenre: ${params.selectedGenre}`;
+    if (params.selectedGenre) originalInputSummary += `\\nGenre: ${params.selectedGenre}`;
 
 
     const detailsToCopy = `DreamTuner - Musical Essence (${params.originalInput.mode} mode):
@@ -372,11 +394,10 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
       const filesToShareAttempt: (File | null)[] = [];
       let shareText = `Check out this musical idea from DreamTuner: "${params.generatedIdea}"`;
       
-      // MIDI File
       const midiDataUri = generateMidiFile(params);
       if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
         let baseFileName = 'dreamtuner_music';
-        if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
+        if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\\w\\s]/gi, '').replace(/\\s+/g, '_').slice(0,30);
         const midiFile = dataURLtoFile(midiDataUri, `${baseFileName}.mid`);
         if (midiFile) filesToShareAttempt.push(midiFile);
         else console.warn("Could not convert MIDI data to a shareable file.");
@@ -384,15 +405,13 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         console.warn("Generated MIDI data was invalid for sharing.");
       }
 
-      // Standard Mode AI Art File (if available and in standard mode)
       if (params.originalInput.mode === 'standard' && standardModeArtUrl) {
         const artFile = dataURLtoFile(standardModeArtUrl, "dreamtuner_standard_art.png");
         if (artFile) filesToShareAttempt.push(artFile);
         else console.warn("Could not convert Standard Mode AI art to a shareable file.");
-        shareText += "\nIt also inspired this AI artwork!";
+        shareText += "\\nIt also inspired this AI artwork!";
       }
-      // Note: Kids mode art sharing is handled in KidsModeTab.tsx as it's generated and displayed there.
-
+      
       const validFilesToShare = filesToShareAttempt.filter(file => file !== null) as File[];
 
       if (validFilesToShare.length === 0) {
@@ -444,14 +463,14 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         title = "Original Text & Generated Core";
 
         const originalTextContent = input.content || "";
-        const lines = originalTextContent.split('\n');
+        const lines = originalTextContent.split('\\n');
         const renderedElements: React.ReactNode[] = [];
 
         const isClearlyNoteLine = (line: string): boolean => {
           const trimmedLine = line.trim();
           if (!trimmedLine) return false;
-          if (/^([CDEFGAB][#b♭♯]?[0-9]?(\s*[-–—]\s*)?)+$/.test(trimmedLine)) {
-              const words = trimmedLine.split(/[\s-]+/).filter(w => w.length > 0);
+          if (/^([CDEFGAB][#b♭♯]?[0-9]?(\\s*[-–—]\\s*)?)+$/.test(trimmedLine)) {
+              const words = trimmedLine.split(/[\\s-]+/).filter(w => w.length > 0);
               let noteLikeWords = 0;
               let nonNoteLikeWords = 0;
               words.forEach(word => {
@@ -508,7 +527,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
             </div>
           </>
         );
-        // For text input, the accordion will wrap the whole card.
         return (
           <Card className="mt-8 bg-nebula-gray/80 border-slate-700">
             <Accordion type="single" collapsible className="w-full">
@@ -548,15 +566,18 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
              )}
           </>);
         break;
-      case 'video': // Covers both video and audio concepts
-        icon = <VideoCameraIcon className="w-6 h-6" />; title = "Original Input Video/Audio Concept";
+      case 'video': 
+        icon = <VideoCameraIcon className="w-6 h-6" />; title = "Original Input Concept";
         const fileTypeDisplay = input.fileDetails.type.startsWith('video/') ? 'Video' :
                                 input.fileDetails.type.startsWith('audio/') ? 'Audio' : 'Media';
         contentDisplay = <>
-            <p className="text-muted-foreground text-sm italic">{fileTypeDisplay} Concept: {input.fileDetails.name} (Analyzed conceptually)</p>
+            <p className="text-muted-foreground text-sm italic">{fileTypeDisplay} Concept: {input.fileDetails.name} (Analyzed conceptually{input.fileDetails.url && input.fileDetails.type.startsWith('audio/') ? ' from live recording' : ''})</p>
             {input.additionalContext && (
                 <p className="text-muted-foreground text-xs italic mt-2">Additional Context: "{input.additionalContext}"</p>
              )}
+            {input.fileDetails.url && input.fileDetails.type.startsWith('audio/') && (
+                <audio controls src={input.fileDetails.url} className="w-full mt-2" />
+            )}
         </>;
         break;
       default: return null;
@@ -625,22 +646,17 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     return desc;
   };
 
-  const player = midiPlayerRef.current;
-  const playButtonDisabled = !player ||
-                             (!midiFileStructLoaded && !isPlayerLoadingSounds && !isPlaying) ||
-                             (isPlayerLoadingSounds && !isPlaying);
-  const showLoadingSpinnerInPlayButton = isPlayerLoadingSounds && !isPlaying;
+  const playButtonDisabled = isLoadingTone || !currentMidiDuration;
+  const showLoadingSpinnerInPlayButton = isLoadingTone;
 
   let statusMessage = "";
-  if (playerError) {
-    statusMessage = `Player Error: ${playerError}`;
-  } else if (params && !midiFileStructLoaded && !isPlaying && !isPlayerLoadingSounds) {
-    statusMessage = "Preparing MIDI data...";
-  } else if (midiFileStructLoaded && isPlayerLoadingSounds && !isPlaying) {
-    statusMessage = "Loading instrument sounds...";
-  } else if (midiFileStructLoaded && !isPlayerLoadingSounds && isPlaybackReady && !isPlaying && playbackProgress < 1) {
+  if (toneError) {
+    statusMessage = `Player Error: ${toneError}`;
+  } else if (isLoadingTone) {
+    statusMessage = "Preparing your tune with Tone.js...";
+  } else if (!isPlaying && currentMidiDuration > 0 && playbackProgress < 1) {
     statusMessage = "Ready to play.";
-  } else if (midiFileStructLoaded && !isPlayerLoadingSounds && !isPlaybackReady && !isPlaying && playbackProgress >= 99) {
+  } else if (!isPlaying && currentMidiDuration > 0 && playbackProgress >= 100) {
     statusMessage = "Playback finished. Play again?";
   }
 
@@ -672,19 +688,19 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
 
       <Card className="mt-8 p-4 bg-nebula-gray/80 border-slate-700">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold text-stardust-blue text-center">Listen to Your Tune</CardTitle>
+          <CardTitle className="text-lg font-semibold text-stardust-blue text-center">Listen to Your Tune (Tone.js)</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center space-x-3">
             <Button onClick={handlePlayPause} disabled={playButtonDisabled} size="icon" className="p-3 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-slate-600">
               {showLoadingSpinnerInPlayButton ? <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" fill="currentColor"></path></svg> : isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
             </Button>
-            <Button onClick={handleStop} disabled={!player || (!isPlaying && !isPlaybackReady && !isPlayerLoadingSounds && playbackProgress === 0)} size="icon" className="p-3 rounded-full bg-slate-600 text-primary-foreground hover:bg-slate-500 disabled:bg-slate-700">
+            <Button onClick={handleStop} disabled={isLoadingTone || (!isPlaying && playbackProgress === 0)} size="icon" className="p-3 rounded-full bg-slate-600 text-primary-foreground hover:bg-slate-500 disabled:bg-slate-700">
               <StopIcon className="w-6 h-6" />
             </Button>
           </div>
-          <Progress value={playbackProgress} className="mt-4 h-2.5 [&>div]:bg-stardust-blue" aria-label="MIDI playback progress" />
-          {statusMessage && <p className={`text-sm text-center mt-2 ${playerError ? 'text-red-400' : 'text-stardust-blue animate-pulse-subtle'}`}>{statusMessage}</p>}
+          <Progress value={playbackProgress} className="mt-4 h-2.5 [&>div]:bg-stardust-blue" aria-label="Tone.js playback progress" />
+          {statusMessage && <p className={`text-sm text-center mt-2 ${toneError ? 'text-red-400' : 'text-stardust-blue animate-pulse-subtle'}`}>{statusMessage}</p>}
         </CardContent>
       </Card>
 
@@ -715,3 +731,4 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     </div>
   );
 };
+
