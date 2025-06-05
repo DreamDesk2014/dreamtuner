@@ -7,7 +7,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogTrigger,
   DialogFooter,
   DialogClose,
@@ -27,7 +26,7 @@ export const NavigationBar: React.FC = () => {
           <DialogHeader>
             <DialogTitle className="text-stardust-blue font-headline text-xl">About DreamTuner</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 text-slate-300 py-3 text-sm leading-relaxed">
+          <div className="space-y-3 text-slate-300 py-3 text-sm leading-relaxed max-h-[60vh] overflow-y-auto pr-3">
             <p>
               DreamTuner is an innovative application that translates your textual descriptions, images, or video/audio concepts into unique musical parameters.
             </p>
@@ -47,7 +46,7 @@ export const NavigationBar: React.FC = () => {
               DreamTuner is currently in <strong>Beta</strong>. We appreciate your feedback as we continue to improve!
             </p>
           </div>
-          <DialogFooter className="mt-2">
+          <DialogFooter className="mt-2 pt-4 border-t border-slate-700">
             <DialogClose asChild>
               <Button type="button" variant="outline" className="border-slate-600 hover:bg-slate-700 text-slate-300 hover:text-galaxy-white">
                 Close
