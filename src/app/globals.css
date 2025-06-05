@@ -8,6 +8,46 @@ body {
 
 @layer base {
   :root {
+    --background: 0 0% 98%; /* Light Gray for background */
+    --foreground: 220 13% 20%; /* Dark Gray for text */
+    --card: 0 0% 100%; /* White for card backgrounds */
+    --card-foreground: 220 13% 20%; /* Dark Gray for card text */
+    --popover: 0 0% 100%; /* White for popover backgrounds */
+    --popover-foreground: 220 13% 20%; /* Dark Gray for popover text */
+    --primary: 199 77% 52%; /* Existing Light Blue #29abe2 */
+    --primary-foreground: 0 0% 7%; /* Very Dark Gray for contrast on primary */
+    --secondary: 210 40% 96.1%; /* Very Light Gray for secondary elements */
+    --secondary-foreground: 220 13% 20%; /* Dark Gray for text on secondary */
+    --muted: 210 40% 93%; /* Light Gray for muted elements */
+    --muted-foreground: 215 15% 45%; /* Medium Gray for muted text */
+    --accent: 199 77% 52%; /* Existing Light Blue for accent */
+    --accent-foreground: 0 0% 7%; /* Very Dark Gray for contrast on accent */
+    --destructive: 0 70% 50%; /* A vibrant red */
+    --destructive-foreground: 0 0% 98%; /* Light Gray for text on destructive */
+    --border: 210 30% 87%; /* Light Gray for borders */
+    --input: 0 0% 100%; /* White for input background */
+    --ring: 199 77% 52%; /* Existing Light Blue for rings */
+
+    --chart-1: 199 77% 45%; /* Darker versions for light theme */
+    --chart-2: 199 77% 38%;
+    --chart-3: 220 25% 45%;
+    --chart-4: 300 50% 45%;
+    --chart-5: 199 70% 40%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar variables for Light Theme */
+    --sidebar-background: 0 0% 96%; /* Off-white, slightly different from main bg */
+    --sidebar-foreground: 220 13% 20%; /* Dark text */
+    --sidebar-primary: 199 77% 48%; /* Slightly darker primary for sidebar elements */
+    --sidebar-primary-foreground: 0 0% 100%; /* White text on sidebar primary */
+    --sidebar-accent: 199 77% 48%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 210 30% 85%; /* Light gray border for sidebar */
+    --sidebar-ring: 199 77% 52%;
+  }
+
+  .dark {
     --background: 0 0% 7%; /* Very Dark Gray #121212 */
     --foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --card: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
@@ -27,14 +67,14 @@ body {
     --border: 215 20% 26%; /* Nebula Gray Light #374151 */
     --input: 215 20% 26%; /* Nebula Gray Light #374151 */
     --ring: 199 77% 52%; /* New Light Blue #29abe2 */
+    
     --chart-1: 199 77% 62%; /* Lighter version of new base */
     --chart-2: 199 77% 72%; /* Even lighter version of new base */
     --chart-3: 220 25% 60%; /* A lighter blue/gray */
     --chart-4: 300 50% 60%; /* A magenta/pinkish hue */
     --chart-5: 199 70% 62%; /* Lighter, slightly less saturated new base */
-    --radius: 0.5rem;
 
-    /* Sidebar variables to match the new theme */
+    /* Sidebar variables for Dark Theme (same as before) */
     --sidebar-background: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
     --sidebar-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --sidebar-primary: 199 77% 52%; /* New Light Blue */
@@ -43,43 +83,6 @@ body {
     --sidebar-accent-foreground: 0 0% 7%; /* Very Dark Gray */
     --sidebar-border: 215 20% 26%; /* Nebula Gray Light #374151 */
     --sidebar-ring: 199 77% 52%; /* New Light Blue */
-  }
-
-  .dark {
-    /* The app is dark by default, so dark theme vars are same as root */
-    --background: 0 0% 7%;
-    --foreground: 220 13% 95%;
-    --card: 215 28% 17%;
-    --card-foreground: 220 13% 95%;
-    --popover: 215 28% 17%;
-    --popover-foreground: 220 13% 95%;
-    --primary: 199 77% 52%;
-    --primary-foreground: 0 0% 7%;
-    --secondary: 215 20% 26%;
-    --secondary-foreground: 220 13% 95%;
-    --muted: 215 20% 26%;
-    --muted-foreground: 220 10% 70%;
-    --accent: 199 77% 52%;
-    --accent-foreground: 0 0% 7%;
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 215 20% 26%;
-    --input: 215 20% 26%;
-    --ring: 199 77% 52%;
-    --chart-1: 199 77% 62%;
-    --chart-2: 199 77% 72%;
-    --chart-3: 220 25% 60%;
-    --chart-4: 300 50% 60%;
-    --chart-5: 199 70% 62%;
-
-    --sidebar-background: 215 28% 17%;
-    --sidebar-foreground: 220 13% 95%;
-    --sidebar-primary: 199 77% 52%;
-    --sidebar-primary-foreground: 0 0% 7%;
-    --sidebar-accent: 199 77% 52%;
-    --sidebar-accent-foreground: 0 0% 7%;
-    --sidebar-border: 215 20% 26%;
-    --sidebar-ring: 199 77% 52%;
   }
 }
 
