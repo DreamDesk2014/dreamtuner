@@ -47,6 +47,13 @@ const mapSliderToFloat = (value: number | undefined): number | undefined => {
   return (value - 50) / 50;
 };
 
+interface InputFormProps {
+  onSubmit: (input: AppInput) => void;
+  isLoading: boolean;
+  selectedGenre: string;
+  onGenreChange: (genre: string) => void;
+}
+
 export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selectedGenre, onGenreChange }) => {
   const [currentStandardInputType, setCurrentStandardInputType] = useState<StandardInputType>('text');
   const [text, setText] = useState<string>('');
@@ -63,7 +70,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isProcessingCamera, setIsProcessingCamera] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const streamRef = useRef<MediaStream | null>(null); // To keep track of the active stream
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -97,95 +104,86 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     }
   }, [transcript, interimTranscript, isListening, currentStandardInputType]);
 
-  const stopCameraStream = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    // Do not reset hasCameraPermission here, as it indicates the general permission state
-    // setHasCameraPermission(null); 
-    // setCameraError(null); // Keep error if permission was denied, for display
-  }, []);
+  useEffect(() => {
+    let currentStreamForCleanup: MediaStream | null = null;
 
-  const requestCameraPermissionAndStream = useCallback(async () => {
-    setCameraError(null);
-    setHasCameraPermission(null);
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      const msg = 'Camera access is not supported by your browser.';
-      setCameraError(msg);
-      toast({ variant: 'destructive', title: 'Camera Error', description: msg });
-      setHasCameraPermission(false);
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+    const startCameraStream = async () => {
+      setCameraError(null);
+      setHasCameraPermission(null); // Reset to indicate requesting permission
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const msg = 'Camera access is not supported by your browser.';
+        setCameraError(msg);
+        toast({ variant: 'destructive', title: 'Camera Error', description: msg });
+        setHasCameraPermission(false);
+        return;
       }
-      setHasCameraPermission(true);
-    } catch (err) {
-      console.error("Error accessing camera:", err);
-      let msg = 'Could not access the camera.';
-      if (err instanceof Error) {
-        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          msg = 'Camera permission denied. Please enable it in your browser settings.';
-        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          msg = 'No camera found. Please ensure a camera is connected and enabled.';
-        } else {
-          msg = `Error accessing camera: ${err.message}`;
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        streamRef.current = stream; // Store ref for explicit stop actions if needed elsewhere
+        currentStreamForCleanup = stream; // Use local var for this effect's cleanup scope
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.load(); // Call load before play
+          await videoRef.current.play().catch(playError => {
+            console.warn('Video play() promise rejected (this might be ok if autoplay works):', playError);
+            // Potentially set a less critical error or just log it, as autoplay might still function.
+            // If play is absolutely essential, setCameraError here.
+          });
         }
+        setHasCameraPermission(true);
+      } catch (err) {
+        console.error("Error accessing camera:", err);
+        let msg = 'Could not access the camera.';
+        if (err instanceof Error) {
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            msg = 'Camera permission denied. Please enable it in your browser settings.';
+          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            msg = 'No camera found. Please ensure a camera is connected and enabled.';
+          } else {
+            msg = `Error accessing camera: ${err.message}`;
+          }
+        }
+        setCameraError(msg);
+        toast({ variant: 'destructive', title: 'Camera Access Failed', description: msg });
+        setHasCameraPermission(false);
       }
-      setCameraError(msg);
-      toast({ variant: 'destructive', title: 'Camera Access Failed', description: msg });
-      setHasCameraPermission(false);
-    }
-  }, []); // videoRef removed from deps as it's a stable ref
+    };
 
-  useEffect(() => {
-    // Handles camera activation and deactivation based on showCameraPreview and input type
+    const stopLocalStream = () => {
+      const streamToStop = currentStreamForCleanup || streamRef.current;
+      if (streamToStop) {
+        streamToStop.getTracks().forEach(track => track.stop());
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      streamRef.current = null; // Clear the main ref as well
+    };
+
     if (showCameraPreview && (currentStandardInputType === 'image' || currentStandardInputType === 'video')) {
-      requestCameraPermissionAndStream();
+      startCameraStream();
     } else {
-      // This 'else' covers when showCameraPreview becomes false, or input type changes away from image/video while preview was on.
-      if (streamRef.current) { // Only stop if a stream was actually active
-        stopCameraStream();
-      }
+      stopLocalStream();
     }
-    // Cleanup function for this effect:
-    // This will be called if showCameraPreview becomes false,
-    // or if currentStandardInputType changes while showCameraPreview was true,
-    // or if the component unmounts while showCameraPreview was true.
-    return () => {
-      if (streamRef.current) { // Ensure stream is stopped if this effect is cleaning up an active camera session
-        stopCameraStream();
-      }
+
+    return () => { // Cleanup function for the effect
+      stopLocalStream();
     };
-  }, [showCameraPreview, currentStandardInputType, requestCameraPermissionAndStream, stopCameraStream]);
-  
-  // Cleanup camera stream on component unmount (covers cases where the above effect's cleanup might not run, e.g. tab close)
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-         stopCameraStream();
-      }
-    };
-  }, [stopCameraStream]);
+  }, [showCameraPreview, currentStandardInputType]); // Dependencies for the effect
 
 
   const handleToggleCameraPreview = () => {
     if (showCameraPreview) {
-      setShowCameraPreview(false); // This will trigger the useEffect above to stop the stream
+      setShowCameraPreview(false); 
     } else {
       setFilePreview(null); 
       setFileError(null);
-      // Reset camera status before showing preview again
       setHasCameraPermission(null); 
       setCameraError(null);
-      setShowCameraPreview(true); // This will trigger the useEffect above to request permission
+      setShowCameraPreview(true); 
     }
   };
   
@@ -227,7 +225,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       setFileError("Failed to get canvas context for capturing photo.");
     }
     
-    setShowCameraPreview(false); // Triggers useEffect cleanup
+    setShowCameraPreview(false); 
     setIsProcessingCamera(false);
   };
 
@@ -238,7 +236,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       type: 'video/mp4',
       size: 0, 
     });
-    setShowCameraPreview(false); // Triggers useEffect cleanup
+    setShowCameraPreview(false); 
     setIsProcessingCamera(false);
     toast({ title: "Video Concept Set", description: "Using 'Live Camera Capture' as the video concept." });
   };
@@ -254,7 +252,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (showCameraPreview) { 
-      setShowCameraPreview(false); // Turn off camera if user chooses file
+      setShowCameraPreview(false); 
     }
     const file = event.target.files?.[0];
     if (file) {
@@ -363,7 +361,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     const fileInput = document.getElementById(fileInputId) as HTMLInputElement;
     if (fileInput) fileInput.value = '';
     if (showCameraPreview) {
-        setShowCameraPreview(false); // Triggers useEffect cleanup
+        setShowCameraPreview(false); 
     }
   };
 
@@ -475,7 +473,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                             <AlertDescription>{cameraError}</AlertDescription>
                         </Alert>
                     )}
-                     {hasCameraPermission === null && !cameraError && (
+                     {hasCameraPermission === null && !cameraError && ( // While requesting permission
                         <Alert variant="default" className="mt-3 bg-slate-700 border-slate-600 text-slate-300">
                             <AlertTitle>Camera Access</AlertTitle>
                             <AlertDescription>Requesting camera permission... Please allow access in your browser.</AlertDescription>
@@ -688,4 +686,3 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     </form>
   );
 };
-    
