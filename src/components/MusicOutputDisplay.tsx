@@ -17,6 +17,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
 import { SparklesIcon as HeroSparklesIcon } from './icons/SparklesIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Separator } from '@/components/ui/separator';
 
 
 interface MusicOutputDisplayProps {
@@ -351,8 +352,23 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     let icon: React.ReactNode; let title: string; let content: React.ReactNode;
     switch(input.type) {
       case 'text':
-        icon = <DocumentTextIcon className="w-6 h-6" />; title = "Original Input Text";
-        content = <ScrollArea className="h-24"><p className="text-muted-foreground text-sm italic whitespace-pre-wrap font-code">{input.content || ""}</p></ScrollArea>;
+        icon = <DocumentTextIcon className="w-6 h-6" />; title = "Original Text & Generated Core";
+        content = (
+          <>
+            <ScrollArea className="h-24 mb-3">
+              <p className="text-muted-foreground text-sm italic whitespace-pre-wrap font-code">{input.content || ""}</p>
+            </ScrollArea>
+            <Separator className="my-3 bg-slate-600" />
+            <div className="space-y-1 text-sm">
+              <p><strong className="text-stardust-blue">Generated Musical Idea:</strong> <span className="text-galaxy-white italic">"{params.generatedIdea}"</span></p>
+              <p><strong className="text-stardust-blue">Key:</strong> {params.keySignature} {params.mode}</p>
+              <p><strong className="text-stardust-blue">Tempo:</strong> {params.tempoBpm} BPM</p>
+              {input.mode === 'standard' && params.selectedGenre && (
+                <p><strong className="text-stardust-blue">Selected Genre:</strong> {params.selectedGenre}</p>
+              )}
+            </div>
+          </>
+        );
         break;
       case 'image':
         icon = <PhotographIcon className="w-6 h-6" />; 
@@ -396,7 +412,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
           </div>
         </CardHeader>
         <CardContent>{content}</CardContent>
-        {params.selectedGenre && (
+        {params.selectedGenre && (input.type !== 'text' || input.mode === 'kids') && (
           <CardFooter className="border-t border-slate-700 pt-4 flex-col items-start">
             {input.mode === 'kids' ? (
               <Accordion type="single" collapsible className="w-full">
@@ -524,3 +540,4 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
 };
 
     
+
