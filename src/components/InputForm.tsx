@@ -69,6 +69,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isProcessingCamera, setIsProcessingCamera] = useState<boolean>(false);
+  const [cameraFeedReady, setCameraFeedReady] = useState<boolean>(false); // New state
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null); 
 
@@ -109,7 +110,8 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
     const startCameraStream = async () => {
       setCameraError(null);
-      setHasCameraPermission(null); 
+      setHasCameraPermission(null);
+      setCameraFeedReady(false); 
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         const msg = 'Camera access is not supported by your browser.';
@@ -125,10 +127,20 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         currentStreamForCleanup = stream; 
 
         if (videoRef.current) {
+          videoRef.current.onplaying = () => {
+            setCameraFeedReady(true);
+          };
+          videoRef.current.onstalled = () => {
+            setCameraFeedReady(false);
+             toast({ variant: 'destructive', title: 'Camera Feed Stalled', description: 'The camera feed stopped unexpectedly.' });
+          };
           videoRef.current.srcObject = stream;
           videoRef.current.load(); 
           await videoRef.current.play().catch(playError => {
-            console.warn('Video play() promise rejected (this might be ok if autoplay works):', playError);
+            console.warn('Video play() promise rejected:', playError);
+            setCameraError(`Failed to play camera feed. ${playError.message}`);
+            setHasCameraPermission(false); // Treat as a failure if play is rejected
+            setCameraFeedReady(false);
           });
         }
         setHasCameraPermission(true);
@@ -147,6 +159,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         setCameraError(msg);
         toast({ variant: 'destructive', title: 'Camera Access Failed', description: msg });
         setHasCameraPermission(false);
+        setCameraFeedReady(false);
       }
     };
 
@@ -157,8 +170,11 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       }
       if (videoRef.current) {
         videoRef.current.srcObject = null;
+        videoRef.current.onplaying = null;
+        videoRef.current.onstalled = null;
       }
       streamRef.current = null; 
+      setCameraFeedReady(false);
     };
 
     if (showCameraPreview && (currentStandardInputType === 'image' || currentStandardInputType === 'video')) {
@@ -176,23 +192,25 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const handleToggleCameraPreview = () => {
     if (showCameraPreview) {
       setShowCameraPreview(false); 
+      // cameraFeedReady will be reset by the useEffect cleanup or stopLocalStream
     } else {
       setFilePreview(null); 
       setFileError(null);
       setHasCameraPermission(null); 
       setCameraError(null);
+      setCameraFeedReady(false); // Explicitly reset here
       setShowCameraPreview(true); 
     }
   };
   
   const handleTakePhoto = async () => {
-    if (!videoRef.current || !hasCameraPermission) {
+    if (!videoRef.current || !hasCameraPermission || !cameraFeedReady) {
       toast({ variant: "destructive", title: "Camera Error", description: "Camera not ready or no permission." });
       return;
     }
      if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
       toast({ variant: "destructive", title: "Camera Not Ready", description: "Camera is still initializing. Please wait a moment and try again." });
-      setIsProcessingCamera(false); // Reset loading state if it was set
+      setIsProcessingCamera(false); 
       return;
     }
 
@@ -237,6 +255,15 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   };
 
   const handleUseLiveVideoConcept = () => {
+    if (!cameraFeedReady && hasCameraPermission) {
+        toast({ variant: "default", title: "Camera Initializing", description: "Please wait for the video feed to start." });
+        return;
+    }
+    if (!hasCameraPermission) {
+        toast({ variant: "destructive", title: "Camera Error", description: "Camera permission not granted or feed not active." });
+        return;
+    }
+
     setIsProcessingCamera(true);
     setFilePreview({
       name: 'live_camera_capture.mp4', 
@@ -369,6 +396,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     if (fileInput) fileInput.value = '';
     if (showCameraPreview) {
         setShowCameraPreview(false); 
+        // cameraFeedReady will be reset by useEffect cleanup
     }
   };
 
@@ -474,24 +502,28 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
             {showCameraPreview && (
                 <Card className="bg-nebula-gray/70 border-slate-600 p-4">
                     <video ref={videoRef} className="w-full aspect-video rounded-md bg-slate-800 border border-slate-500" autoPlay muted playsInline />
+                    
+                    {hasCameraPermission === null && !cameraError && ( 
+                        <Alert variant="default" className="mt-3 bg-slate-700 border-slate-600 text-slate-300">
+                            <AlertTitle>Camera Access</AlertTitle>
+                            <AlertDescription>Requesting camera permission... Please allow access in your browser.</AlertDescription>
+                        </Alert>
+                    )}
+                    {hasCameraPermission === true && !cameraFeedReady && !cameraError && (
+                        <p className="text-sm text-stardust-blue text-center mt-2 animate-pulse">Loading video feed...</p>
+                    )}
                     {hasCameraPermission === false && cameraError && (
                         <Alert variant="destructive" className="mt-3">
                             <AlertTitle>Camera Error</AlertTitle>
                             <AlertDescription>{cameraError}</AlertDescription>
                         </Alert>
                     )}
-                     {hasCameraPermission === null && !cameraError && ( 
-                        <Alert variant="default" className="mt-3 bg-slate-700 border-slate-600 text-slate-300">
-                            <AlertTitle>Camera Access</AlertTitle>
-                            <AlertDescription>Requesting camera permission... Please allow access in your browser.</AlertDescription>
-                        </Alert>
-                    )}
                     {hasCameraPermission && currentStandardInputType === 'image' && (
                         <Button
                             type="button"
                             onClick={handleTakePhoto}
-                            disabled={isProcessingCamera || isLoading || !hasCameraPermission}
-                            className="w-full mt-3 bg-green-600 hover:bg-green-700 text-primary-foreground"
+                            disabled={isProcessingCamera || isLoading || !hasCameraPermission || !cameraFeedReady}
+                            className="w-full mt-3 bg-green-600 hover:bg-green-700 text-primary-foreground disabled:opacity-60"
                         >
                             {isProcessingCamera ? 'Processing...' : 'Take Photo'}
                         </Button>
@@ -500,8 +532,8 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                         <Button
                             type="button"
                             onClick={handleUseLiveVideoConcept}
-                            disabled={isProcessingCamera || isLoading || !hasCameraPermission}
-                            className="w-full mt-3 bg-sky-600 hover:bg-sky-700 text-primary-foreground"
+                            disabled={isProcessingCamera || isLoading || !hasCameraPermission || !cameraFeedReady}
+                            className="w-full mt-3 bg-sky-600 hover:bg-sky-700 text-primary-foreground disabled:opacity-60"
                         >
                             {isProcessingCamera ? 'Processing...' : 'Use Live Video Concept'}
                         </Button>
@@ -693,5 +725,4 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     </form>
   );
 };
-
     
