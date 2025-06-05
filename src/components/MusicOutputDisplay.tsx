@@ -361,14 +361,25 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         const notePatternRegex = /^\s*([CDEFGABcdefgab][#b♭♯]?[0-9]?)(\s*[-–—]\s*([CDEFGABcdefgab][#b♭♯]?[0-9]?))*\s*$/;
         const isClearlyNoteLine = (line: string): boolean => {
           const trimmedLine = line.trim();
-          if (!trimmedLine) return false;
-          if (notePatternRegex.test(trimmedLine)) {
-            const words = trimmedLine.split(/\s+/);
-            const nonNoteWords = words.filter(word => !/^[CDEFGABcdefgab#b♭♯0-9-]+$/.test(word));
-            return nonNoteWords.length < 2;
+          if (!trimmedLine) return false; // Empty lines are not note lines
+          // Test for simple note sequence: C, C#, D-E, etc.
+          if (/^([CDEFGAB][#b♭♯]?[0-9]?(\s*[-–—]\s*)?)+$/.test(trimmedLine)) {
+              // Further check: if it has more non-note "words" than note-like "words", it's probably not notes
+              const words = trimmedLine.split(/[\s-]+/).filter(w => w.length > 0);
+              let noteLikeWords = 0;
+              let nonNoteLikeWords = 0;
+              words.forEach(word => {
+                  if (/^[CDEFGAB][#b♭♯]?[0-9]?$/.test(word)) {
+                      noteLikeWords++;
+                  } else {
+                      nonNoteLikeWords++;
+                  }
+              });
+              return noteLikeWords > nonNoteLikeWords || (noteLikeWords > 0 && nonNoteLikeWords === 0);
           }
           return false;
         };
+
 
         for (let i = 0; i < lines.length; i++) {
           const currentLine = lines[i]; 
@@ -397,7 +408,9 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         contentDisplay = (
           <>
             <ScrollArea className="h-auto max-h-80 mb-3 pr-3"> 
-              {renderedElements.map((el, index) => <React.Fragment key={index}>{el}</React.Fragment>)}
+              <div className="space-y-1"> {/* Wrapper div for ScrollArea content */}
+                {renderedElements.map((el, index) => <React.Fragment key={index}>{el}</React.Fragment>)}
+              </div>
             </ScrollArea>
             <Separator className="my-3 bg-slate-600" />
             <div className="space-y-1 text-sm mt-3">
