@@ -145,6 +145,11 @@ function getScaleNotesForKey(
     } else {
         intervals = (mode.toLowerCase().includes('minor')) ? STANDARD_MINOR_INTERVALS : STANDARD_MAJOR_INTERVALS;
     }
+     if (!intervals) { 
+        console.warn("Intervals not assigned in getScaleNotesForKey, defaulting to Major intervals. Inputs:", {keySignature, mode, genre, isKidsMode});
+        intervals = STANDARD_MAJOR_INTERVALS;
+    }
+
 
     return intervals.map(interval => {
         const currentMidiValue = rootMidiBase + interval;
@@ -453,11 +458,20 @@ export const generateMidiFile = (params: MusicParameters): string => {
         );
     };
 
-    progression.forEach(chordDef => {
+    progression.forEach((chordDef, measureIndex) => {
+        if (!chordDef) {
+            console.warn(`Undefined chordDef at measureIndex ${measureIndex} in chordsPadTrack. Skipping this measure.`);
+            return; 
+        }
+        if (!Array.isArray(chordDef.notes)) {
+            console.warn(`chordDef.notes is not an array at measureIndex ${measureIndex} in chordsPadTrack. Defaulting to empty. ChordDef:`, chordDef);
+            chordDef.notes = [];
+        }
+
         const chordVelocity = calculateDynamicVelocity(isKidsMode ? 40 : 50, isKidsMode ? 25 : 30, isKidsMode ? 70 : 85, isKidsMode ? 8 : 12); 
         if (chordDef.notes && chordDef.notes.length > 0) {
             const notesToPlay = isKidsMode ? [chordDef.notes[0]] : chordDef.notes; 
-            if(notesToPlay.length > 0 && isValidMidiNumber(notesToPlay[0])) {
+            if (notesToPlay && notesToPlay.length > 0 && isValidMidiNumber(notesToPlay[0])) {
                  chordsPadTrack.addEvent(new MidiWriter.NoteEvent({ 
                      pitch: notesToPlay, 
                      duration: chordDef.measureDuration || '1', 
@@ -467,7 +481,16 @@ export const generateMidiFile = (params: MusicParameters): string => {
         }
     });
     
-    progression.forEach(chordDef => {
+    progression.forEach((chordDef, measureIndex) => {
+        if (!chordDef) {
+            console.warn(`Undefined chordDef at measureIndex ${measureIndex} in bassTrack. Skipping this measure.`);
+            return; 
+        }
+        if (!Array.isArray(chordDef.notes)) {
+            console.warn(`chordDef.notes is not an array at measureIndex ${measureIndex} in bassTrack. Defaulting to empty. ChordDef:`, chordDef);
+            chordDef.notes = [];
+        }
+
         const bassNoteMidi = robustNoteToMidi(midiToNoteName(chordDef.rootNoteMidi).replace(/[0-9]+$/, String(bassOctave)));
         const bassVelocity = calculateDynamicVelocity(isKidsMode ? 60 : 70, isKidsMode ? 35 : 40, isKidsMode ? 85 : 105, isKidsMode ? 12 : 18); 
         
@@ -490,16 +513,36 @@ export const generateMidiFile = (params: MusicParameters): string => {
                 }
             }
         } else if (genreLower && genreLower.includes('jazz')) { 
-            const scaleForWalking = getScaleNotesForKey(midiToNoteName(chordDef.rootNoteMidi), chordDef.quality, bassOctave, params.selectedGenre, rhythmicDensity, harmonicComplexity, isKidsMode);
+            const rawScaleForWalking = getScaleNotesForKey(midiToNoteName(chordDef.rootNoteMidi), chordDef.quality, bassOctave, params.selectedGenre, rhythmicDensity, harmonicComplexity, isKidsMode);
+            const scaleForWalking = Array.isArray(rawScaleForWalking) ? rawScaleForWalking : [];
+
             for (let i = 0; i < beatsPerMeasure; i++) {
                 let noteChoice = bassNoteMidi;
-                if (i > 0 && scaleForWalking.length > 0) { 
-                    const prevNoteIndexInScale = scaleForWalking.indexOf(bassTrack.notes[bassTrack.notes.length-1]?.pitch[0] || bassNoteMidi);
+                if (i > 0 && scaleForWalking.length > 0 && bassTrack.notes && bassTrack.notes.length > 0) {
+                    const prevNoteEvent = bassTrack.notes[bassTrack.notes.length - 1];
+                    let pitchToSearch: number | string = bassNoteMidi; 
+
+                    if (prevNoteEvent && prevNoteEvent.pitch) {
+                        if (Array.isArray(prevNoteEvent.pitch) && prevNoteEvent.pitch.length > 0 && prevNoteEvent.pitch[0] !== undefined) {
+                           pitchToSearch = prevNoteEvent.pitch[0];
+                        } else if (typeof prevNoteEvent.pitch === 'string' || typeof prevNoteEvent.pitch === 'number') {
+                           pitchToSearch = prevNoteEvent.pitch;
+                        }
+                    }
+                    
+                    if (typeof pitchToSearch === 'string' && scaleForWalking.every(n => typeof n === 'number')) {
+                        pitchToSearch = robustNoteToMidi(pitchToSearch);
+                    }
+
+                    const prevNoteIndexInScale = scaleForWalking.indexOf(pitchToSearch as any);
+
                     if (prevNoteIndexInScale !== -1) {
                          noteChoice = scaleForWalking[(prevNoteIndexInScale + (Math.random() < 0.5 ? 1 : -1) + scaleForWalking.length) % scaleForWalking.length];
-                    } else {
+                    } else if (scaleForWalking.length > 0) { 
                         noteChoice = scaleForWalking[i % scaleForWalking.length];
                     }
+                } else if (i > 0 && scaleForWalking.length > 0) { 
+                     noteChoice = scaleForWalking[i % scaleForWalking.length];
                 }
                  if (!isValidMidiNumber(noteChoice)) noteChoice = bassNoteMidi;
                  bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [noteChoice], duration: '4', velocity: calculateDynamicVelocity(65, 40, 95, 18)})); 
@@ -523,7 +566,16 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const rawMainScaleNotesMidi = getScaleNotesForKey(params.keySignature, params.mode, melodyOctave, params.selectedGenre, rhythmicDensity, harmonicComplexity, isKidsMode);
     const mainScaleNotesMidi = Array.isArray(rawMainScaleNotesMidi) ? rawMainScaleNotesMidi : [];
 
-    progression.forEach((chordDef) => {
+    progression.forEach((chordDef, measureIndex) => {
+        if (!chordDef) {
+            console.warn(`Undefined chordDef at measureIndex ${measureIndex} in melodyTrack. Skipping this measure.`);
+            return; 
+        }
+        if (!Array.isArray(chordDef.notes)) {
+            console.warn(`chordDef.notes is not an array at measureIndex ${measureIndex} in melodyTrack. Defaulting to empty. ChordDef:`, chordDef);
+            chordDef.notes = [];
+        }
+
         const rawCurrentChordScaleMidi = getScaleNotesForKey(midiToNoteName(chordDef.rootNoteMidi).replace(/[0-9]+$/, String(melodyOctave)), chordDef.quality, melodyOctave, params.selectedGenre, rhythmicDensity, harmonicComplexity, isKidsMode);
         const currentChordScaleMidi = Array.isArray(rawCurrentChordScaleMidi) ? rawCurrentChordScaleMidi : [];
         
@@ -590,7 +642,16 @@ export const generateMidiFile = (params: MusicParameters): string => {
     });
 
     let arpeggioTrackHasEvents = false;
-    progression.forEach(chordDef => {
+    progression.forEach((chordDef, measureIndex) => {
+        if (!chordDef) {
+            console.warn(`Undefined chordDef at measureIndex ${measureIndex} in arpeggioTrack. Skipping this measure.`);
+            return; 
+        }
+        if (!Array.isArray(chordDef.notes)) {
+            console.warn(`chordDef.notes is not an array at measureIndex ${measureIndex} in arpeggioTrack. Defaulting to empty. ChordDef:`, chordDef);
+            chordDef.notes = [];
+        }
+        
         const rawArpNotesMidi = (chordDef.notes || []).map(n => (n % 12) + (arpeggioOctave + 1) * 12).filter(isValidMidiNumber);
         const arpNotesMidi = Array.isArray(rawArpNotesMidi) ? rawArpNotesMidi : [];
 
@@ -631,6 +692,16 @@ export const generateMidiFile = (params: MusicParameters): string => {
     let drumTrackHasEvents = false;
 
     progression.forEach((chordDef, measureIndex) => {
+        if (!chordDef) {
+            console.warn(`Undefined chordDef at measureIndex ${measureIndex} in drumTrack. Skipping this measure.`);
+            return; 
+        }
+        if (!Array.isArray(chordDef.notes)) {
+            // This check is less critical for drums but good for consistency
+            console.warn(`chordDef.notes is not an array at measureIndex ${measureIndex} in drumTrack. Defaulting to empty. ChordDef:`, chordDef);
+            chordDef.notes = [];
+        }
+
         const measureStartTick = measureIndex * beatsPerMeasure * TPQN;
         const isFillMeasure = (measureIndex + 1) % 4 === 0 && measureIndex !== progression.length -1 && rhythmicDensity > 0.5; 
 
