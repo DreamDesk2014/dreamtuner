@@ -172,10 +172,10 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     if (showCameraPreview) {
       stopCameraStream();
       setShowCameraPreview(false);
-      setHasCameraPermission(null); // Reset permission status when closing
+      setHasCameraPermission(null); 
       setCameraError(null);
     } else {
-      setFilePreview(null); // Clear any existing file preview
+      setFilePreview(null); 
       setFileError(null);
       setShowCameraPreview(true);
       requestCameraPermissionAndStream();
@@ -196,7 +196,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     const context = canvas.getContext('2d');
     if (context) {
       context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9); // Use JPEG for better size control
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9); 
       const filename = `dreamtuner_photo_${Date.now()}.jpg`;
       const imageFile = dataURLtoFile(dataUrl, filename);
 
@@ -228,9 +228,9 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const handleUseLiveVideoConcept = () => {
     setIsProcessingCamera(true);
     setFilePreview({
-      name: 'live_camera_capture.mp4', // Conceptual name
+      name: 'live_camera_capture.mp4', 
       type: 'video/mp4',
-      size: 0, // Conceptual, no actual bytes
+      size: 0, 
     });
     stopCameraStream();
     setShowCameraPreview(false);
@@ -248,7 +248,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   };
 
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (showCameraPreview) { // If camera is open, close it first
+    if (showCameraPreview) { 
       stopCameraStream();
       setShowCameraPreview(false);
       setHasCameraPermission(null);
@@ -346,7 +346,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   
   const isSubmitDisabled = isLoading || isListening || isProcessingCamera ||
     (currentStandardInputType === 'text' && !text.trim()) ||
-    ((currentStandardInputType === 'image' || currentStandardInputType === 'video') && !filePreview && !showCameraPreview) || // Allow submission if camera is open but not yet captured
+    ((currentStandardInputType === 'image' || currentStandardInputType === 'video') && !filePreview && !showCameraPreview) || 
     !!fileError;
 
   const inputOptions: { type: StandardInputType, label: string, icon: React.FC<any> }[] = [
@@ -361,7 +361,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     const fileInput = document.getElementById(fileInputId) as HTMLInputElement;
     if (fileInput) fileInput.value = '';
     if (showCameraPreview) {
-        handleToggleCameraPreview(); // This will stop stream and hide preview
+        handleToggleCameraPreview(); 
     }
   };
 
@@ -376,6 +376,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
   const resetEnergySlider = () => setEnergySlider(50);
   const resetPositivitySlider = () => setPositivitySlider(50);
+
+  let cameraButtonText = 'Use Camera';
+  if (!showCameraPreview) {
+    if (currentStandardInputType === 'image') cameraButtonText = 'Use Camera to Take Photo';
+    else if (currentStandardInputType === 'video') cameraButtonText = 'Use Camera for Video Concept';
+  } else {
+    cameraButtonText = 'Close Camera';
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -441,7 +449,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
       {(currentStandardInputType === 'image' || currentStandardInputType === 'video') && (
         <div className="space-y-4">
-            {isClientMounted && navigator.mediaDevices && ( // Show camera button only if supported by browser
+            {isClientMounted && navigator.mediaDevices && ( 
                 <div className="mb-4">
                     <Button
                         type="button"
@@ -451,7 +459,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                         className="w-full border-stardust-blue text-stardust-blue hover:bg-stardust-blue/10"
                     >
                         {showCameraPreview ? <CameraOff className="w-5 h-5 mr-2" /> : <Camera className="w-5 h-5 mr-2" />}
-                        {showCameraPreview ? 'Close Camera' : 'Use Camera'}
+                        {cameraButtonText}
                     </Button>
                 </div>
             )}
@@ -507,7 +515,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                 />
                 <UploadCloudIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
                 </div>
-                {currentStandardInputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Note: The video/audio content itself is not uploaded. Music parameters will be generated based on the file's name and conceptual analysis.</p>}
+                {currentStandardInputType === 'video' && <p className="mt-2 text-xs text-muted-foreground">Note: Video/audio content is not uploaded. Music parameters are based on file name & conceptual analysis.</p>}
                 {currentStandardInputType === 'image' && <p className="mt-2 text-xs text-muted-foreground">Max file size: {MAX_IMAGE_FILE_SIZE_MB}MB. Supported formats: JPEG, PNG, GIF, WEBP.</p>}
             </div>
           )}
@@ -518,7 +526,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               </p>
             )}
 
-            {filePreview && !showCameraPreview && ( // Only show file preview if camera is not active
+            {filePreview && !showCameraPreview && ( 
                <Card className="mt-4 bg-nebula-gray border-slate-600">
                 <CardHeader className="p-3">
                   <div className="flex items-center justify-between">
