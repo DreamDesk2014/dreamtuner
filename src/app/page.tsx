@@ -21,7 +21,7 @@ import { NavigationBar } from '@/components/NavigationBar';
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { Download, Share2, Disc3, SlidersHorizontal } from 'lucide-react'; // Changed ListMusic, Album to DJ icons
+import { Download, Share2, Disc3, SlidersHorizontal, Library, Users } from 'lucide-react';
 import { dataURLtoFile } from '@/lib/utils';
 import { generateMidiFile } from '@/lib/midiService';
 
@@ -64,7 +64,6 @@ export default function DreamTunerPage() {
       const storedSession = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (storedSession) {
         const sessionData = JSON.parse(storedSession) as StoredSessionData;
-        // Optional: Could add a check for timestamp if we want sessions to expire
         setMusicParams(sessionData.musicParams);
         setAiKidsArtUrl(sessionData.aiKidsArtUrl);
         setStandardModeAiArtUrl(sessionData.standardModeAiArtUrl);
@@ -79,7 +78,7 @@ export default function DreamTunerPage() {
       }
     } catch (e) {
       console.error("Failed to load session from localStorage:", e);
-      localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear corrupted data
+      localStorage.removeItem(LOCAL_STORAGE_KEY); 
     }
   }, []);
 
@@ -99,7 +98,6 @@ export default function DreamTunerPage() {
         console.error("Failed to save session to localStorage:", e);
       }
     } else if (isClientMounted && !musicParams && !aiKidsArtUrl && !standardModeAiArtUrl && currentMode !== 'comingSoon') {
-        // If all results are cleared and not in coming soon, clear storage
         localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
   }, [isClientMounted, musicParams, aiKidsArtUrl, standardModeAiArtUrl, currentMode, selectedGenre]);
@@ -124,7 +122,7 @@ export default function DreamTunerPage() {
       setSelectedGenre(MUSIC_GENRES[0] || '');
     }
     setCurrentKidsMusicParams(null);
-    if (isClientMounted && newMode === 'comingSoon') { // Clear storage when switching to 'comingSoon'
+    if (isClientMounted && newMode === 'comingSoon') { 
         localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
   };
@@ -308,8 +306,6 @@ export default function DreamTunerPage() {
                 setIsRenderingStandardModeAiArt(false);
               });
           }
-          // If in Kids mode, the art is tied to the original drawing/voice hint, not just the idea text, so we don't re-render kids art here.
-          // The music params, including the new idea, will be saved by the useEffect for localStorage.
           return updatedParams;
         });
       }
@@ -447,7 +443,7 @@ export default function DreamTunerPage() {
 
           <TabsContent value="kids" className="mt-6">
             <KidsModeTab
-              key={`kids-mode-tab-${currentMode}`} // Ensures re-mount on mode switch for fresh state if needed
+              key={`kids-mode-tab-${currentMode}`} 
               onTuneCreation={handleKidsModeTuneCreation}
               isLoadingMusic={isLoadingMusic}
               isRenderingArt={isRenderingAiKidsArt}
@@ -460,7 +456,7 @@ export default function DreamTunerPage() {
             />
           </TabsContent>
 
-          <TabsContent value="comingSoon" className="mt-6">
+          <TabsContent value="comingSoon" className="mt-6 space-y-8">
             <Card className="bg-nebula-gray shadow-xl rounded-xl border-slate-700">
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl font-semibold text-accent mb-2 font-headline">
@@ -504,6 +500,55 @@ export default function DreamTunerPage() {
                             <p><strong className="text-slate-300">Remix Style:</strong> Lo-fi Chill Hop</p>
                             <p className="text-slate-400 italic">"Flipping a gentle journey into a head-nodding beat..."</p>
                             <Button variant="outline" size="sm" className="mt-2 border-slate-500 text-slate-300" disabled>Load into Console (Placeholder)</Button>
+                        </div>
+                    </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-nebula-gray shadow-xl rounded-xl border-slate-700">
+              <CardHeader className="text-center">
+                <CardTitle className="text-2xl font-semibold text-accent mb-2 font-headline">
+                  <Library className="inline-block w-7 h-7 mr-2 -mt-1" />
+                  Your Personal Music Library
+                </CardTitle>
+                <CardDescription className="text-slate-300">
+                  Save, organize, and revisit your unique DreamTuner creations.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6 text-center space-y-6">
+                <div className="flex flex-col items-center space-y-4 p-6 bg-nebula-gray/50 rounded-lg border border-dashed border-slate-600">
+                  <Users className="w-24 h-24 text-slate-500" />
+                  <h3 className="text-xl font-semibold text-slate-400">Feature Coming Soon!</h3>
+                  <p className="text-sm text-slate-400 max-w-md">
+                    Build your collection of AI-generated musical ideas and artworks. Features will include:
+                  </p>
+                  <ul className="text-xs text-slate-400 list-disc list-inside text-left max-w-sm space-y-1">
+                    <li>Saving your favorite generated music parameters and AI art.</li>
+                    <li>Customizing album/track titles and descriptions.</li>
+                    <li>Generating or uploading custom cover art for your creations.</li>
+                    <li>Organizing creations into playlists or albums.</li>
+                    <li>Easy sharing of your saved items.</li>
+                  </ul>
+                  <p className="text-xs text-slate-500 mt-2">Curate your dreams!</p>
+                </div>
+                <div className="mt-4 p-4 bg-slate-800/30 rounded-md border border-slate-700">
+                    <h4 className="text-lg font-medium text-accent mb-3">Example Album: "Neon Dreams Vol. 1"</h4>
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4">
+                        <Image
+                            src="https://placehold.co/150x150.png"
+                            alt="Placeholder Album Art"
+                            data-ai-hint="album cover abstract music"
+                            width={150}
+                            height={150}
+                            className="rounded-md border border-slate-600 shadow-md object-cover mx-auto sm:mx-0"
+                        />
+                        <div className="space-y-1 text-sm flex-grow">
+                            <p><strong className="text-slate-300">Album:</strong> Neon Dreams Vol. 1</p>
+                            <p><strong className="text-slate-300">Artist:</strong> DreamTuner User</p>
+                            <p><strong className="text-slate-300">Tracks:</strong> 5 (Saved Creations)</p>
+                            <p className="text-slate-400 italic">"A collection of vibrant soundscapes from late-night musings."</p>
+                            <Button variant="outline" size="sm" className="mt-2 border-slate-500 text-slate-300" disabled>View Album (Placeholder)</Button>
                         </div>
                     </div>
                 </div>
