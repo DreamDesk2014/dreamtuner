@@ -81,9 +81,6 @@ export default {
           light: '#374151', // Nebula Gray Light (Muted/Input/Border)
         },
         'galaxy-white': '#f3f4f6', // Galaxy White (Foreground)
-        // New gradient colors
-        'gradient-blue-dark': 'hsl(var(--gradient-blue-dark))',
-        'gradient-blue-light': 'hsl(var(--gradient-blue-light))',
       },
       borderRadius: {
         lg: 'var(--radius)',

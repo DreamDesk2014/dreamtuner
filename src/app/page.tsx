@@ -189,7 +189,7 @@ export default function DreamTunerPage() {
     : "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
 
   return (
-    <div className="min-h-screen bg-gradient-to-tr from-gradient-blue-dark to-gradient-blue-light/65 text-galaxy-white flex flex-col items-center p-4 sm:p-8 font-body">
+    <div className="min-h-screen bg-gradient-to-br from-nebula-dark via-slate-900 to-nebula-dark text-galaxy-white flex flex-col items-center p-4 sm:p-8 font-body">
       <NavigationBar />
       <header className="w-full max-w-3xl mb-8 text-center">
         <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2">
