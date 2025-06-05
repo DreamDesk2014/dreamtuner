@@ -503,7 +503,7 @@ export const DrawingCanvas = forwardRef<
                 >
                     {sizeName === 'Small' && <Circle className="w-2 h-2 fill-current" />}
                     {sizeName === 'Medium' && <Circle className="w-3 h-3 fill-current" />}
-                    {sizeName === 'Large' && <Circle className="w-4 h-4 fill-current" />}
+                    {sizeName === 'Large' && <Circle className="w-5 h-5 fill-current" />}
                 </Button>
             ))}
         </div>
