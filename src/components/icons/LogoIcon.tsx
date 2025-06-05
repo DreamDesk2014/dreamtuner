@@ -12,13 +12,23 @@ export const LogoIcon: React.FC<IconProps> = ({ className, ...props }) => (
     xmlns="http://www.w3.org/2000/svg"
     {...props}
   >
-    <circle cx="50" cy="50" r="45" stroke="currentColor" strokeWidth="4"/>
-    {/* Detailed Eighth Note (Quaver) Components */}
-    {/* Notehead */}
-    <circle cx="36" cy="67" r="10" fill="currentColor" />
-    {/* Stem */}
-    <path d="M46 67 V28" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-    {/* Flag */}
-    <path d="M46 28 C 60 32, 65 40, 46 46" fill="currentColor" />
+    {/* Darker Blue Ellipse - R:28 G:110 B:158 -> #1C6E9E */}
+    <ellipse
+      cx="50"
+      cy="50"
+      rx="42"
+      ry="21"
+      transform="rotate(45 50 50)"
+      fill="#1C6E9E"
+    />
+    {/* Lighter Blue Ellipse - R:48 G:197 B:245 -> #30C5F5 */}
+    <ellipse
+      cx="50"
+      cy="50"
+      rx="42"
+      ry="21"
+      transform="rotate(-45 50 50)"
+      fill="#30C5F5"
+    />
   </svg>
 );
