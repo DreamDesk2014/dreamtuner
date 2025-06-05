@@ -5,11 +5,14 @@ import MidiPlayer from 'midi-player-js';
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription, SOUNDFONT_URL, SOUND_LOADING_TIMEOUT_MS } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
+import { dataURLtoFile } from '@/lib/utils'; // Import the helper
+import { toast } from '@/hooks/use-toast';
 import {
   MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon,
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
   LibraryIcon, PlayIcon, PauseIcon, StopIcon
 } from './icons/HeroIcons';
+import { Share2 } from 'lucide-react'; // Import Share icon
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -71,6 +74,8 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   const [isGeneratingMidiForDownload, setIsGeneratingMidiForDownload] = useState<boolean>(false);
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState<boolean>(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   const midiPlayerRef = useRef<any>(null);
   const [isPlayerLoadingSounds, setIsPlayerLoadingSounds] = useState<boolean>(false);
@@ -348,6 +353,65 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     }
   };
 
+  const handleShare = async () => {
+    setShareError(null);
+    if (!navigator.share) {
+      toast({
+        variant: "destructive",
+        title: "Share Not Supported",
+        description: "Web Share API is not available on your browser.",
+      });
+      setShareError("Web Share API not supported.");
+      return;
+    }
+
+    setIsSharing(true);
+    try {
+      const midiDataUri = generateMidiFile(params);
+      if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
+        throw new Error("Generated MIDI data was invalid for sharing.");
+      }
+      
+      let baseFileName = 'dreamtuner_music';
+      if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
+      else if (params.originalInput.type === 'text' && params.originalInput.content) baseFileName = params.originalInput.content.substring(0,30).replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
+      else if ((params.originalInput.type === 'image' || params.originalInput.type === 'video') && params.originalInput.fileDetails) baseFileName = params.originalInput.fileDetails.name.split('.')[0].replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
+      const midiFileName = `${baseFileName || 'dreamtuner_output'}.mid`;
+      
+      const midiFile = dataURLtoFile(midiDataUri, midiFileName);
+      if (!midiFile) {
+        throw new Error("Could not convert MIDI data to a shareable file.");
+      }
+
+      const shareData: ShareData = {
+        title: `DreamTuner Music: "${params.generatedIdea}"`,
+        text: `Check out this musical idea from DreamTuner!\nIdea: ${params.generatedIdea}\nKey: ${params.keySignature} ${params.mode}, Tempo: ${params.tempoBpm} BPM.`,
+        files: [midiFile],
+      };
+      
+      // Add URL if the app is hosted, for now, it's a placeholder or can be omitted
+      // shareData.url = window.location.href; 
+
+      await navigator.share(shareData);
+      toast({ title: "Shared Successfully!" });
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        toast({ title: "Share Cancelled", variant: "default" });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Share Failed",
+          description: error.message || "Could not share the content.",
+        });
+      }
+      setShareError(error.message || "Failed to share.");
+      console.error("Share error:", error);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+
   const renderOriginalInputInfo = (input: AppInput) => {
     let icon: React.ReactNode;
     let title: string;
@@ -612,10 +676,14 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         <Button onClick={handleCopyDetails} disabled={isCopied} variant="outline" className="w-full sm:w-auto border-slate-500 text-slate-200 hover:bg-slate-700 hover:text-slate-100">
            {isCopied ? <><ClipboardCopyIcon className="w-5 h-5 mr-2 text-green-400" />Copied!</> : <><ClipboardCopyIcon className="w-5 h-5 mr-2 group-hover:scale-110" />Copy Details</>}
         </Button>
+        <Button onClick={handleShare} disabled={isSharing} variant="outline" className="w-full sm:w-auto border-green-500 text-green-400 hover:bg-green-500/10 hover:text-green-300">
+          {isSharing ? <><svg className="animate-spin -ml-1 mr-3 h-5 w-5" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" fill="currentColor"></path></svg>Sharing...</> : <><Share2 className="w-5 h-5 mr-2 group-hover:scale-110" />Share</>}
+        </Button>
       </div>
       <div className="text-center mt-2 h-4"> 
         {midiError && <p className="text-red-400 text-sm">{`MIDI Download Error: ${midiError}`}</p>}
         {copyError && <p className="text-red-400 text-sm">{copyError}</p>}
+        {shareError && <p className="text-red-400 text-sm">{`Share Error: ${shareError}`}</p>}
       </div>
       
       {params.originalInput && renderOriginalInputInfo(params.originalInput)}
