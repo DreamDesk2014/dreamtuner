@@ -1,8 +1,8 @@
 
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import * as Tone from 'tone';
-import { Midi as MidiFileParser } from '@tonejs/midi';
+// import * as Tone from 'tone'; // Tone.js imports commented out
+// import { Midi as MidiFileParser } from '@tonejs/midi'; // Tone.js imports commented out
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
@@ -11,74 +11,74 @@ import { toast } from '@/hooks/use-toast';
 import {
   MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon,
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
-  LibraryIcon, PlayIcon, PauseIcon, StopIcon
+  LibraryIcon, ExclamationCircleIcon // Replaced AlertTriangle with ExclamationCircleIcon
+  // PlayIcon, PauseIcon, StopIcon commented out
 } from './icons/HeroIcons';
 import { Share2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+// import { Progress } from "@/components/ui/progress"; // Progress bar commented out
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from '@/components/ui/separator';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 
 interface MusicOutputDisplayProps {
   params: MusicParameters;
   onRegenerateIdea: () => void;
   isRegeneratingIdea: boolean;
-  standardModeArtUrl: string | null; 
+  standardModeArtUrl: string | null;
 }
 
-const MIN_TIME_GAP = 0.001; 
+// MIN_TIME_GAP and ensureStrictlyIncreasingTimes are no longer needed here if Tone.js playback is disabled
+// const MIN_TIME_GAP = 0.001;
+// interface EventTime { time: number; [key: string]: any; }
 
-interface EventTime { time: number; [key: string]: any; }
-
-function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[], debugLabel?: string): T[] {
-  if (!events || events.length === 0) return [];
-
-  const sortedEvents = [...events].sort((a, b) => {
+/*
+function ensureStrictlyIncreasingTimes(events: EventTime[], label = "Track"): EventTime[] {
+  const sorted = [...events].sort((a, b) => {
     const timeA = typeof a.time === 'number' ? a.time : parseFloat(a.time as any);
     const timeB = typeof b.time === 'number' ? b.time : parseFloat(b.time as any);
     if (isNaN(timeA) && isNaN(timeB)) return 0;
-    if (isNaN(timeA)) return -1; // Sort NaNs to the beginning
-    if (isNaN(timeB)) return 1;
+    if (isNaN(timeA)) return 1;
+    if (isNaN(timeB)) return -1;
     return timeA - timeB;
   });
 
-  const adjustedEvents: T[] = [];
-  let lastAdjustedTime = -Infinity;
+  let lastTime = -Infinity;
+  const epsilon = 0.001; // MIN_TIME_GAP
 
-  for (const event of sortedEvents) {
-    let eventTime = typeof event.time === 'number' ? event.time : parseFloat(event.time as any);
+  return sorted.map((event, idx) => {
+    const originalEventTime = typeof event.time === 'number' ? event.time : parseFloat(event.time as any);
+    let newTime = originalEventTime;
 
-    if (isNaN(eventTime)) {
-      if (debugLabel) console.warn(`[${debugLabel}] Event with invalid time encountered and skipped:`, event);
-      continue; // Skip events with unparsable time
+    if (isNaN(newTime)) {
+      console.warn(`[${label}] Event with invalid time encountered at index ${idx}:`, event, `Setting time to ${lastTime + epsilon}`);
+      newTime = lastTime + epsilon;
+    } else if (newTime <= lastTime) {
+      newTime = lastTime + epsilon;
+      // console.warn(`[${label}] Adjusted overlapping note time from ${originalEventTime} -> ${newTime} (index: ${idx})`);
     }
-
-    if (eventTime <= lastAdjustedTime) {
-      const originalTime = eventTime;
-      eventTime = lastAdjustedTime + MIN_TIME_GAP;
-      if (debugLabel) {
-        // console.log(`[${debugLabel}] Adjusted time from ${originalTime.toFixed(6)} to ${eventTime.toFixed(6)} for event:`, event);
-      }
-    }
-    adjustedEvents.push({ ...event, time: eventTime });
-    lastAdjustedTime = eventTime;
-  }
-  return adjustedEvents;
+    
+    lastTime = newTime;
+    return { ...event, time: newTime };
+  });
 }
-
+*/
 
 interface SynthConfigurations {
-  melody: Partial<Tone.SynthOptions>;
-  bass: Partial<Tone.SynthOptions>;
-  chords: Partial<Tone.SynthOptions>;
-  kick: Partial<Tone.MembraneSynthOptions>;
-  snare: Partial<Tone.NoiseSynthOptions>;
-  hiHat: Partial<Tone.MetalSynthOptions>;
+  melody: any; // Partial<Tone.SynthOptions>;
+  bass: any; // Partial<Tone.SynthOptions>;
+  chords: any; // Partial<Tone.SynthOptions>;
+  kick: any; // Partial<Tone.MembraneSynthOptions>;
+  snare: any; // Partial<Tone.NoiseSynthOptions>;
+  hiHat: any; // Partial<Tone.MetalSynthOptions>;
 }
 
+// getSynthConfigurations might still be useful if we re-enable player or for other purposes
+// For now, its Tone-specific parts are not directly used for playback.
 const getSynthConfigurations = (
   instrumentHints: string[] = [],
   genre: string = '',
@@ -158,15 +158,18 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   const [isSharing, setIsSharing] = useState<boolean>(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [isLoadingTone, setIsLoadingTone] = useState<boolean>(false);
-  const [toneError, setToneError] = useState<string | null>(null);
-  const [playbackProgress, setPlaybackProgress] = useState<number>(0);
-  const [currentMidiDuration, setCurrentMidiDuration] = useState<number>(0);
-  
-  const synthsRef = useRef<{ 
-    melody?: Tone.PolySynth, 
-    bass?: Tone.PolySynth, 
+  // Comment out Tone.js specific state
+  // const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  // const [isLoadingTone, setIsLoadingTone] = useState<boolean>(false);
+  // const [toneError, setToneError] = useState<string | null>(null);
+  // const [playbackProgress, setPlaybackProgress] = useState<number>(0);
+  // const [currentMidiDuration, setCurrentMidiDuration] = useState<number>(0);
+
+  // Comment out Tone.js synth refs
+  /*
+  const synthsRef = useRef<{
+    melody?: Tone.PolySynth,
+    bass?: Tone.PolySynth,
     chords?: Tone.PolySynth,
     kick?: Tone.MembraneSynth,
     snare?: Tone.NoiseSynth,
@@ -174,7 +177,10 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     parts: (Tone.Part | Tone.Sequence)[]
   }>({parts: []});
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  */
 
+  // Comment out Tone.js initialization useEffect
+  /*
   useEffect(() => {
     synthsRef.current = {
       melody: new Tone.PolySynth(Tone.Synth).toDestination(),
@@ -185,7 +191,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       hiHat: new Tone.MetalSynth().toDestination(),
       parts: []
     };
-    
+
     return () => {
       if (Tone.Transport.state === 'started') {
         Tone.Transport.stop();
@@ -203,267 +209,262 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       }
     };
   }, []);
+  */
 
-  useEffect(() => {
-    const loadAndScheduleMidi = async () => {
-      if (!params || !synthsRef.current.melody || !synthsRef.current.kick || !synthsRef.current.snare || !synthsRef.current.hiHat || !synthsRef.current.bass || !synthsRef.current.chords) { 
-        setToneError("Synths not initialized yet.");
-        return;
-      }
+  // Comment out loadAndScheduleMidi and its related useEffects
+  /*
+  const loadAndScheduleMidi = useCallback(async () => {
+    if (!params || !synthsRef.current.melody || !synthsRef.current.kick || !synthsRef.current.snare || !synthsRef.current.hiHat || !synthsRef.current.bass || !synthsRef.current.chords) {
+    setToneError("Synths not initialized yet.");
+    return;
+  }
 
-      setIsLoadingTone(true);
-      setToneError(null);
-      setIsPlaying(false); 
-      setPlaybackProgress(0);
-      setCurrentMidiDuration(0);
-      
-      if (Tone.Transport.state === 'started') Tone.Transport.stop();
-      Tone.Transport.cancel(0);
-      Tone.Transport.position = 0;
-      synthsRef.current.parts.forEach(part => part.dispose());
-      synthsRef.current.parts = [];
+  setIsLoadingTone(true);
+  setToneError(null);
+  setIsPlaying(false);
+  setPlaybackProgress(0);
+  setCurrentMidiDuration(0);
 
-      try {
-        const synthConfigs = getSynthConfigurations(
-          params.instrumentHints,
-          params.selectedGenre,
-          params.originalInput.mode === 'kids'
-        );
+  if (Tone.Transport.state === 'started') Tone.Transport.stop();
+  Tone.Transport.cancel(0);
+  Tone.Transport.position = 0;
+  synthsRef.current.parts.forEach(part => part.dispose());
+  synthsRef.current.parts = [];
 
-        synthsRef.current.melody?.set(synthConfigs.melody);
-        synthsRef.current.bass?.set(synthConfigs.bass);
-        synthsRef.current.chords?.set(synthConfigs.chords);
-        synthsRef.current.kick?.set(synthConfigs.kick);
-        synthsRef.current.snare?.set(synthConfigs.snare);
-        synthsRef.current.hiHat?.set(synthConfigs.hiHat);
+  try {
+    const synthConfigs = getSynthConfigurations(
+      params.instrumentHints,
+      params.selectedGenre,
+      params.originalInput.mode === 'kids'
+    );
 
-        const midiDataUri = generateMidiFile(params);
-        if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
-          throw new Error("Failed to generate valid MIDI data.");
-        }
-        
-        const parsedMidi = await MidiFileParser.fromUrl(midiDataUri);
-        setCurrentMidiDuration(parsedMidi.duration);
-        Tone.Transport.bpm.value = params.tempoBpm;
+    synthsRef.current.melody?.set(synthConfigs.melody);
+    synthsRef.current.bass?.set(synthConfigs.bass);
+    synthsRef.current.chords?.set(synthConfigs.chords);
+    synthsRef.current.kick?.set(synthConfigs.kick);
+    synthsRef.current.snare?.set(synthConfigs.snare);
+    synthsRef.current.hiHat?.set(synthConfigs.hiHat);
 
-        const newParts: (Tone.Part)[] = [];
-        
-        const drumEvents: { kick: EventTime[], snare: EventTime[], hiHat: EventTime[] } = { kick: [], snare: [], hiHat: [] };
-        
-        parsedMidi.tracks.forEach((track) => {
-          if (track.channel === 9) { // Drum track
-            track.notes.forEach(note => {
-                const noteTime = parseFloat(note.time as any);
-                let noteDuration = parseFloat(note.duration as any);
-                const noteVelocity = parseFloat(note.velocity as any);
+    const midiDataUri = generateMidiFile(params);
+    if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
+      throw new Error("Failed to generate valid MIDI data.");
+    }
 
-                if (isNaN(noteTime) || isNaN(noteDuration) || isNaN(noteVelocity)) {
-                    console.warn(`[Drums] Skipping note with invalid time/duration/velocity:`, note);
-                    return; 
-                }
-                if (noteDuration <=0) noteDuration = 0.05; // Ensure positive duration for drums
+    const parsedMidi = await MidiFileParser.fromUrl(midiDataUri);
+    setCurrentMidiDuration(parsedMidi.duration);
+    Tone.Transport.bpm.value = params.tempoBpm;
 
-                let drumType: 'kick' | 'snare' | 'hiHat' | null = null;
-                let pitchToPlay: string | number | undefined = undefined;
-                
-                if (note.midi === 35 || note.midi === 36) { drumType = 'kick'; pitchToPlay = "C1"; }
-                else if (note.midi === 38 || note.midi === 40) { drumType = 'snare'; }
-                else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { 
-                    drumType = 'hiHat'; 
-                    pitchToPlay = note.midi === 46 ? 400 : 250; // Frequency for MetalSynth
-                }
+    const newParts: (Tone.Part)[] = [];
 
-                if (drumType) {
-                    const event: EventTime = { time: noteTime, duration: noteDuration, velocity: noteVelocity, pitch: pitchToPlay };
-                    if (drumType === 'kick') drumEvents.kick.push(event);
-                    else if (drumType === 'snare') drumEvents.snare.push(event);
-                    else if (drumType === 'hiHat') drumEvents.hiHat.push(event);
-                }
-            });
-          } else { // Pitched instrument tracks
-            let synth: Tone.PolySynth | undefined;
-            const { melody: melodyInstrument, bass: bassInstrument, chordsPad: chordsPadInstrument } = mapInstrumentHintToGM(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids');
-            
-            if (track.instrument.number === melodyInstrument && synthsRef.current.melody) synth = synthsRef.current.melody;
-            else if (track.instrument.number === bassInstrument && synthsRef.current.bass) synth = synthsRef.current.bass;
-            else if (track.instrument.number === chordsPadInstrument && synthsRef.current.chords) synth = synthsRef.current.chords;
-            else if (synthsRef.current.melody) synth = synthsRef.current.melody; // Fallback to melody synth
+    // For drum parts - collect events first, then create one part per drum type
+    const drumEvents: { kick: EventTime[], snare: EventTime[], hiHat: EventTime[] } = { kick: [], snare: [], hiHat: [] };
+    
+    parsedMidi.tracks.forEach((track) => {
+      if (track.channel === 9) { // Drum track (MIDI channel 10, 0-indexed)
+        track.notes.forEach(note => {
+          const noteTimeInput = note.time;
+          const noteDurationInput = note.duration;
+          const noteVelocityInput = note.velocity;
 
-            if (synth) {
-              const trackEvents: EventTime[] = track.notes.map(n => {
-                const noteTime = parseFloat(n.time as any);
-                const noteDuration = parseFloat(n.duration as any);
-                const noteVelocity = parseFloat(n.velocity as any);
+          const noteTime = parseFloat(noteTimeInput as any);
+          let noteDuration = parseFloat(noteDurationInput as any);
+          const noteVelocity = parseFloat(noteVelocityInput as any);
 
-                if (typeof n.name === 'string' && !isNaN(noteTime) && !isNaN(noteDuration) && !isNaN(noteVelocity)) {
-                  return { time: noteTime, name: n.name, duration: noteDuration, velocity: noteVelocity };
-                }
-                console.warn(`[${track.name || 'Pitched'}] Skipping note with invalid properties:`, n);
-                return null;
-              }).filter(e => e !== null) as EventTime[];
+          if (isNaN(noteTime) || isNaN(noteDuration) || isNaN(noteVelocity)) {
+            console.warn(`[Drums] Skipping note with invalid time/duration/velocity:`, note);
+            return;
+          }
+          if (noteDuration <= 0) {
+            // console.warn(`[Drums] Note with non-positive duration (${noteDurationInput}) encountered, defaulting to 0.05s for note:`, note, "@ t:", noteTime);
+            noteDuration = 0.05;
+          }
 
-              if (trackEvents.length > 0) {
-                const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Track-${track.name || 'pitched'}`);
-                const part = new Tone.Part(((time, value) => {
-                  if (value.name && typeof value.name === 'string' && synth) {
-                    let durationNum = parseFloat(value.duration as any);
-                    if (isNaN(durationNum) || durationNum <= 0) {
-                        console.warn(`[${track.name || 'Pitched'}] Invalid or non-positive duration (${value.duration}), defaulting to 0.05s for note:`, value.name, "@ t:", time);
-                        durationNum = 0.05;
-                    }
-                    const effectiveDuration = Math.max(durationNum, 0.05);
-                    synth.triggerAttackRelease(value.name, effectiveDuration, time, value.velocity);
-                  } else {
-                    console.warn(`[${track.name || 'Pitched'}] Invalid note data for synth:`, value);
-                  }
-                }) as any, correctedTrackEvents);
-                newParts.push(part);
-              }
-            }
+
+          let drumType: 'kick' | 'snare' | 'hiHat' | null = null;
+          let pitchToPlay: string | number | undefined = undefined;
+
+          // GM Drum Map common notes
+          if (note.midi === 35 || note.midi === 36) { drumType = 'kick'; pitchToPlay = "C1"; } // Bass Drum 1, Acoustic Bass Drum
+          else if (note.midi === 38 || note.midi === 40) { drumType = 'snare'; } // Acoustic Snare, Electric Snare
+          else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { // Closed Hi-Hat, Pedal Hi-Hat, Open Hi-Hat
+            drumType = 'hiHat';
+            pitchToPlay = note.midi === 46 ? 400 : 250; // Higher freq for open hi-hat
+          }
+
+          if (drumType) {
+            const event: EventTime = { time: noteTime, duration: Math.max(noteDuration, 0.05), velocity: noteVelocity, pitch: pitchToPlay };
+            if (drumType === 'kick') drumEvents.kick.push(event);
+            else if (drumType === 'snare') drumEvents.snare.push(event);
+            else if (drumType === 'hiHat') drumEvents.hiHat.push(event);
           }
         });
-        
-        if (drumEvents.kick.length > 0 && synthsRef.current.kick) {
-            const correctedKickEvents = ensureStrictlyIncreasingTimes(drumEvents.kick, "Kick");
-            const kickPart = new Tone.Part(((time, value) => {
-                const drumSynth = synthsRef.current.kick;
-                if (drumSynth && value.pitch && (typeof value.pitch === 'string' || typeof value.pitch === 'number')) {
-                    let durationNum = parseFloat(value.duration as any);
-                    if (isNaN(durationNum) || durationNum <= 0) {
-                        console.warn(`[Kick] Invalid or non-positive duration (${value.duration}), defaulting to 0.05s for note:`, value.pitch, "@ t:", time);
-                        durationNum = 0.05;
-                    }
-                    const effectiveDuration = Math.max(durationNum, 0.05);
-                    drumSynth.triggerAttackRelease(value.pitch, effectiveDuration, time, value.velocity);
-                } else {
-                    console.warn("[Kick] Invalid pitch or synth not ready", value);
-                }
-            }) as any, correctedKickEvents);
-            newParts.push(kickPart);
-        }
-        if (drumEvents.snare.length > 0 && synthsRef.current.snare) {
-            const correctedSnareEvents = ensureStrictlyIncreasingTimes(drumEvents.snare, "Snare");
-            const snarePart = new Tone.Part(((time, value) => {
-                 const drumSynth = synthsRef.current.snare;
-                 if (drumSynth) {
-                    let durationNum = parseFloat(value.duration as any);
-                    if (isNaN(durationNum) || durationNum <= 0) {
-                        console.warn(`[Snare] Invalid or non-positive duration (${value.duration}), defaulting to 0.05s @ t:`, time);
-                        durationNum = 0.05;
-                    }
-                    const effectiveDuration = Math.max(durationNum, 0.05);
-                    drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
-                 }
-            }) as any, correctedSnareEvents);
-            newParts.push(snarePart);
-        }
-        if (drumEvents.hiHat.length > 0 && synthsRef.current.hiHat) {
-            const correctedHiHatEvents = ensureStrictlyIncreasingTimes(drumEvents.hiHat, "HiHat");
-            const hiHatPart = new Tone.Part(((time, value) => {
-                const drumSynth = synthsRef.current.hiHat as Tone.MetalSynth; 
-                if (drumSynth) {
-                    if (value.pitch && typeof value.pitch === 'number') { // pitch is frequency for MetalSynth
-                        drumSynth.frequency.setValueAtTime(value.pitch, time);
-                    }
-                    let durationNum = parseFloat(value.duration as any);
-                    if (isNaN(durationNum) || durationNum <= 0) {
-                        console.warn(`[HiHat] Invalid or non-positive duration (${value.duration}), defaulting to 0.05s @ t:`, time);
-                        durationNum = 0.05;
-                    }
-                    const effectiveDuration = Math.max(durationNum, 0.05);
-                    drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
-                }
-            }) as any, correctedHiHatEvents);
-            newParts.push(hiHatPart);
-        }
-        
-        newParts.forEach(part => part.start(0));
-        synthsRef.current.parts = newParts;
+      } else { // Pitched instrument tracks
+        let synth: Tone.PolySynth | undefined;
+        const { melody: melodyInstrument, bass: bassInstrument, chordsPad: chordsPadInstrument } = mapInstrumentHintToGM(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids');
 
-      } catch (error) {
-        console.error("Tone.js MIDI loading/scheduling error:", error);
-        setToneError(error instanceof Error ? error.message : "Error loading or scheduling MIDI with Tone.js");
-      } finally {
-        setIsLoadingTone(false);
+        if (track.instrument.number === melodyInstrument && synthsRef.current.melody) synth = synthsRef.current.melody;
+        else if (track.instrument.number === bassInstrument && synthsRef.current.bass) synth = synthsRef.current.bass;
+        else if (track.instrument.number === chordsPadInstrument && synthsRef.current.chords) synth = synthsRef.current.chords;
+        else if (synthsRef.current.melody) synth = synthsRef.current.melody; // Fallback to melody synth
+
+        if (synth) {
+          const trackEvents: EventTime[] = track.notes.map(n => {
+            const noteTimeInput = n.time;
+            const noteDurationInput = n.duration;
+            const noteVelocityInput = n.velocity;
+            const noteNameInput = n.name;
+
+            const noteTime = parseFloat(noteTimeInput as any);
+            let noteDuration = parseFloat(noteDurationInput as any);
+            const noteVelocity = parseFloat(noteVelocityInput as any);
+
+            if (typeof noteNameInput === 'string' && !isNaN(noteTime) && !isNaN(noteDuration) && !isNaN(noteVelocity)) {
+              if (noteDuration <=0) {
+                  // console.warn(`[${track.name || 'Pitched'}] Note with non-positive duration (${noteDurationInput}) encountered, defaulting to 0.05s for note:`, n.name, "@ t:", noteTime);
+                  noteDuration = 0.05;
+              }
+              return { time: noteTime, name: noteNameInput, duration: Math.max(noteDuration, 0.05), velocity: noteVelocity };
+            }
+            // console.warn(`[${track.name || 'Pitched'}] Skipping note with invalid properties:`, n);
+            return null;
+          }).filter(e => e !== null) as EventTime[];
+
+          if (trackEvents.length > 0) {
+            const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Track-${track.name || 'pitched'}`);
+            const part = new Tone.Part(((time, value) => {
+              if (value.name && typeof value.name === 'string' && synth) {
+                const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05); // Ensure min duration
+                synth.triggerAttackRelease(value.name, effectiveDuration, time, value.velocity);
+              } else {
+                // console.warn(`[${track.name || 'Pitched'}] Invalid note data for synth:`, value);
+              }
+            }) as any, correctedTrackEvents);
+            newParts.push(part);
+          }
+        }
       }
-    };
+    });
 
-    loadAndScheduleMidi();
+    // Create parts for collected drum events
+    if (drumEvents.kick.length > 0 && synthsRef.current.kick) {
+      const correctedKickEvents = ensureStrictlyIncreasingTimes(drumEvents.kick, "Kick");
+      const kickPart = new Tone.Part(((time, value) => {
+        const drumSynth = synthsRef.current.kick;
+        if (drumSynth && value.pitch && (typeof value.pitch === 'string' || typeof value.pitch === 'number')) {
+            const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05);
+            drumSynth.triggerAttackRelease(value.pitch, effectiveDuration, time, value.velocity);
+        } else {
+            // console.warn("[Kick] Invalid pitch or synth not ready", value);
+        }
+      }) as any, correctedKickEvents);
+      newParts.push(kickPart);
+    }
+    if (drumEvents.snare.length > 0 && synthsRef.current.snare) {
+      const correctedSnareEvents = ensureStrictlyIncreasingTimes(drumEvents.snare, "Snare");
+      const snarePart = new Tone.Part(((time, value) => {
+        const drumSynth = synthsRef.current.snare as Tone.NoiseSynth; // Correct type
+        if (drumSynth) {
+          const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05);
+          drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity); // Correct signature
+        }
+      }) as any, correctedSnareEvents);
+      newParts.push(snarePart);
+    }
+    if (drumEvents.hiHat.length > 0 && synthsRef.current.hiHat) {
+      const correctedHiHatEvents = ensureStrictlyIncreasingTimes(drumEvents.hiHat, "HiHat");
+      const hiHatPart = new Tone.Part(((time, value) => {
+        const drumSynth = synthsRef.current.hiHat as Tone.MetalSynth;
+        if (drumSynth) {
+          if (value.pitch && typeof value.pitch === 'number') {
+            drumSynth.frequency.setValueAtTime(value.pitch, time);
+          }
+          const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05);
+          drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
+        }
+      }) as any, correctedHiHatEvents);
+      newParts.push(hiHatPart);
+    }
 
-  }, [params]);
+    newParts.forEach(part => part.start(0));
+    synthsRef.current.parts = newParts;
+
+  } catch (error) {
+    console.error("Tone.js MIDI loading/scheduling error:", error);
+    setToneError(error instanceof Error ? error.message : "Error loading or scheduling MIDI with Tone.js");
+  } finally {
+    setIsLoadingTone(false);
+  }
+  }, [params]); 
+
+  useEffect(() => {
+    if (params) {
+      loadAndScheduleMidi();
+    }
+  }, [params, loadAndScheduleMidi]);
 
   const updateProgress = useCallback(() => {
-    if (Tone.Transport.state === "started" && currentMidiDuration > 0) {
-      const progress = (Tone.Transport.seconds / currentMidiDuration) * 100;
-      setPlaybackProgress(Math.min(progress, 100));
-    } else if (Tone.Transport.state !== "started") {
-       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-       progressIntervalRef.current = null;
-       if(playbackProgress >= 99.9 && !isPlaying) { 
-         setPlaybackProgress(100);
-       }
+    if (!isPlaying || !currentMidiDuration) {
+      setPlaybackProgress(0);
+      return;
     }
+    const progress = (Tone.Transport.seconds / currentMidiDuration) * 100;
+    setPlaybackProgress(Math.min(progress, 100));
   }, [currentMidiDuration, isPlaying, playbackProgress]);
 
   useEffect(() => {
     const endOfTransportHandler = () => {
       setIsPlaying(false);
       setPlaybackProgress(100);
-       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-       progressIntervalRef.current = null;
-    };
-
-    Tone.Transport.on('stop', endOfTransportHandler);
-    
-    return () => {
-      Tone.Transport.off('stop', endOfTransportHandler);
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
       }
+      Tone.Transport.position = 0; // Reset position for next play
+    };
+    Tone.Transport.on('stop', endOfTransportHandler);
+    return () => {
+      Tone.Transport.off('stop', endOfTransportHandler);
     };
   }, []);
+  */
 
-
+  // Comment out playback control handlers
+  /*
   const handlePlayPause = async () => {
-    setToneError(null);
-    try {
-      if (Tone.context.state !== 'running') {
-        await Tone.start();
-      }
+    if (isLoadingTone) return;
+    if (!currentMidiDuration) {
+      setToneError("MIDI data not loaded or duration is zero.");
+      return;
+    }
 
-      if (Tone.Transport.state === 'started') {
-        Tone.Transport.pause();
-        setIsPlaying(false);
-        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      } else {
-        if (playbackProgress >= 100 && currentMidiDuration > 0) {
-             Tone.Transport.position = 0;
-             setPlaybackProgress(0);
-        }
-        Tone.Transport.start();
-        setIsPlaying(true);
-        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = setInterval(updateProgress, 100);
-      }
-    } catch (error) {
-      console.error("Tone.js play/pause error:", error);
-      setToneError(error instanceof Error ? error.message : "Playback error");
+    if (Tone.Transport.state !== 'started') {
+      await Tone.start(); // Ensure AudioContext is running
+      Tone.Transport.start();
+      setIsPlaying(true);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = setInterval(updateProgress, 100);
+    } else {
+      Tone.Transport.pause();
       setIsPlaying(false);
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
     }
   };
 
   const handleStop = async () => {
-    try {
-      if (Tone.context.state !== 'running' && Tone.Transport.state !== 'stopped') {
-        await Tone.start(); 
-      }
-      Tone.Transport.stop();
-    } catch (error) {
-      console.error("Tone.js stop error:", error);
-      setToneError(error instanceof Error ? error.message : "Stop error");
+    if (isLoadingTone) return;
+    Tone.Transport.stop();
+    setIsPlaying(false);
+    setPlaybackProgress(0);
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
     }
+    Tone.Transport.position = 0; // Always reset position on stop
   };
+  */
 
   const handleDownloadMidi = () => {
     setMidiError(null); setIsGeneratingMidiForDownload(true);
@@ -498,7 +499,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
           originalInputSummary += `\nAdditional Context: "${params.originalInput.additionalContext}"`;
         }
         break;
-      case 'video': 
+      case 'video':
         const fileTypeDisplay = params.originalInput.fileDetails.type.startsWith('video/') ? 'Video' :
                               params.originalInput.fileDetails.type.startsWith('audio/') ? 'Audio' : 'Media';
         originalInputSummary = `${fileTypeDisplay} Concept: ${params.originalInput.fileDetails.name}`;
@@ -582,14 +583,14 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         const renderedElements: React.ReactNode[] = [];
 
         const isClearlyNoteLine = (line: string): boolean => {
-            return /^[A-G][#bSsxBF]?[0-9]$/.test(line.trim()) || 
+            return /^[A-G][#bSsxBF]?[0-9]$/.test(line.trim()) ||
                    (line.trim().length < 10 && /[A-G]/.test(line));
         };
-        
+
         for (let i = 0; i < lines.length; i++) {
             let currentLine = lines[i];
-            if (isClearlyNoteLine(currentLine) && 
-                i + 1 < lines.length && 
+            if (isClearlyNoteLine(currentLine) &&
+                i + 1 < lines.length &&
                 isClearlyNoteLine(lines[i+1]) &&
                 currentLine.length < 20 && lines[i+1].length < 20
             ) {
@@ -657,7 +658,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
           </>
         );
         break;
-      case 'video': 
+      case 'video':
         icon = <VideoCameraIcon className="w-6 h-6" />;
         title = "Original Input Concept";
         const fileTypeDisplay = input.fileDetails.type.startsWith('video/') ? 'Video' :
@@ -724,15 +725,15 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     if (complexity < 0.8) return "Complex";
     return "Very Complex";
   };
-  
-  const playButtonDisabled = isLoadingTone || !currentMidiDuration;
-  const showLoadingSpinnerInPlayButton = isLoadingTone;
 
-  let statusMessage = "";
-  if (toneError) statusMessage = `Player Error: ${toneError}`;
-  else if (isLoadingTone) statusMessage = "Preparing your tune...";
-  else if (!isPlaying && currentMidiDuration > 0 && playbackProgress < 1) statusMessage = "Ready to play.";
-  else if (!isPlaying && currentMidiDuration > 0 && playbackProgress >= 100) statusMessage = "Playback finished. Play again?";
+  // const playButtonDisabled = isLoadingTone || !currentMidiDuration; // Commented out
+  // const showLoadingSpinnerInPlayButton = isLoadingTone; // Commented out
+  // let statusMessage = ""; // Commented out
+  // if (toneError) statusMessage = `Player Error: ${toneError}`;
+  // else if (isLoadingTone) statusMessage = "Preparing your tune...";
+  // else if (!isPlaying && currentMidiDuration > 0 && playbackProgress < 1) statusMessage = "Ready to play.";
+  // else if (!isPlaying && currentMidiDuration > 0 && playbackProgress >= 100) statusMessage = "Playback finished. Play again?";
+
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -780,28 +781,18 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
           <CardTitle className="text-lg font-semibold text-stardust-blue text-center">Listen to Your Tune</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-center space-x-3">
-            <Button onClick={handlePlayPause} disabled={playButtonDisabled} size="icon" className="p-3 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-slate-600">
-               {showLoadingSpinnerInPlayButton ? (
-                <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle>
-                  <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" fill="currentColor"></path>
-                </svg>
-              ) : isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
-            </Button>
-            <Button onClick={handleStop} disabled={isLoadingTone || (!isPlaying && playbackProgress === 0)} size="icon" className="p-3 rounded-full bg-slate-600 text-primary-foreground hover:bg-slate-500 disabled:bg-slate-700">
-              <StopIcon className="w-6 h-6" />
-            </Button>
-          </div>
-          <Progress value={playbackProgress} className="mt-4 h-2.5 [&>div]:bg-stardust-blue" aria-label="Playback progress"/>
-          {statusMessage && (
-            <p className={`text-sm text-center mt-2 ${toneError ? 'text-red-400' : 'text-stardust-blue animate-pulse-subtle'}`}>
-              {statusMessage}
-            </p>
-          )}
+          {/* MIDI Player Controls Removed/Commented Out */}
+           <Alert variant="default" className="bg-muted/30 border-slate-600 text-slate-300">
+            <ExclamationCircleIcon className="h-5 w-5 text-amber-400" />
+            <AlertTitle className="text-amber-400">Player Under Development</AlertTitle>
+            <AlertDescription>
+              In-browser MIDI playback is temporarily unavailable while we fine-tune it.
+              You can still download the MIDI file below to listen with your preferred MIDI player.
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
-      
+
       <div className="mt-8 text-center space-y-4 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
         <Button onClick={handleDownloadMidi} disabled={isGeneratingMidiForDownload} className="w-full sm:w-auto bg-stardust-blue hover:bg-sky-500 text-primary-foreground">
           {isGeneratingMidiForDownload ? (
@@ -817,10 +808,10 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
             <><ClipboardCopyIcon className="w-5 h-5 mr-2" />Copy Details</>
           )}
         </Button>
-        <Button 
-            onClick={handleShare} 
+        <Button
+            onClick={handleShare}
             disabled={isSharing || (params.originalInput.mode === 'standard' && !standardModeArtUrl && !params) || (params.originalInput.mode === 'kids' && !params) }
-            variant="outline" 
+            variant="outline"
             className="w-full sm:w-auto border-green-500 text-green-400 hover:bg-green-500/10 hover:text-green-300"
         >
              {isSharing ? (
@@ -860,11 +851,11 @@ const ParameterCardComponent: React.FC<{title: string; value: any; icon: React.R
 );
 
 const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: boolean = false): { melody: number; bass: number; chordsPad: number; arpeggioSynth: number } => {
-    let mapping = { melody: 80, bass: 38, chordsPad: 89, arpeggioSynth: 81 }; 
+    let mapping = { melody: 80, bass: 38, chordsPad: 89, arpeggioSynth: 81 };
     const genreLower = genre?.toLowerCase();
 
     if (isKidsMode) {
-        mapping = { melody: 13, bass: 24, chordsPad: 8, arpeggioSynth: 74 }; 
+        mapping = { melody: 13, bass: 24, chordsPad: 8, arpeggioSynth: 74 };
         (hints || []).forEach(hint => {
             const hLower = hint.toLowerCase();
             if (/xylophone/i.test(hLower)) mapping.melody = 13;
@@ -879,13 +870,13 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
 
 
     if (genreLower) {
-        if (genreLower.includes("rock")) { mapping = { melody: 27, bass: 34, chordsPad: 27, arpeggioSynth: 27 }; } 
-        else if (genreLower.includes("pop")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81 }; } 
-        else if (genreLower.includes("jazz")) { mapping = { melody: 1, bass: 32, chordsPad: 1, arpeggioSynth: 52 }; } 
+        if (genreLower.includes("rock")) { mapping = { melody: 27, bass: 34, chordsPad: 27, arpeggioSynth: 27 }; }
+        else if (genreLower.includes("pop")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81 }; }
+        else if (genreLower.includes("jazz")) { mapping = { melody: 1, bass: 32, chordsPad: 1, arpeggioSynth: 52 }; }
         else if (genreLower.includes("electronic")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81 }; }
-        else if (genreLower.includes("ambient")) { mapping = { melody: 90, bass: 90, chordsPad: 89, arpeggioSynth: 99 }; } 
-        else if (genreLower.includes("classical") || genreLower.includes("cinematic")) { mapping = { melody: 40, bass: 42, chordsPad: 48, arpeggioSynth: 49 }; } 
-        else if (genreLower.includes("folk")) { mapping = { melody: 24, bass: 32, chordsPad: 24, arpeggioSynth: 73 }; } 
+        else if (genreLower.includes("ambient")) { mapping = { melody: 90, bass: 90, chordsPad: 89, arpeggioSynth: 99 }; }
+        else if (genreLower.includes("classical") || genreLower.includes("cinematic")) { mapping = { melody: 40, bass: 42, chordsPad: 48, arpeggioSynth: 49 }; }
+        else if (genreLower.includes("folk")) { mapping = { melody: 24, bass: 32, chordsPad: 24, arpeggioSynth: 73 }; }
     }
 
     (hints || []).forEach(hint => {
@@ -893,14 +884,14 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
         if (/piano/i.test(hLower)) { mapping.melody = 0; if (genreLower?.includes("jazz") || !genreLower) mapping.chordsPad = 0; }
         else if (/flute/i.test(hLower)) mapping.melody = 73;
         else if (/violin|strings/i.test(hLower) && !/ensemble|pad/i.test(hLower)) mapping.melody = 40;
-        else if (/guitar/i.test(hLower) && !/bass|acoustic/i.test(hLower)) mapping.melody = 27; 
+        else if (/guitar/i.test(hLower) && !/bass|acoustic/i.test(hLower)) mapping.melody = 27;
         else if (/acoustic guitar/i.test(hLower)) mapping.melody = 24;
         else if (/trumpet|brass/i.test(hLower) && !/section/i.test(hLower)) mapping.melody = 56;
-        else if (/sax|saxophone/i.test(hLower)) mapping.melody = 65; 
-        else if (/bell|celesta|glockenspiel|music box/i.test(hLower)) { mapping.melody = 9; mapping.arpeggioSynth = 14; } 
-        else if (/bright synth|synth lead/i.test(hLower)) mapping.melody = 80; 
-        else if (/warm lead|soft lead/i.test(hLower)) mapping.melody = 81; 
-        else if (/organ/i.test(hLower)) mapping.melody = 19; 
+        else if (/sax|saxophone/i.test(hLower)) mapping.melody = 65;
+        else if (/bell|celesta|glockenspiel|music box/i.test(hLower)) { mapping.melody = 9; mapping.arpeggioSynth = 14; }
+        else if (/bright synth|synth lead/i.test(hLower)) mapping.melody = 80;
+        else if (/warm lead|soft lead/i.test(hLower)) mapping.melody = 81;
+        else if (/organ/i.test(hLower)) mapping.melody = 19;
 
         if (/synth bass|bass synth/i.test(hLower)) mapping.bass = 38;
         else if (/acoustic bass|double bass|upright bass/i.test(hLower)) mapping.bass = 32;
@@ -909,14 +900,16 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
 
 
         if (/string ensemble|strings pad/i.test(hLower)) mapping.chordsPad = 48;
-        else if (/synth pad|ambient pad|warm pad/i.test(hLower)) mapping.chordsPad = 89; 
-        else if (/dark pad|sweep pad/i.test(hLower)) mapping.chordsPad = 96; 
-        else if (/organ/i.test(hLower) && (genreLower?.includes("blues") || genreLower?.includes("funk") || genreLower?.includes("reggae"))) mapping.chordsPad = 19; 
-        else if (/electric piano/i.test(hLower) && (genreLower?.includes("jazz") || genreLower?.includes("soul") || genreLower?.includes("funk"))) mapping.chordsPad = 4; 
-        else if (/choir|voice|aahs/i.test(hLower)) mapping.chordsPad = 52; 
+        else if (/synth pad|ambient pad|warm pad/i.test(hLower)) mapping.chordsPad = 89;
+        else if (/dark pad|sweep pad/i.test(hLower)) mapping.chordsPad = 96;
+        else if (/organ/i.test(hLower) && (genreLower?.includes("blues") || genreLower?.includes("funk") || genreLower?.includes("reggae"))) mapping.chordsPad = 19;
+        else if (/electric piano/i.test(hLower) && (genreLower?.includes("jazz") || genreLower?.includes("soul") || genreLower?.includes("funk"))) mapping.chordsPad = 4;
+        else if (/choir|voice|aahs/i.test(hLower)) mapping.chordsPad = 52;
 
-        if (/arp|arpeggio|pluck|sequence/i.test(hLower)) mapping.arpeggioSynth = 99; 
-        else if (/fx|sound effect/i.test(hLower)) mapping.arpeggioSynth = 102; 
+        if (/arp|arpeggio|pluck|sequence/i.test(hLower)) mapping.arpeggioSynth = 99;
+        else if (/fx|sound effect/i.test(hLower)) mapping.arpeggioSynth = 102;
     });
     return mapping;
 };
+
+
