@@ -19,7 +19,7 @@ export const NavigationBar: React.FC = () => {
       <Dialog>
         <DialogTrigger asChild>
           <Button variant="ghost" size="icon" aria-label="About DreamTuner">
-            <InfoIcon className="h-5 w-5 text-slate-400 hover:text-stardust-blue transition-colors" />
+            <InfoIcon className="h-5 w-5 text-destructive hover:text-destructive/80 transition-colors" />
           </Button>
         </DialogTrigger>
         <DialogContent
