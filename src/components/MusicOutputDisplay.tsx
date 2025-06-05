@@ -2,7 +2,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Tone from 'tone';
-import { Midi as MidiFileParser } from '@tonejs/midi'; // Using alias
+import { Midi as MidiFileParser } from '@tonejs/midi';
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
@@ -22,50 +22,73 @@ import Image from 'next/image';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from '@/components/ui/separator';
 
-interface MusicOutputDisplayProps {
-  params: MusicParameters;
-  onRegenerateIdea: () => void;
-  isRegeneratingIdea: boolean;
-  standardModeArtUrl: string | null;
-}
-
 interface EventTime { time: number; [key: string]: any; }
 
-// Increased epsilon for more robustness
-const MIN_TIME_GAP = 0.001;
+const MIN_TIME_GAP = 0.001; // Adjusted to 0.001 for more robustness
 
 function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[], debugLabel?: string): T[] {
   if (!events || events.length === 0) return [];
-  
-  // Ensure events are sorted by their original time first
-  const sortedEvents = [...events].sort((a, b) => {
-    const timeA = typeof a.time === 'number' ? a.time : parseFloat(a.time as any);
-    const timeB = typeof b.time === 'number' ? b.time : parseFloat(b.time as any);
-    if (isNaN(timeA) || isNaN(timeB)) return 0; // Keep order if invalid times
-    return timeA - timeB;
-  });
 
-  if (debugLabel) console.log(`[${debugLabel}] Before ensureStrictlyIncreasingTimes (after initial sort):`, JSON.parse(JSON.stringify(sortedEvents.map(e => e.time))));
-  
-  let lastTime = -Infinity;
-  const correctedEvents = sortedEvents.map((e) => {
-    const originalEventTime = typeof e.time === 'number' ? e.time : parseFloat(e.time as any);
-    
-    if (isNaN(originalEventTime)) {
-        console.warn(`[${debugLabel}] Invalid time in event, skipping adjustment:`, e);
-        return e; // Return original if time is invalid
+  // 1. Create a mutable copy and parse times, handling NaNs early
+  // Ensure that all time properties are numbers before sorting.
+  const processedEvents = events.map(e => {
+    const timeAsNumber = typeof e.time === 'number' ? e.time : parseFloat(e.time as any);
+    if (isNaN(timeAsNumber)) {
+      console.warn(`[${debugLabel}] Invalid time in event, setting to 0 for sorting step:`, e);
+      return { ...e, time: 0, originalTimeInvalid: true }; // Mark invalid, sort to beginning
+    }
+    return { ...e, time: timeAsNumber };
+  }).sort((a, b) => a.time - b.time); // Sort by numeric time
+
+  if (debugLabel) {
+    // console.log(`[${debugLabel}] ensureStrictlyIncreasingTimes - After initial sort & parse:`, JSON.parse(JSON.stringify(processedEvents.map(e => e.time))));
+  }
+
+  // 2. Iterate and enforce strictly increasing times
+  for (let i = 0; i < processedEvents.length; i++) {
+    if (processedEvents[i].originalTimeInvalid) {
+        // Decide how to handle events that had invalid original times.
+        // For now, if it was invalid, its time is 0. If it's the first event, it stays 0.
+        // If not first, it will be adjusted relative to the previous valid event.
+        if (i > 0 && !processedEvents[i-1].originalTimeInvalid) {
+             processedEvents[i].time = processedEvents[i-1].time + MIN_TIME_GAP;
+        } else if (i === 0) {
+            // It's the first event and had an invalid time, already set to 0.
+            // If all events have invalid times, they'll all end up as 0, 0+eps, 0+2eps etc.
+        } else {
+            // This case implies previous events were also invalid.
+            // We'd need a more complex recovery or error strategy.
+            // For now, this might lead to a cascade of 0, eps, 2eps...
+            // This should be rare if `parseFloat` and checks in main loop are good.
+            let lastValidTime = 0;
+            for(let k = i-1; k >=0; k--){
+                if(!processedEvents[k].originalTimeInvalid){
+                    lastValidTime = processedEvents[k].time;
+                    break;
+                }
+            }
+            processedEvents[i].time = lastValidTime + (i - (processedEvents.findIndex((ev,idx) => idx < i && !ev.originalTimeInvalid) )) * MIN_TIME_GAP;
+
+        }
     }
 
-    let time = originalEventTime;
-    if (time <= lastTime) {
-      time = lastTime + MIN_TIME_GAP;
+    if (i > 0) {
+      const prevEventTime = processedEvents[i-1].time;
+      if (processedEvents[i].time <= prevEventTime) {
+        processedEvents[i].time = prevEventTime + MIN_TIME_GAP;
+      }
     }
-    lastTime = time;
-    return { ...e, time };
+  }
+  
+  const finalEvents = processedEvents.map(e => {
+    const { originalTimeInvalid, ...rest } = e; // Remove temporary property
+    return rest as T;
   });
 
-  if (debugLabel) console.log(`[${debugLabel}] After ensureStrictlyIncreasingTimes:`, JSON.parse(JSON.stringify(correctedEvents.map(e => e.time))));
-  return correctedEvents;
+  if (debugLabel) {
+    // console.log(`[${debugLabel}] ensureStrictlyIncreasingTimes - After correction:`, JSON.parse(JSON.stringify(finalEvents.map(e => e.time))));
+  }
+  return finalEvents;
 }
 
 
@@ -177,7 +200,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   useEffect(() => {
     synthsRef.current = {
       melody: new Tone.PolySynth(Tone.Synth).toDestination(),
-      bass: new Tone.PolySynth(Tone.Synth, { detune: -1200 }).toDestination(), // Detune for bass range
+      bass: new Tone.PolySynth(Tone.Synth, { detune: -1200 }).toDestination(),
       chords: new Tone.PolySynth(Tone.Synth).toDestination(),
       kick: new Tone.MembraneSynth().toDestination(),
       snare: new Tone.NoiseSynth().toDestination(),
@@ -186,24 +209,22 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     };
     
     return () => {
-      // Stop transport and dispose of all parts and synths on component unmount
       if (Tone.Transport.state === 'started') {
         Tone.Transport.stop();
       }
-      Tone.Transport.cancel(0); // Clear all scheduled events
+      Tone.Transport.cancel(0);
       synthsRef.current.parts.forEach(part => part.dispose());
       Object.values(synthsRef.current).forEach(synthOrParts => {
-        // Check if it's a synth and has a dispose method
         if (synthOrParts && typeof (synthOrParts as any).dispose === 'function' && !Array.isArray(synthOrParts)) {
             (synthOrParts as any).dispose();
         }
       });
-      synthsRef.current = { parts: [] }; // Reset parts array
+      synthsRef.current = { parts: [] };
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
     };
-  }, []); // Empty dependency array ensures this runs only on mount and unmount
+  }, []);
 
   useEffect(() => {
     const loadAndScheduleMidi = async () => {
@@ -214,19 +235,17 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
       setIsLoadingTone(true);
       setToneError(null);
-      setIsPlaying(false); // Stop playback if it was playing before new params
+      setIsPlaying(false); 
       setPlaybackProgress(0);
       setCurrentMidiDuration(0);
       
-      // Stop transport and cancel previous events before loading new ones
       if (Tone.Transport.state === 'started') Tone.Transport.stop();
       Tone.Transport.cancel(0);
-      Tone.Transport.position = 0; // Reset transport position
-      synthsRef.current.parts.forEach(part => part.dispose()); // Dispose old parts
-      synthsRef.current.parts = []; // Clear parts array
+      Tone.Transport.position = 0;
+      synthsRef.current.parts.forEach(part => part.dispose());
+      synthsRef.current.parts = [];
 
       try {
-        // Get and apply synth configurations based on AI params
         const synthConfigs = getSynthConfigurations(
           params.instrumentHints,
           params.selectedGenre,
@@ -249,13 +268,12 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         setCurrentMidiDuration(parsedMidi.duration);
         Tone.Transport.bpm.value = params.tempoBpm;
 
-        const newParts: (Tone.Part)[] = []; // Store new parts to be started later
+        const newParts: (Tone.Part)[] = [];
         
-        // For drums, collect all events for each drum type first
         const drumEvents: { kick: EventTime[], snare: EventTime[], hiHat: EventTime[] } = { kick: [], snare: [], hiHat: [] };
         
         parsedMidi.tracks.forEach((track) => {
-          if (track.channel === 9) { // Drum track (usually channel 10 in MIDI, 9 in 0-indexed arrays)
+          if (track.channel === 9) {
             track.notes.forEach(note => {
                 const noteTime = parseFloat(note.time as any);
                 const noteDuration = parseFloat(note.duration as any);
@@ -267,15 +285,13 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                 }
 
                 let drumType: 'kick' | 'snare' | 'hiHat' | null = null;
-                let pitchToPlay: string | number | undefined = undefined; // For MembraneSynth (kick) or MetalSynth (hi-hat freq)
+                let pitchToPlay: string | number | undefined = undefined;
                 
-                // Standard GM Drum Map (simplified)
-                if (note.midi === 35 || note.midi === 36) { drumType = 'kick'; pitchToPlay = "C1"; } // Acoustic Bass Drum, Bass Drum 1
-                else if (note.midi === 38 || note.midi === 40) { drumType = 'snare'; } // Acoustic Snare, Electric Snare
+                if (note.midi === 35 || note.midi === 36) { drumType = 'kick'; pitchToPlay = "C1"; }
+                else if (note.midi === 38 || note.midi === 40) { drumType = 'snare'; }
                 else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { 
-                    // Closed Hi-Hat, Pedal Hi-Hat, Open Hi-Hat
                     drumType = 'hiHat'; 
-                    pitchToPlay = note.midi === 46 ? 400 : 250; // Higher freq for open hi-hat
+                    pitchToPlay = note.midi === 46 ? 400 : 250;
                 }
 
                 if (drumType) {
@@ -285,15 +301,13 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                     else if (drumType === 'hiHat') drumEvents.hiHat.push(event);
                 }
             });
-          } else { // Pitched instrument tracks
+          } else {
             let synth: Tone.PolySynth | undefined;
-            // Rudimentary track-to-synth mapping (can be improved)
-            // This depends on how generateMidiFile orders tracks
             const { melody: melodyInstrument, bass: bassInstrument, chordsPad: chordsPadInstrument } = mapInstrumentHintToGM(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids');
             if (track.instrument.number === melodyInstrument && synthsRef.current.melody) synth = synthsRef.current.melody;
             else if (track.instrument.number === bassInstrument && synthsRef.current.bass) synth = synthsRef.current.bass;
             else if (track.instrument.number === chordsPadInstrument && synthsRef.current.chords) synth = synthsRef.current.chords;
-            else if (synthsRef.current.melody) synth = synthsRef.current.melody; // Fallback to melody synth if no specific match
+            else if (synthsRef.current.melody) synth = synthsRef.current.melody;
 
             if (synth) {
               const trackEvents: EventTime[] = track.notes.map(n => {
@@ -310,8 +324,10 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
               if (trackEvents.length > 0) {
                 const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Track-${track.name || 'pitched'}`);
                 const part = new Tone.Part(((time, value) => {
-                  if (value.name && synth) { // Ensure value.name and synth are valid
+                  if (value.name && typeof value.name === 'string' && synth) {
                     synth.triggerAttackRelease(value.name, value.duration, time, value.velocity);
+                  } else {
+                    console.warn("Invalid note data for pitched synth:", value);
                   }
                 }) as any, correctedTrackEvents);
                 newParts.push(part);
@@ -320,38 +336,42 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
           }
         });
         
-        // Create and add drum parts
         if (drumEvents.kick.length > 0 && synthsRef.current.kick) {
             const correctedKickEvents = ensureStrictlyIncreasingTimes(drumEvents.kick, "Kick");
-            // console.log("Corrected Kick Events:", JSON.parse(JSON.stringify(correctedKickEvents.map(e => e.time))));
             const kickPart = new Tone.Part(((time, value) => {
-                if (value.pitch && synthsRef.current.kick) synthsRef.current.kick.triggerAttackRelease(value.pitch as string, value.duration, time, value.velocity);
+                const drumSynth = synthsRef.current.kick;
+                if (drumSynth && value.pitch && (typeof value.pitch === 'string' || typeof value.pitch === 'number')) {
+                     drumSynth.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
+                } else {
+                    console.warn("[Kick] Invalid pitch or synth not ready", value);
+                }
             }) as any, correctedKickEvents);
             newParts.push(kickPart);
         }
         if (drumEvents.snare.length > 0 && synthsRef.current.snare) {
             const correctedSnareEvents = ensureStrictlyIncreasingTimes(drumEvents.snare, "Snare");
-            // console.log("Corrected Snare Events:", JSON.parse(JSON.stringify(correctedSnareEvents.map(e => e.time))));
             const snarePart = new Tone.Part(((time, value) => {
-                 if (synthsRef.current.snare) synthsRef.current.snare.triggerAttackRelease(value.duration, time, value.velocity);
+                 const drumSynth = synthsRef.current.snare;
+                 if (drumSynth) drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
             }) as any, correctedSnareEvents);
             newParts.push(snarePart);
         }
         if (drumEvents.hiHat.length > 0 && synthsRef.current.hiHat) {
             const correctedHiHatEvents = ensureStrictlyIncreasingTimes(drumEvents.hiHat, "HiHat");
-            // console.log("Corrected HiHat Events:", JSON.parse(JSON.stringify(correctedHiHatEvents.map(e => e.time))));
             const hiHatPart = new Tone.Part(((time, value) => {
-                // MetalSynth might not use pitch in triggerAttackRelease, depends on config.
-                // It's often frequency based. Assuming value.pitch holds frequency for hihat if needed.
-                if (value.pitch && typeof value.pitch === 'number' && synthsRef.current.hiHat) synthsRef.current.hiHat.frequency.setValueAtTime(value.pitch, time);
-                if (synthsRef.current.hiHat) synthsRef.current.hiHat.triggerAttackRelease(value.duration, time, value.velocity);
+                const drumSynth = synthsRef.current.hiHat as Tone.MetalSynth; // Cast for frequency
+                if (drumSynth) {
+                    if (value.pitch && typeof value.pitch === 'number') {
+                        drumSynth.frequency.setValueAtTime(value.pitch, time);
+                    }
+                    drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
+                }
             }) as any, correctedHiHatEvents);
             newParts.push(hiHatPart);
         }
         
-        // Start all new parts at the beginning of the transport
         newParts.forEach(part => part.start(0));
-        synthsRef.current.parts = newParts; // Store new parts
+        synthsRef.current.parts = newParts;
 
       } catch (error) {
         console.error("Tone.js MIDI loading/scheduling error:", error);
@@ -363,26 +383,25 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
     loadAndScheduleMidi();
 
-  }, [params]); // Re-run when params change
+  }, [params]);
 
   const updateProgress = useCallback(() => {
     if (Tone.Transport.state === "started" && currentMidiDuration > 0) {
       const progress = (Tone.Transport.seconds / currentMidiDuration) * 100;
-      setPlaybackProgress(Math.min(progress, 100)); // Cap progress at 100
+      setPlaybackProgress(Math.min(progress, 100));
     } else if (Tone.Transport.state !== "started") {
        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
        progressIntervalRef.current = null;
-       // Ensure progress hits 100% if playback finished and wasn't exactly on an interval
        if(playbackProgress >= 99.9 && !isPlaying) { 
          setPlaybackProgress(100);
        }
     }
-  }, [currentMidiDuration, isPlaying, playbackProgress]); // playbackProgress added to deps to avoid stale closure issues
+  }, [currentMidiDuration, isPlaying, playbackProgress]);
 
   useEffect(() => {
     const endOfTransportHandler = () => {
       setIsPlaying(false);
-      setPlaybackProgress(100); // Explicitly set to 100% on stop
+      setPlaybackProgress(100);
        if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
        progressIntervalRef.current = null;
     };
@@ -395,14 +414,14 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         clearInterval(progressIntervalRef.current);
       }
     };
-  }, []); // Empty dependency, sets up global transport listener once
+  }, []);
 
 
   const handlePlayPause = async () => {
     setToneError(null);
     try {
       if (Tone.context.state !== 'running') {
-        await Tone.start(); // Ensure AudioContext is running
+        await Tone.start();
       }
 
       if (Tone.Transport.state === 'started') {
@@ -411,38 +430,28 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       } else {
-        // If playback finished and user hits play again, restart from beginning
-        if (playbackProgress >= 100 && currentMidiDuration > 0) { // Check currentMidiDuration to ensure it's loaded
-             Tone.Transport.position = 0; // Reset transport
-             setPlaybackProgress(0); // Reset progress bar
+        if (playbackProgress >= 100 && currentMidiDuration > 0) {
+             Tone.Transport.position = 0;
+             setPlaybackProgress(0);
         }
         Tone.Transport.start();
         setIsPlaying(true);
-        // Clear any existing interval before starting a new one
         if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = setInterval(updateProgress, 100);
       }
     } catch (error) {
       console.error("Tone.js play/pause error:", error);
       setToneError(error instanceof Error ? error.message : "Playback error");
-      setIsPlaying(false); // Ensure isPlaying is false on error
+      setIsPlaying(false);
     }
   };
 
   const handleStop = async () => {
     try {
-      // No need to await Tone.start() here, stop should work regardless of context state
-      // if transport was started.
-      if (Tone.context.state !== 'running' && Tone.Transport.state !== 'stopped') { // Only start if trying to stop a non-stopped transport on a non-running context
+      if (Tone.context.state !== 'running' && Tone.Transport.state !== 'stopped') {
         await Tone.start(); 
       }
-      Tone.Transport.stop(); // This will also trigger the 'stop' event handled by endOfTransportHandler
-      // setIsPlaying(false); // Handled by endOfTransportHandler
-      // setPlaybackProgress(0); // Handled by endOfTransportHandler
-      // if (progressIntervalRef.current) { // Handled by endOfTransportHandler
-      //   clearInterval(progressIntervalRef.current);
-      //   progressIntervalRef.current = null;
-      // }
+      Tone.Transport.stop();
     } catch (error) {
       console.error("Tone.js stop error:", error);
       setToneError(error instanceof Error ? error.message : "Stop error");
@@ -456,7 +465,6 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) throw new Error("Generated MIDI data was invalid.");
       const link = document.createElement('a');
       link.href = midiDataUri;
-      // Create a more descriptive filename
       let baseFileName = 'dreamtuner_music';
       if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
       else if (params.originalInput.type === 'text' && params.originalInput.content) baseFileName = params.originalInput.content.substring(0,30).replace(/[^\w\s]/gi, '').replace(/\s+/g, '_');
@@ -529,7 +537,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     try {
       const filesToShareAttempt: (File | null)[] = [];
       let shareText = `Check out this musical idea from DreamTuner: "${params.generatedIdea}"`;
-      // Generate MIDI for sharing
       const midiDataUri = generateMidiFile(params);
       if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
         let baseFileName = 'dreamtuner_music';
@@ -537,7 +544,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         const midiFile = dataURLtoFile(midiDataUri, `${baseFileName}.mid`);
         if (midiFile) filesToShareAttempt.push(midiFile);
       }
-      // Add art if it's standard mode and art URL exists
       if (params.originalInput.mode === 'standard' && standardModeArtUrl) {
         const artFile = dataURLtoFile(standardModeArtUrl, "dreamtuner_standard_art.png");
         if (artFile) filesToShareAttempt.push(artFile);
@@ -569,24 +575,19 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         const renderedElements: React.ReactNode[] = [];
 
         const isClearlyNoteLine = (line: string): boolean => {
-            // Basic check for common note patterns (e.g., C4, G#3, Ab5)
-            // or lines that are very short and look like musical notation.
-            // This is a heuristic and can be improved.
             return /^[A-G][#bSsxBF]?[0-9]$/.test(line.trim()) || 
                    (line.trim().length < 10 && /[A-G]/.test(line));
         };
         
         for (let i = 0; i < lines.length; i++) {
             let currentLine = lines[i];
-            // If a line might be musical notation, and the next line also looks like it,
-            // try to keep them on the same visual line if they are short.
             if (isClearlyNoteLine(currentLine) && 
                 i + 1 < lines.length && 
                 isClearlyNoteLine(lines[i+1]) &&
                 currentLine.length < 20 && lines[i+1].length < 20
             ) {
                 renderedElements.push(<p key={i} className="text-muted-foreground text-sm whitespace-pre-wrap">{currentLine.trim()}  |  {lines[i+1].trim()}</p>);
-                i++; // Skip next line as it's combined
+                i++;
             } else {
                 renderedElements.push(<p key={i} className="text-muted-foreground text-sm whitespace-pre-wrap">{currentLine}</p>);
             }
@@ -606,7 +607,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
             </div>
           </>
         );
-        // For text, use an accordion to make it collapsible
         return (
             <Card className="mt-8 bg-nebula-gray/80 border-slate-700">
                 <Accordion type="single" collapsible className="w-full">
@@ -650,7 +650,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
           </>
         );
         break;
-      case 'video': // Also handles audio concepts / recorded audio
+      case 'video': 
         icon = <VideoCameraIcon className="w-6 h-6" />;
         title = "Original Input Concept";
         const fileTypeDisplay = input.fileDetails.type.startsWith('video/') ? 'Video' :
@@ -663,7 +663,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
             {input.additionalContext && (
               <p className="text-muted-foreground text-xs italic mt-2">Additional Context: "{input.additionalContext}"</p>
             )}
-            {/* Preview for recorded audio */}
             {input.fileDetails.url && input.fileDetails.type.startsWith('audio/') && (
                 <audio controls src={input.fileDetails.url} className="w-full mt-2" />
             )}
@@ -674,7 +673,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         return null;
     }
 
-    // Add genre to footer if it exists and it's not a text input in standard mode (already shown in accordion)
     if (params.selectedGenre && (input.type !== 'text' || input.mode === 'kids')) {
       footerContent = (
           <div className="space-y-1 text-sm">
@@ -720,20 +718,17 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     return "Very Complex";
   };
   
-  const playButtonDisabled = isLoadingTone || !currentMidiDuration; // Play button disabled if loading Tone or no MIDI duration
-  const showLoadingSpinnerInPlayButton = isLoadingTone; // Show spinner only when actively loading Tone and its resources
+  const playButtonDisabled = isLoadingTone || !currentMidiDuration;
+  const showLoadingSpinnerInPlayButton = isLoadingTone;
 
-  // Status message logic
   let statusMessage = "";
   if (toneError) statusMessage = `Player Error: ${toneError}`;
   else if (isLoadingTone) statusMessage = "Preparing your tune...";
   else if (!isPlaying && currentMidiDuration > 0 && playbackProgress < 1) statusMessage = "Ready to play.";
   else if (!isPlaying && currentMidiDuration > 0 && playbackProgress >= 100) statusMessage = "Playback finished. Play again?";
-  // No message if playing, or if idle and no MIDI loaded yet.
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Generated Idea Display */}
       <Card className="p-6 bg-primary shadow-xl text-center border-none">
         <CardTitle className="text-3xl font-bold text-primary-foreground mb-2">Musical Essence Unveiled</CardTitle>
         <div className="flex items-center justify-center space-x-2">
@@ -760,7 +755,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         </div>
       </Card>
 
-      {/* Musical Parameters Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <ParameterCardComponent title="Key Signature" value={`${params.keySignature} ${params.mode}`} icon={<MusicalNoteIcon />} />
         <ParameterCardComponent title="Tempo" value={params.tempoBpm} unit="BPM" icon={<ClockIcon />} />
@@ -769,12 +763,11 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         <ParameterCardComponent title="Valence &amp; Arousal" value={`V: ${params.targetValence.toFixed(2)}, A: ${params.targetArousal.toFixed(2)}`} icon={<LightningBoltIcon />} subText={getValenceArousalDescription(params.targetValence, params.targetArousal)} />
         <ParameterCardComponent title="Rhythmic Density" value={params.rhythmicDensity.toFixed(2)} icon={<ScaleIcon />} subText={getRhythmicDensityDescription(params.rhythmicDensity)} />
         <ParameterCardComponent title="Harmonic Complexity" value={params.harmonicComplexity.toFixed(2)} icon={<CogIcon />} subText={getHarmonicComplexityDescription(params.harmonicComplexity)} />
-        {params.selectedGenre && params.originalInput.mode === 'standard' && ( // Only show genre card here for standard mode, as it's also in the original input card otherwise for kids
+        {params.selectedGenre && params.originalInput.mode === 'standard' && (
             <ParameterCardComponent title="Selected Genre" value={params.selectedGenre} icon={<LibraryIcon />} />
         )}
       </div>
 
-      {/* MIDI Player Card */}
       <Card className="mt-8 p-4 bg-nebula-gray/80 border-slate-700">
         <CardHeader className="pb-2">
           <CardTitle className="text-lg font-semibold text-stardust-blue text-center">Listen to Your Tune</CardTitle>
@@ -802,7 +795,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         </CardContent>
       </Card>
       
-      {/* Action Buttons: Download, Copy, Share */}
       <div className="mt-8 text-center space-y-4 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
         <Button onClick={handleDownloadMidi} disabled={isGeneratingMidiForDownload} className="w-full sm:w-auto bg-stardust-blue hover:bg-sky-500 text-primary-foreground">
           {isGeneratingMidiForDownload ? (
@@ -820,7 +812,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         </Button>
         <Button 
             onClick={handleShare} 
-            disabled={isSharing || (params.originalInput.mode === 'standard' && !standardModeArtUrl && !params) || (params.originalInput.mode === 'kids' && !params) } // Disable if standard mode has no art and no params, or kids mode no params
+            disabled={isSharing || (params.originalInput.mode === 'standard' && !standardModeArtUrl && !params) || (params.originalInput.mode === 'kids' && !params) }
             variant="outline" 
             className="w-full sm:w-auto border-green-500 text-green-400 hover:bg-green-500/10 hover:text-green-300"
         >
@@ -831,19 +823,17 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
              )}
         </Button>
       </div>
-      <div className="text-center mt-2 h-4"> {/* Placeholder for error messages to prevent layout shift */}
+      <div className="text-center mt-2 h-4">
         {midiError && <p className="text-red-400 text-sm">{`MIDI Error: ${midiError}`}</p>}
         {copyError && <p className="text-red-400 text-sm">{copyError}</p>}
         {shareError && <p className="text-red-400 text-sm">{`Share Error: ${shareError}`}</p>}
       </div>
 
-      {/* Original Input Info Card */}
       {params.originalInput && renderOriginalInputInfo(params.originalInput)}
     </div>
   );
 };
 
-// Minimal ParameterCardComponent to avoid breaking the structure
 const ParameterCardComponent: React.FC<{title: string; value: any; icon: React.ReactNode; unit?: string; subText?: string; className?:string}> = ({ title, value, icon, unit, subText, className }) => (
   <Card className={`bg-nebula-gray/80 border-slate-700 ${className}`}>
     <CardHeader className="pb-2">
@@ -862,16 +852,12 @@ const ParameterCardComponent: React.FC<{title: string; value: any; icon: React.R
   </Card>
 );
 
-// Helper to map instrument hints to GM numbers for midi-writer-js
-// This is a simplified mapping
 const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: boolean = false): { melody: number; bass: number; chordsPad: number; arpeggioSynth: number } => {
-    // Default to some synth sounds if no specific hints
-    let mapping = { melody: 80, bass: 38, chordsPad: 89, arpeggioSynth: 81 }; // Synth Lead, Synth Bass, Synth Pad, Synth FX
+    let mapping = { melody: 80, bass: 38, chordsPad: 89, arpeggioSynth: 81 }; 
     const genreLower = genre?.toLowerCase();
 
     if (isKidsMode) {
-        // Kids mode: simple, recognizable sounds
-        mapping = { melody: 13, bass: 24, chordsPad: 8, arpeggioSynth: 74 }; // Xylophone, Ukulele, Celesta, Recorder
+        mapping = { melody: 13, bass: 24, chordsPad: 8, arpeggioSynth: 74 }; 
         (hints || []).forEach(hint => {
             const hLower = hint.toLowerCase();
             if (/xylophone/i.test(hLower)) mapping.melody = 13;
@@ -885,31 +871,29 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
     }
 
 
-    // Genre-based defaults (can be refined)
     if (genreLower) {
-        if (genreLower.includes("rock")) { mapping = { melody: 27, bass: 34, chordsPad: 27, arpeggioSynth: 27 }; } // Electric Guitar (clean), Picked Bass
-        else if (genreLower.includes("pop")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81 }; } // Synth Lead, Synth Bass, Synth Pad
-        else if (genreLower.includes("jazz")) { mapping = { melody: 1, bass: 32, chordsPad: 1, arpeggioSynth: 52 }; } // Piano, Acoustic Bass, Vibraphone
+        if (genreLower.includes("rock")) { mapping = { melody: 27, bass: 34, chordsPad: 27, arpeggioSynth: 27 }; } 
+        else if (genreLower.includes("pop")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81 }; } 
+        else if (genreLower.includes("jazz")) { mapping = { melody: 1, bass: 32, chordsPad: 1, arpeggioSynth: 52 }; } 
         else if (genreLower.includes("electronic")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81 }; }
-        else if (genreLower.includes("ambient")) { mapping = { melody: 90, bass: 90, chordsPad: 89, arpeggioSynth: 99 }; } // Pad (warm), Pad (sweep), FX (crystal)
-        else if (genreLower.includes("classical") || genreLower.includes("cinematic")) { mapping = { melody: 40, bass: 42, chordsPad: 48, arpeggioSynth: 49 }; } // Violin, Cello, Strings Ens
-        else if (genreLower.includes("folk")) { mapping = { melody: 24, bass: 32, chordsPad: 24, arpeggioSynth: 73 }; } // Acoustic Guitar, Acoustic Bass, Flute
+        else if (genreLower.includes("ambient")) { mapping = { melody: 90, bass: 90, chordsPad: 89, arpeggioSynth: 99 }; } 
+        else if (genreLower.includes("classical") || genreLower.includes("cinematic")) { mapping = { melody: 40, bass: 42, chordsPad: 48, arpeggioSynth: 49 }; } 
+        else if (genreLower.includes("folk")) { mapping = { melody: 24, bass: 32, chordsPad: 24, arpeggioSynth: 73 }; } 
     }
 
-    // Override with specific hints if provided
     (hints || []).forEach(hint => {
         const hLower = hint.toLowerCase();
         if (/piano/i.test(hLower)) { mapping.melody = 0; if (genreLower?.includes("jazz") || !genreLower) mapping.chordsPad = 0; }
         else if (/flute/i.test(hLower)) mapping.melody = 73;
         else if (/violin|strings/i.test(hLower) && !/ensemble|pad/i.test(hLower)) mapping.melody = 40;
-        else if (/guitar/i.test(hLower) && !/bass|acoustic/i.test(hLower)) mapping.melody = 27; // Default to electric clean
+        else if (/guitar/i.test(hLower) && !/bass|acoustic/i.test(hLower)) mapping.melody = 27; 
         else if (/acoustic guitar/i.test(hLower)) mapping.melody = 24;
         else if (/trumpet|brass/i.test(hLower) && !/section/i.test(hLower)) mapping.melody = 56;
-        else if (/sax|saxophone/i.test(hLower)) mapping.melody = 65; // Alto Sax
-        else if (/bell|celesta|glockenspiel|music box/i.test(hLower)) { mapping.melody = 9; mapping.arpeggioSynth = 14; } // Celesta, Tubular Bells
-        else if (/bright synth|synth lead/i.test(hLower)) mapping.melody = 80; // Square Lead
-        else if (/warm lead|soft lead/i.test(hLower)) mapping.melody = 81; // Saw Lead
-        else if (/organ/i.test(hLower)) mapping.melody = 19; // Church Organ or Rock Organ based on context
+        else if (/sax|saxophone/i.test(hLower)) mapping.melody = 65; 
+        else if (/bell|celesta|glockenspiel|music box/i.test(hLower)) { mapping.melody = 9; mapping.arpeggioSynth = 14; } 
+        else if (/bright synth|synth lead/i.test(hLower)) mapping.melody = 80; 
+        else if (/warm lead|soft lead/i.test(hLower)) mapping.melody = 81; 
+        else if (/organ/i.test(hLower)) mapping.melody = 19; 
 
         if (/synth bass|bass synth/i.test(hLower)) mapping.bass = 38;
         else if (/acoustic bass|double bass|upright bass/i.test(hLower)) mapping.bass = 32;
@@ -918,14 +902,15 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
 
 
         if (/string ensemble|strings pad/i.test(hLower)) mapping.chordsPad = 48;
-        else if (/synth pad|ambient pad|warm pad/i.test(hLower)) mapping.chordsPad = 89; // Pad 2 (warm)
-        else if (/dark pad|sweep pad/i.test(hLower)) mapping.chordsPad = 96; // Pad 8 (sweep)
-        else if (/organ/i.test(hLower) && (genreLower?.includes("blues") || genreLower?.includes("funk") || genreLower?.includes("reggae"))) mapping.chordsPad = 19; // Rock Organ
-        else if (/electric piano/i.test(hLower) && (genreLower?.includes("jazz") || genreLower?.includes("soul") || genreLower?.includes("funk"))) mapping.chordsPad = 4; // Electric Piano 1
-        else if (/choir|voice|aahs/i.test(hLower)) mapping.chordsPad = 52; // Choir Aahs
+        else if (/synth pad|ambient pad|warm pad/i.test(hLower)) mapping.chordsPad = 89; 
+        else if (/dark pad|sweep pad/i.test(hLower)) mapping.chordsPad = 96; 
+        else if (/organ/i.test(hLower) && (genreLower?.includes("blues") || genreLower?.includes("funk") || genreLower?.includes("reggae"))) mapping.chordsPad = 19; 
+        else if (/electric piano/i.test(hLower) && (genreLower?.includes("jazz") || genreLower?.includes("soul") || genreLower?.includes("funk"))) mapping.chordsPad = 4; 
+        else if (/choir|voice|aahs/i.test(hLower)) mapping.chordsPad = 52; 
 
-        if (/arp|arpeggio|pluck|sequence/i.test(hLower)) mapping.arpeggioSynth = 99; // FX 4 (atmosphere) - can be more specific
-        else if (/fx|sound effect/i.test(hLower)) mapping.arpeggioSynth = 102; // FX 7 (echoes)
+        if (/arp|arpeggio|pluck|sequence/i.test(hLower)) mapping.arpeggioSynth = 99; 
+        else if (/fx|sound effect/i.test(hLower)) mapping.arpeggioSynth = 102; 
     });
     return mapping;
 };
+
