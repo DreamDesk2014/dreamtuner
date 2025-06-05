@@ -14,35 +14,35 @@ body {
     --card-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --popover: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
     --popover-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --primary: 203 100% 13%; /* Deep Dark Blue #002942 */
-    --primary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
+    --primary: 199 77% 52%; /* New Light Blue #29abe2 */
+    --primary-foreground: 0 0% 7%; /* Very Dark Gray for contrast */
     --secondary: 215 20% 26%; /* Nebula Gray Light #374151 */
     --secondary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --muted: 215 20% 26%; /* Nebula Gray Light #374151 */
     --muted-foreground: 220 10% 70%; /* Lighter Gray #aab0b8 */
-    --accent: 203 100% 13%; /* Deep Dark Blue #002942 */
-    --accent-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
+    --accent: 199 77% 52%; /* New Light Blue #29abe2 */
+    --accent-foreground: 0 0% 7%; /* Very Dark Gray for contrast */
     --destructive: 0 70% 50%; /* A vibrant red for dark theme */
     --destructive-foreground: 0 0% 98%;
     --border: 215 20% 26%; /* Nebula Gray Light #374151 */
     --input: 215 20% 26%; /* Nebula Gray Light #374151 */
-    --ring: 203 100% 13%; /* Deep Dark Blue #002942 */
-    --chart-1: 203 100% 23%; /* Lighter version of new base #004066 */
-    --chart-2: 203 100% 33%; /* Even lighter version of new base #00578A */
+    --ring: 199 77% 52%; /* New Light Blue #29abe2 */
+    --chart-1: 199 77% 62%; /* Lighter version of new base */
+    --chart-2: 199 77% 72%; /* Even lighter version of new base */
     --chart-3: 220 25% 60%; /* A lighter blue/gray */
     --chart-4: 300 50% 60%; /* A magenta/pinkish hue */
-    --chart-5: 203 80% 33%; /* Lighter, slightly less saturated new base #1D6A9C */
+    --chart-5: 199 70% 62%; /* Lighter, slightly less saturated new base */
     --radius: 0.5rem;
 
     /* Sidebar variables to match the new theme */
     --sidebar-background: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
     --sidebar-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --sidebar-primary: 203 100% 13%; /* Deep Dark Blue #002942 */
-    --sidebar-primary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --sidebar-accent: 203 100% 13%; /* Deep Dark Blue #002942 */
-    --sidebar-accent-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
+    --sidebar-primary: 199 77% 52%; /* New Light Blue */
+    --sidebar-primary-foreground: 0 0% 7%; /* Very Dark Gray */
+    --sidebar-accent: 199 77% 52%; /* New Light Blue */
+    --sidebar-accent-foreground: 0 0% 7%; /* Very Dark Gray */
     --sidebar-border: 215 20% 26%; /* Nebula Gray Light #374151 */
-    --sidebar-ring: 203 100% 13%; /* Deep Dark Blue #002942 */
+    --sidebar-ring: 199 77% 52%; /* New Light Blue */
   }
 
   .dark {
@@ -53,33 +53,33 @@ body {
     --card-foreground: 220 13% 95%;
     --popover: 215 28% 17%;
     --popover-foreground: 220 13% 95%;
-    --primary: 203 100% 13%;
-    --primary-foreground: 220 13% 95%;
+    --primary: 199 77% 52%;
+    --primary-foreground: 0 0% 7%;
     --secondary: 215 20% 26%;
     --secondary-foreground: 220 13% 95%;
     --muted: 215 20% 26%;
     --muted-foreground: 220 10% 70%;
-    --accent: 203 100% 13%;
-    --accent-foreground: 220 13% 95%;
+    --accent: 199 77% 52%;
+    --accent-foreground: 0 0% 7%;
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 98%;
     --border: 215 20% 26%;
     --input: 215 20% 26%;
-    --ring: 203 100% 13%;
-    --chart-1: 203 100% 23%;
-    --chart-2: 203 100% 33%;
+    --ring: 199 77% 52%;
+    --chart-1: 199 77% 62%;
+    --chart-2: 199 77% 72%;
     --chart-3: 220 25% 60%;
     --chart-4: 300 50% 60%;
-    --chart-5: 203 80% 33%;
+    --chart-5: 199 70% 62%;
 
     --sidebar-background: 215 28% 17%;
     --sidebar-foreground: 220 13% 95%;
-    --sidebar-primary: 203 100% 13%;
-    --sidebar-primary-foreground: 220 13% 95%;
-    --sidebar-accent: 203 100% 13%;
-    --sidebar-accent-foreground: 220 13% 95%;
+    --sidebar-primary: 199 77% 52%;
+    --sidebar-primary-foreground: 0 0% 7%;
+    --sidebar-accent: 199 77% 52%;
+    --sidebar-accent-foreground: 0 0% 7%;
     --sidebar-border: 215 20% 26%;
-    --sidebar-ring: 203 100% 13%;
+    --sidebar-ring: 199 77% 52%;
   }
 }
 

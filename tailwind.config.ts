@@ -73,8 +73,8 @@ export default {
           ring: 'hsl(var(--sidebar-ring))',
         },
         // Custom colors from user proposal
-        'cosmic-purple': '#002942', // Was Deep Indigo, now Deep Dark Blue
-        'stardust-blue': '#002942', // Was Electric Purple, now Deep Dark Blue
+        'cosmic-purple': '#29abe2', // Was Deep Indigo/Deep Dark Blue, now New Light Blue
+        'stardust-blue': '#29abe2', // Was Electric Purple/Deep Dark Blue, now New Light Blue
         'nebula-dark': '#121212', // Very Dark Gray (Background)
         'nebula-gray': {
           DEFAULT: '#1f2937', // Nebula Gray Dark (Card)

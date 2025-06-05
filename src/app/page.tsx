@@ -357,13 +357,13 @@ export default function DreamTunerPage() {
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight font-headline">
             {currentMode === 'kids' ? (
               <>
-                <span style={{ color: 'rgb(0, 41, 66)' }}>Dream</span>
+                <span style={{ color: 'rgb(41, 171, 226)' }}>Dream</span>
                 <span style={{ color: 'rgb(41, 171, 226)' }}>Tuner</span>
                 <span style={{ color: 'hsl(var(--accent))' }}> Kids!</span>
               </>
             ) : (
               <>
-                <span style={{ color: 'rgb(0, 41, 66)' }}>Dream</span>
+                <span style={{ color: 'rgb(41, 171, 226)' }}>Dream</span>
                 <span style={{ color: 'rgb(41, 171, 226)' }}>Tuner</span>
               </>
             )}
@@ -376,8 +376,8 @@ export default function DreamTunerPage() {
       <main className="w-full max-w-3xl">
         <Tabs value={currentMode} onValueChange={(value) => handleModeChange(value as 'standard' | 'kids' | 'comingSoon')} className="w-full mb-8">
           <TabsList className="grid w-full grid-cols-3 bg-nebula-gray/80 border border-slate-700">
-            <TabsTrigger value="standard" className="data-[state=active]:bg-cosmic-purple data-[state=active]:text-primary-foreground">Standard Mode</TabsTrigger>
-            <TabsTrigger value="kids" className="data-[state=active]:bg-stardust-blue data-[state=active]:text-primary-foreground">Kids Mode</TabsTrigger>
+            <TabsTrigger value="standard" className="data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">Standard Mode</TabsTrigger>
+            <TabsTrigger value="kids" className="data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">Kids Mode</TabsTrigger>
             <TabsTrigger value="comingSoon" className="data-[state=active]:bg-slate-600 data-[state=active]:text-primary-foreground">Coming Soon!</TabsTrigger>
           </TabsList>
 
@@ -408,7 +408,7 @@ export default function DreamTunerPage() {
           <TabsContent value="comingSoon" className="mt-6">
             <Card className="bg-nebula-gray shadow-xl rounded-xl border-slate-700">
               <CardHeader className="text-center">
-                <CardTitle className="text-2xl font-semibold text-stardust-blue mb-2 font-headline">
+                <CardTitle className="text-2xl font-semibold text-accent mb-2 font-headline">
                   <ListMusic className="inline-block w-7 h-7 mr-2 -mt-1" />
                   Your DreamTuner Collections
                 </CardTitle>
@@ -427,7 +427,7 @@ export default function DreamTunerPage() {
                   <p className="text-xs text-slate-500">Stay tuned for updates!</p>
                 </div>
                  <div className="mt-4 p-4 bg-slate-800/30 rounded-md border border-slate-700">
-                    <h4 className="text-lg font-medium text-stardust-blue mb-3">Example: "Cosmic Lullaby"</h4>
+                    <h4 className="text-lg font-medium text-accent mb-3">Example: "Cosmic Lullaby"</h4>
                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
                         <Image
                             src="https://placehold.co/150x150.png"
@@ -454,7 +454,7 @@ export default function DreamTunerPage() {
         {currentMode !== 'comingSoon' && isLoadingMusic && !musicParams && (
           <div className="mt-10 text-center">
             <LoadingSpinner />
-            <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
+            <p className="mt-4 text-lg text-accent animate-pulse-subtle">
               {currentMode === 'standard' ? 'DreamTuning your input... (Art will follow)' : 'DreamTuning music for your creation... (AI art will follow!)'}
             </p>
           </div>
@@ -462,7 +462,7 @@ export default function DreamTunerPage() {
         {currentMode === 'standard' && isRenderingStandardModeAiArt && musicParams && (
              <div className="mt-10 text-center">
                 <LoadingSpinner />
-                <p className="mt-4 text-lg text-stardust-blue animate-pulse-subtle">
+                <p className="mt-4 text-lg text-accent animate-pulse-subtle">
                     AI Artist is painting your vision...
                 </p>
             </div>
@@ -478,7 +478,7 @@ export default function DreamTunerPage() {
         {currentMode !== 'comingSoon' && showWelcome && !isLoadingOverall && !error && !musicParams && !aiKidsArtUrl && !standardModeAiArtUrl && (
           <Card className="mt-10 text-center p-6 bg-nebula-gray/80 rounded-lg border-slate-700">
             <CardHeader>
-              <CardTitle className="text-2xl font-semibold text-stardust-blue mb-3 font-headline">Welcome to DreamTuner</CardTitle>
+              <CardTitle className="text-2xl font-semibold text-accent mb-3 font-headline">Welcome to DreamTuner</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-slate-300">
@@ -512,7 +512,7 @@ export default function DreamTunerPage() {
         {currentMode === 'standard' && standardModeAiArtUrl && !isRenderingStandardModeAiArt && (
           <Card className="mt-6 bg-nebula-gray/70 border-slate-600">
             <CardHeader>
-              <CardTitle className="text-center text-xl font-semibold text-stardust-blue">AI's Artistic Rendition</CardTitle>
+              <CardTitle className="text-center text-xl font-semibold text-accent">AI's Artistic Rendition</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-4">
               <Image
@@ -525,7 +525,7 @@ export default function DreamTunerPage() {
                 unoptimized
               />
                <div className="flex space-x-2">
-                <Button onClick={handleDownloadStandardArt} variant="outline" className="border-stardust-blue text-stardust-blue hover:bg-stardust-blue/10">
+                <Button onClick={handleDownloadStandardArt} variant="outline" className="border-accent text-accent hover:bg-accent/10">
                     <Download className="w-4 h-4 mr-2" />
                     Download Art
                 </Button>
