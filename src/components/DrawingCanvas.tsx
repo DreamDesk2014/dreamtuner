@@ -474,7 +474,14 @@ export const DrawingCanvas = forwardRef<
                 if (isDrawing) stopDrawing(); 
                 setIsErasing(false);
                 setCurrentColor(color.value);
-                // setCurrentLineWidth(BRUSH_SIZES.Small); // Keep current brush size
+                if (isKidsMode) {
+                  playToneForColor(color.value);
+                  const noteDetails = COLOR_TO_NOTE_MAP[color.value];
+                  if (noteDetails && (color.value !== lastPlayedColorForSound || recordedNotesSequence.length === 0) ) {
+                     setRecordedNotesSequence(prev => [...prev, noteDetails.name]);
+                     setLastPlayedColorForSound(color.value);
+                  }
+                }
               }}
               className={cn(
                 "w-8 h-10 rounded-md border-2 flex flex-col justify-center items-center p-1",
