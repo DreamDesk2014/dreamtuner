@@ -2,7 +2,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Tone from 'tone';
-import { Midi as MidiFileParser } from '@tonejs/midi';
+import { Midi as MidiFileParser } from '@tonejs/midi'; // Use specialized MIDI parser
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
@@ -12,7 +12,7 @@ import {
   MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon,
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
   LibraryIcon, PlayIcon, PauseIcon, StopIcon
-} from './icons/HeroIcons'; // Corrected path
+} from './icons/HeroIcons';
 import { Share2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -154,9 +154,8 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         const newParts: Tone.Part[] = [];
         
         const drumEvents: { kick: any[], snare: any[], hiHat: any[] } = { kick: [], snare: [], hiHat: [] };
-        const lastDrumEventTimes: { kick: number, snare: number, hiHat: number } = { kick: -1, snare: -1, hiHat: -1 };
-        const epsilon = 0.0001; 
-
+        const lastDrumEventTimes: { kick: number, snare: number, hiHat: number } = { kick: -Infinity, snare: -Infinity, hiHat: -Infinity };
+        const epsilon = 0.00001; // Small offset to ensure strictly increasing times
 
         parsedMidi.tracks.forEach((track, trackIndex) => {
           if (track.channel === 9) { // Drum track
@@ -203,7 +202,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
               );
               if (validNotes.length > 0) {
                 const part = new Tone.Part(((time, value) => {
-                  if (value.name) { // Ensure value.name is defined
+                  if (value.name) { 
                     synth!.triggerAttackRelease(value.name, value.duration, time, value.velocity);
                   } else {
                     console.warn("Skipping pitched note with undefined name:", value);
@@ -215,24 +214,24 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
           }
         });
 
-        // Create and add drum parts from collected events
+        // Create and add drum parts from collected and time-adjusted events
         if (drumEvents.kick.length > 0 && synthsRef.current.kick) {
             const kickPart = new Tone.Part(((time, value) => {
                 if (value.pitch && synthsRef.current.kick) synthsRef.current.kick.triggerAttackRelease(value.pitch as string, value.duration, time, value.velocity);
-            }) as any, drumEvents.kick.sort((a,b) => a.time - b.time)); 
+            }) as any, drumEvents.kick); 
             newParts.push(kickPart);
         }
         if (drumEvents.snare.length > 0 && synthsRef.current.snare) {
             const snarePart = new Tone.Part(((time, value) => {
                  if (synthsRef.current.snare) synthsRef.current.snare.triggerAttackRelease(value.duration, time, value.velocity);
-            }) as any, drumEvents.snare.sort((a,b) => a.time - b.time));
+            }) as any, drumEvents.snare);
             newParts.push(snarePart);
         }
         if (drumEvents.hiHat.length > 0 && synthsRef.current.hiHat) {
             const hiHatPart = new Tone.Part(((time, value) => {
                 if (typeof value.pitch === 'number' && synthsRef.current.hiHat) synthsRef.current.hiHat.frequency.setValueAtTime(value.pitch, time);
                 if (synthsRef.current.hiHat) synthsRef.current.hiHat.triggerAttackRelease(value.duration, time, value.velocity);
-            }) as any, drumEvents.hiHat.sort((a,b) => a.time - b.time));
+            }) as any, drumEvents.hiHat);
             newParts.push(hiHatPart);
         }
         
