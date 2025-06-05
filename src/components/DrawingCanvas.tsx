@@ -463,7 +463,7 @@ export const DrawingCanvas = forwardRef<
           }}
         />
       </div>
-      <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-2 items-center">
+      <div className="flex flex-col sm:flex-row flex-wrap space-y-3 sm:space-y-0 sm:space-x-2 items-center justify-center">
         <div className="flex space-x-1 items-center">
           {colorsForDisplay.map(color => (
             <Button

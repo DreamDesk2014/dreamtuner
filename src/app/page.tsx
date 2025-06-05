@@ -428,16 +428,16 @@ export default function DreamTunerPage() {
                 </div>
                  <div className="mt-4 p-4 bg-slate-800/30 rounded-md border border-slate-700">
                     <h4 className="text-lg font-medium text-accent mb-3">Example: "Cosmic Lullaby"</h4>
-                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4">
                         <Image
                             src="https://placehold.co/150x150.png"
                             alt="Placeholder Album Art"
                             data-ai-hint="space nebula stars"
                             width={150}
                             height={150}
-                            className="rounded-md border border-slate-600 shadow-md object-cover"
+                            className="rounded-md border border-slate-600 shadow-md object-cover mx-auto sm:mx-0"
                         />
-                        <div className="text-left space-y-1 text-sm">
+                        <div className="space-y-1 text-sm flex-grow">
                             <p><strong className="text-slate-300">Title:</strong> Cosmic Lullaby</p>
                             <p><strong className="text-slate-300">Genre:</strong> Ambient</p>
                             <p><strong className="text-slate-300">Date Created:</strong> Sometime in the Future!</p>
