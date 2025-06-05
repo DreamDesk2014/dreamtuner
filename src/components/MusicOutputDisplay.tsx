@@ -2,7 +2,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Tone from 'tone';
-import { Midi } from 'tone'; // Import Midi class directly
+// import { Midi } from 'tone'; // Reverted this specific import
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
@@ -151,8 +151,12 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
           throw new Error("Failed to generate valid MIDI data for Tone.js. URI was: " + (midiDataUri ? midiDataUri.substring(0,100) + "..." : "undefined/null"));
         }
+        if (!Tone.Midi || typeof Tone.Midi.fromUrl !== 'function') {
+          console.error("Tone.Midi or Tone.Midi.fromUrl is not available.", Tone.Midi);
+          throw new Error("Tone.Midi.fromUrl is not a function. Check Tone.js import or version.");
+        }
 
-        const parsedMidi = await Midi.fromUrl(midiDataUri); // Use imported Midi
+        const parsedMidi = await Tone.Midi.fromUrl(midiDataUri); // Use Tone.Midi.fromUrl
         setCurrentMidiDuration(parsedMidi.duration);
         Tone.Transport.bpm.value = params.tempoBpm;
 
@@ -176,11 +180,11 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                 }
 
                 if (drumSynth) {
-                    const part = new Tone.Part((time, value) => {
+                    const part = new Tone.Part(((time, value) => {
                         if (drumSynth instanceof Tone.MembraneSynth && value.pitch) drumSynth.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
                         else if (drumSynth instanceof Tone.NoiseSynth) drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
                         else if (drumSynth instanceof Tone.MetalSynth) drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
-                    }, [{ time: note.time, duration: note.duration, velocity: note.velocity, pitch: pitchToPlay }]).start(0);
+                    }) as any, [{ time: note.time, duration: note.duration, velocity: note.velocity, pitch: pitchToPlay }]).start(0); // Cast to any to avoid type error
                     newParts.push(part);
                 }
             });
@@ -190,9 +194,9 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
             else if (synthsRef.current.chords) synth = synthsRef.current.chords;
             
             if (synth) {
-              const part = new Tone.Part((time, value) => {
+              const part = new Tone.Part(((time, value) => {
                 (synth as Tone.PolySynth).triggerAttackRelease(value.name, value.duration, time, value.velocity);
-              }, track.notes.map(n => ({ time: n.time, name: n.name, duration: n.duration, velocity: n.velocity }))).start(0);
+              }) as any, track.notes.map(n => ({ time: n.time, name: n.name, duration: n.duration, velocity: n.velocity }))).start(0);  // Cast to any to avoid type error
               newParts.push(part);
             }
           }
@@ -722,3 +726,5 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     </div>
   );
 };
+
+
