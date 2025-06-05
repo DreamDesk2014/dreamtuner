@@ -2,7 +2,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Tone from 'tone';
-// import { Midi } from 'tone'; // Reverted this specific import
+import { Midi as MidiFileParser } from '@tonejs/midi'; // Import from @tonejs/midi
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
@@ -130,7 +130,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   // Load and schedule MIDI when params change
   useEffect(() => {
     const loadAndScheduleMidi = async () => {
-      if (!params || !Object.keys(synthsRef.current).length || !synthsRef.current.melody) return; // Check if synths are initialized
+      if (!params || !Object.keys(synthsRef.current).length || !synthsRef.current.melody) return; 
 
       setIsLoadingTone(true);
       setToneError(null);
@@ -147,16 +147,11 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
       try {
         const midiDataUri = generateMidiFile(params);
-        console.log("Generated MIDI Data URI for playback:", midiDataUri);
         if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
           throw new Error("Failed to generate valid MIDI data for Tone.js. URI was: " + (midiDataUri ? midiDataUri.substring(0,100) + "..." : "undefined/null"));
         }
-        if (!Tone.Midi || typeof Tone.Midi.fromUrl !== 'function') {
-          console.error("Tone.Midi or Tone.Midi.fromUrl is not available.", Tone.Midi);
-          throw new Error("Tone.Midi.fromUrl is not a function. Check Tone.js import or version.");
-        }
-
-        const parsedMidi = await Tone.Midi.fromUrl(midiDataUri); // Use Tone.Midi.fromUrl
+        
+        const parsedMidi = await MidiFileParser.fromUrl(midiDataUri); // Use MidiFileParser from @tonejs/midi
         setCurrentMidiDuration(parsedMidi.duration);
         Tone.Transport.bpm.value = params.tempoBpm;
 
@@ -184,7 +179,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                         if (drumSynth instanceof Tone.MembraneSynth && value.pitch) drumSynth.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
                         else if (drumSynth instanceof Tone.NoiseSynth) drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
                         else if (drumSynth instanceof Tone.MetalSynth) drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
-                    }) as any, [{ time: note.time, duration: note.duration, velocity: note.velocity, pitch: pitchToPlay }]).start(0); // Cast to any to avoid type error
+                    }) as any, [{ time: note.time, duration: note.duration, velocity: note.velocity, pitch: pitchToPlay }]).start(0);
                     newParts.push(part);
                 }
             });
@@ -196,7 +191,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
             if (synth) {
               const part = new Tone.Part(((time, value) => {
                 (synth as Tone.PolySynth).triggerAttackRelease(value.name, value.duration, time, value.velocity);
-              }) as any, track.notes.map(n => ({ time: n.time, name: n.name, duration: n.duration, velocity: n.velocity }))).start(0);  // Cast to any to avoid type error
+              }) as any, track.notes.map(n => ({ time: n.time, name: n.name, duration: n.duration, velocity: n.velocity }))).start(0);
               newParts.push(part);
             }
           }
@@ -648,7 +643,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   if (toneError) {
     statusMessage = `Player Error: ${toneError}`;
   } else if (isLoadingTone) {
-    statusMessage = "Preparing your tune with Tone.js...";
+    statusMessage = "Preparing your tune...";
   } else if (!isPlaying && currentMidiDuration > 0 && playbackProgress < 1) {
     statusMessage = "Ready to play.";
   } else if (!isPlaying && currentMidiDuration > 0 && playbackProgress >= 100) {
@@ -683,7 +678,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
 
       <Card className="mt-8 p-4 bg-nebula-gray/80 border-slate-700">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-semibold text-stardust-blue text-center">Listen to Your Tune (Tone.js)</CardTitle>
+          <CardTitle className="text-lg font-semibold text-stardust-blue text-center">Listen to Your Tune</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center space-x-3">
@@ -726,5 +721,3 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     </div>
   );
 };
-
-
