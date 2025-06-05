@@ -349,10 +349,15 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   };
 
   const renderOriginalInputInfo = (input: AppInput) => {
-    let icon: React.ReactNode; let title: string; let contentDisplay: React.ReactNode;
+    let icon: React.ReactNode;
+    let title: string;
+    let contentDisplay: React.ReactNode;
+    let footerContent: React.ReactNode = null;
+
     switch(input.type) {
       case 'text':
-        icon = <DocumentTextIcon className="w-6 h-6" />; title = "Original Text & Generated Core";
+        icon = <DocumentTextIcon className="w-6 h-6" />;
+        title = "Original Text & Generated Core";
         
         const originalTextContent = input.content || "";
         const lines = originalTextContent.split('\n');
@@ -361,10 +366,8 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         const notePatternRegex = /^\s*([CDEFGABcdefgab][#b♭♯]?[0-9]?)(\s*[-–—]\s*([CDEFGABcdefgab][#b♭♯]?[0-9]?))*\s*$/;
         const isClearlyNoteLine = (line: string): boolean => {
           const trimmedLine = line.trim();
-          if (!trimmedLine) return false; // Empty lines are not note lines
-          // Test for simple note sequence: C, C#, D-E, etc.
+          if (!trimmedLine) return false;
           if (/^([CDEFGAB][#b♭♯]?[0-9]?(\s*[-–—]\s*)?)+$/.test(trimmedLine)) {
-              // Further check: if it has more non-note "words" than note-like "words", it's probably not notes
               const words = trimmedLine.split(/[\s-]+/).filter(w => w.length > 0);
               let noteLikeWords = 0;
               let nonNoteLikeWords = 0;
@@ -379,7 +382,6 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
           }
           return false;
         };
-
 
         for (let i = 0; i < lines.length; i++) {
           const currentLine = lines[i]; 
@@ -407,8 +409,8 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         
         contentDisplay = (
           <>
-            <ScrollArea className="h-auto max-h-80 mb-3 pr-3"> 
-              <div className="space-y-1"> {/* Wrapper div for ScrollArea content */}
+            <ScrollArea className="h-auto max-h-80 mb-3 pr-3">
+              <div className="space-y-1">
                 {renderedElements.map((el, index) => <React.Fragment key={index}>{el}</React.Fragment>)}
               </div>
             </ScrollArea>
@@ -423,7 +425,25 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
             </div>
           </>
         );
-        break;
+        // For text input, the accordion will wrap the whole card.
+        return (
+          <Card className="mt-8 bg-nebula-gray/80 border-slate-700">
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="original-input-text" className="border-b-0">
+                <AccordionTrigger className="p-6 hover:no-underline">
+                  <div className="flex items-center text-stardust-blue">
+                    {icon}
+                    <CardTitle className="ml-2 text-lg font-semibold">{title}</CardTitle>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-6 pb-6">
+                  {contentDisplay}
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </Card>
+        );
+
       case 'image':
         icon = <PhotographIcon className="w-6 h-6" />; 
         title = input.mode === 'kids' ? "Child's Original Concept" : "Original Input Image";
@@ -458,6 +478,37 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         break;
       default: return null;
     }
+
+    if (params.selectedGenre && (input.type !== 'text' || input.mode === 'kids')) {
+      const genreDisplay = (
+        <div className="flex items-center text-stardust-blue">
+          <LibraryIcon className="w-5 h-5" /> 
+          <h5 className="ml-2 text-sm font-semibold">Selected Genre:</h5>
+          <p className="text-muted-foreground text-sm ml-2">{params.selectedGenre}</p>
+        </div>
+      );
+      if (input.mode === 'kids') {
+        footerContent = (
+           <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="selected-genre-kids" className="border-b-0">
+              <AccordionTrigger className="py-1 hover:no-underline text-sm">
+                <div className="flex items-center text-stardust-blue">
+                  <LibraryIcon className="w-5 h-5" /> 
+                  <h5 className="ml-2 text-sm font-semibold">Selected Genre (Tap to view)</h5>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pt-1 pb-0 pl-7">
+                <p className="text-muted-foreground text-sm">{params.selectedGenre}</p>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        );
+      } else {
+         footerContent = genreDisplay;
+      }
+    }
+
+
     return (
       <Card className="mt-8 bg-nebula-gray/80 border-slate-700">
         <CardHeader>
@@ -466,29 +517,9 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
           </div>
         </CardHeader>
         <CardContent>{contentDisplay}</CardContent>
-        {params.selectedGenre && (input.type !== 'text' || input.mode === 'kids') && (
+        {footerContent && (
           <CardFooter className="border-t border-slate-700 pt-4 flex-col items-start">
-            {input.mode === 'kids' ? (
-              <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="selected-genre" className="border-b-0">
-                  <AccordionTrigger className="py-1 hover:no-underline text-sm">
-                    <div className="flex items-center text-stardust-blue">
-                      <LibraryIcon className="w-5 h-5" /> 
-                      <h5 className="ml-2 text-sm font-semibold">Selected Genre (Tap to view)</h5>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-1 pb-0 pl-7">
-                    <p className="text-muted-foreground text-sm">{params.selectedGenre}</p>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            ) : (
-              <div className="flex items-center text-stardust-blue">
-                <LibraryIcon className="w-5 h-5" /> 
-                <h5 className="ml-2 text-sm font-semibold">Selected Genre:</h5>
-                <p className="text-muted-foreground text-sm ml-2">{params.selectedGenre}</p>
-              </div>
-            )}
+             {footerContent}
           </CardFooter>
         )}
       </Card>
@@ -593,4 +624,4 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   );
 };
 
-    
+  
