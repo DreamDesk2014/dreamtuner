@@ -7,7 +7,7 @@ import { ErrorMessage } from '@/components/ErrorMessage';
 import { generateMusicParametersAction } from '@/app/actions/generateMusicParametersAction';
 import { regenerateMusicalIdeaAction } from '@/app/actions/regenerateMusicalIdeaAction';
 import { renderKidsDrawingAction } from '@/app/actions/renderKidsDrawingAction';
-import { renderStandardInputArtAction } from '@/app/actions/renderStandardInputArtAction'; // New action
+import { renderStandardInputArtAction } from '@/app/actions/renderStandardInputArtAction';
 import type { MusicParameters, AppInput, RenderKidsDrawingInput, RenderedDrawingResponse, RenderedStandardArtResponse } from '@/types';
 import { LogoIcon } from '@/components/icons/LogoIcon';
 import { Footer } from '@/components/Footer';
@@ -19,12 +19,22 @@ import { toast } from '@/hooks/use-toast';
 import { MUSIC_GENRES } from '@/lib/constants';
 import { NavigationBar } from '@/components/NavigationBar';
 import { Badge } from "@/components/ui/badge";
-import Image from 'next/image'; // For displaying AI art
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Download, Share2, ListMusic, Album } from 'lucide-react';
 import { dataURLtoFile } from '@/lib/utils';
 import { generateMidiFile } from '@/lib/midiService';
 
+const LOCAL_STORAGE_KEY = 'dreamTunerLastSession';
+
+interface StoredSessionData {
+  musicParams: MusicParameters | null;
+  aiKidsArtUrl: string | null;
+  standardModeAiArtUrl: string | null;
+  currentMode: 'standard' | 'kids' | 'comingSoon';
+  selectedGenre: string;
+  timestamp: number;
+}
 
 export default function DreamTunerPage() {
   const [musicParams, setMusicParams] = useState<MusicParameters | null>(null);
@@ -35,13 +45,11 @@ export default function DreamTunerPage() {
   const [currentMode, setCurrentMode] = useState<'standard' | 'kids' | 'comingSoon'>('standard');
   const [isClientMounted, setIsClientMounted] = useState(false);
 
-  // Kids Mode Art State
   const [aiKidsArtUrl, setAiKidsArtUrl] = useState<string | null>(null);
   const [isRenderingAiKidsArt, setIsRenderingAiKidsArt] = useState<boolean>(false);
   const [aiKidsArtError, setAiKidsArtError] = useState<string | null>(null);
   const [currentKidsMusicParams, setCurrentKidsMusicParams] = useState<MusicParameters | null>(null);
 
-  // Standard Mode Art State
   const [standardModeAiArtUrl, setStandardModeAiArtUrl] = useState<string | null>(null);
   const [isRenderingStandardModeAiArt, setIsRenderingStandardModeAiArt] = useState<boolean>(false);
   const [standardModeAiArtError, setStandardModeAiArtError] = useState<string | null>(null);
@@ -50,10 +58,52 @@ export default function DreamTunerPage() {
 
   const [selectedGenre, setSelectedGenre] = useState<string>(MUSIC_GENRES[0] || '');
 
-
   useEffect(() => {
     setIsClientMounted(true);
+    try {
+      const storedSession = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (storedSession) {
+        const sessionData = JSON.parse(storedSession) as StoredSessionData;
+        // Optional: Could add a check for timestamp if we want sessions to expire
+        setMusicParams(sessionData.musicParams);
+        setAiKidsArtUrl(sessionData.aiKidsArtUrl);
+        setStandardModeAiArtUrl(sessionData.standardModeAiArtUrl);
+        setCurrentMode(sessionData.currentMode);
+        setSelectedGenre(sessionData.selectedGenre || MUSIC_GENRES[0] || '');
+        if (sessionData.musicParams || sessionData.aiKidsArtUrl || sessionData.standardModeAiArtUrl) {
+          setShowWelcome(false);
+        }
+        if (sessionData.currentMode === 'kids' && sessionData.musicParams) {
+            setCurrentKidsMusicParams(sessionData.musicParams);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load session from localStorage:", e);
+      localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear corrupted data
+    }
   }, []);
+
+  useEffect(() => {
+    if (isClientMounted && (musicParams || aiKidsArtUrl || standardModeAiArtUrl)) {
+      try {
+        const sessionData: StoredSessionData = {
+          musicParams,
+          aiKidsArtUrl,
+          standardModeAiArtUrl,
+          currentMode,
+          selectedGenre,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionData));
+      } catch (e) {
+        console.error("Failed to save session to localStorage:", e);
+      }
+    } else if (isClientMounted && !musicParams && !aiKidsArtUrl && !standardModeAiArtUrl && currentMode !== 'comingSoon') {
+        // If all results are cleared and not in coming soon, clear storage
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+    }
+  }, [isClientMounted, musicParams, aiKidsArtUrl, standardModeAiArtUrl, currentMode, selectedGenre]);
+
 
   const resetAllArtStates = () => {
     setAiKidsArtUrl(null);
@@ -69,11 +119,14 @@ export default function DreamTunerPage() {
     setMusicParams(null);
     setError(null);
     resetAllArtStates();
-    setShowWelcome(newMode !== 'comingSoon'); // Don't show welcome for "Coming Soon"
+    setShowWelcome(newMode !== 'comingSoon');
     if (newMode !== 'comingSoon') {
       setSelectedGenre(MUSIC_GENRES[0] || '');
     }
     setCurrentKidsMusicParams(null);
+    if (isClientMounted && newMode === 'comingSoon') { // Clear storage when switching to 'comingSoon'
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+    }
   };
 
   const handleStandardModeSubmit = useCallback(async (input: AppInput) => {
@@ -255,6 +308,8 @@ export default function DreamTunerPage() {
                 setIsRenderingStandardModeAiArt(false);
               });
           }
+          // If in Kids mode, the art is tied to the original drawing/voice hint, not just the idea text, so we don't re-render kids art here.
+          // The music params, including the new idea, will be saved by the useEffect for localStorage.
           return updatedParams;
         });
       }
@@ -392,7 +447,7 @@ export default function DreamTunerPage() {
 
           <TabsContent value="kids" className="mt-6">
             <KidsModeTab
-              key={`kids-mode-tab-${currentMode}`}
+              key={`kids-mode-tab-${currentMode}`} // Ensures re-mount on mode switch for fresh state if needed
               onTuneCreation={handleKidsModeTuneCreation}
               isLoadingMusic={isLoadingMusic}
               isRenderingArt={isRenderingAiKidsArt}
