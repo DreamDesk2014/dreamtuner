@@ -646,11 +646,11 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      <Card className="p-6 bg-gradient-to-r from-cosmic-purple to-stardust-blue shadow-xl text-center border-none">
+      <Card className="p-6 bg-primary shadow-xl text-center border-none">
         <CardTitle className="text-3xl font-bold text-primary-foreground mb-2">Musical Essence Unveiled</CardTitle>
         <div className="flex items-center justify-center space-x-2">
-          <CardDescription className="text-lg text-purple-100 italic">"{params.generatedIdea}"</CardDescription>
-          <Button variant="ghost" size="icon" onClick={onRegenerateIdea} disabled={isRegeneratingIdea} className="text-purple-200 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed focus:ring-purple-300 rounded-full" title="Regenerate Idea">
+          <CardDescription className="text-lg text-primary-foreground/80 italic">"{params.generatedIdea}"</CardDescription>
+          <Button variant="ghost" size="icon" onClick={onRegenerateIdea} disabled={isRegeneratingIdea} className="text-primary-foreground/70 hover:text-primary-foreground disabled:opacity-50 disabled:cursor-not-allowed focus:ring-primary rounded-full" title="Regenerate Idea">
             {isRegeneratingIdea ? <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" fill="currentColor"></path></svg> : <RefreshIcon className="w-5 h-5" />}
           </Button>
         </div>
@@ -675,7 +675,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center space-x-3">
-            <Button onClick={handlePlayPause} disabled={playButtonDisabled} size="icon" className="p-3 rounded-full bg-cosmic-purple text-primary-foreground hover:bg-purple-700 disabled:bg-slate-600">
+            <Button onClick={handlePlayPause} disabled={playButtonDisabled} size="icon" className="p-3 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-slate-600">
               {showLoadingSpinnerInPlayButton ? <svg className="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" fill="currentColor"></path></svg> : isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
             </Button>
             <Button onClick={handleStop} disabled={!player || (!isPlaying && !isPlaybackReady && !isPlayerLoadingSounds && playbackProgress === 0)} size="icon" className="p-3 rounded-full bg-slate-600 text-primary-foreground hover:bg-slate-500 disabled:bg-slate-700">

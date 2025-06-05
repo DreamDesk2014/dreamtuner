@@ -14,35 +14,35 @@ body {
     --card-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --popover: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
     --popover-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --primary: 271 100% 25%; /* Deep Indigo #4B0082 */
+    --primary: 203 100% 13%; /* Deep Dark Blue #002942 */
     --primary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --secondary: 215 20% 26%; /* Nebula Gray Light #374151 */
     --secondary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --muted: 215 20% 26%; /* Nebula Gray Light #374151 */
     --muted-foreground: 220 10% 70%; /* Lighter Gray #aab0b8 */
-    --accent: 276 78% 52%; /* Electric Purple #8A2BE2 */
+    --accent: 203 100% 13%; /* Deep Dark Blue #002942 */
     --accent-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --destructive: 0 70% 50%; /* A vibrant red for dark theme */
     --destructive-foreground: 0 0% 98%;
     --border: 215 20% 26%; /* Nebula Gray Light #374151 */
     --input: 215 20% 26%; /* Nebula Gray Light #374151 */
-    --ring: 276 78% 52%; /* Electric Purple #8A2BE2 */
-    --chart-1: 276 78% 62%; /* Brighter Electric Purple */
-    --chart-2: 271 100% 45%; /* Brighter Deep Indigo */
+    --ring: 203 100% 13%; /* Deep Dark Blue #002942 */
+    --chart-1: 203 100% 23%; /* Lighter version of new base #004066 */
+    --chart-2: 203 100% 33%; /* Even lighter version of new base #00578A */
     --chart-3: 220 25% 60%; /* A lighter blue/gray */
     --chart-4: 300 50% 60%; /* A magenta/pinkish hue */
-    --chart-5: 250 60% 65%; /* A lighter purple */
+    --chart-5: 203 80% 33%; /* Lighter, slightly less saturated new base #1D6A9C */
     --radius: 0.5rem;
 
     /* Sidebar variables to match the new theme */
     --sidebar-background: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
     --sidebar-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --sidebar-primary: 276 78% 52%; /* Electric Purple #8A2BE2 */
+    --sidebar-primary: 203 100% 13%; /* Deep Dark Blue #002942 */
     --sidebar-primary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --sidebar-accent: 271 100% 25%; /* Deep Indigo #4B0082 */
+    --sidebar-accent: 203 100% 13%; /* Deep Dark Blue #002942 */
     --sidebar-accent-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --sidebar-border: 215 20% 26%; /* Nebula Gray Light #374151 */
-    --sidebar-ring: 276 78% 52%; /* Electric Purple #8A2BE2 */
+    --sidebar-ring: 203 100% 13%; /* Deep Dark Blue #002942 */
   }
 
   .dark {
@@ -53,33 +53,33 @@ body {
     --card-foreground: 220 13% 95%;
     --popover: 215 28% 17%;
     --popover-foreground: 220 13% 95%;
-    --primary: 271 100% 25%;
+    --primary: 203 100% 13%;
     --primary-foreground: 220 13% 95%;
     --secondary: 215 20% 26%;
     --secondary-foreground: 220 13% 95%;
     --muted: 215 20% 26%;
     --muted-foreground: 220 10% 70%;
-    --accent: 276 78% 52%;
+    --accent: 203 100% 13%;
     --accent-foreground: 220 13% 95%;
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 98%;
     --border: 215 20% 26%;
     --input: 215 20% 26%;
-    --ring: 276 78% 52%;
-    --chart-1: 276 78% 62%;
-    --chart-2: 271 100% 45%;
+    --ring: 203 100% 13%;
+    --chart-1: 203 100% 23%;
+    --chart-2: 203 100% 33%;
     --chart-3: 220 25% 60%;
     --chart-4: 300 50% 60%;
-    --chart-5: 250 60% 65%;
+    --chart-5: 203 80% 33%;
 
     --sidebar-background: 215 28% 17%;
     --sidebar-foreground: 220 13% 95%;
-    --sidebar-primary: 276 78% 52%;
+    --sidebar-primary: 203 100% 13%;
     --sidebar-primary-foreground: 220 13% 95%;
-    --sidebar-accent: 271 100% 25%;
+    --sidebar-accent: 203 100% 13%;
     --sidebar-accent-foreground: 220 13% 95%;
     --sidebar-border: 215 20% 26%;
-    --sidebar-ring: 276 78% 52%;
+    --sidebar-ring: 203 100% 13%;
   }
 }
 

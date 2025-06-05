@@ -434,7 +434,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               variant={currentStandardInputType === opt.type ? "default" : "ghost"}
               onClick={() => handleInputTypeChange(opt.type)}
               className={`flex-1 p-3 text-sm font-medium flex items-center justify-center transition-all duration-150 min-w-[100px] 
-                ${currentStandardInputType === opt.type ? 'bg-cosmic-purple text-primary-foreground shadow-md' : 'text-slate-300 hover:bg-nebula-gray'}`}
+                ${currentStandardInputType === opt.type ? 'bg-primary text-primary-foreground shadow-md' : 'text-slate-300 hover:bg-nebula-gray'}`}
               aria-pressed={currentStandardInputType === opt.type}
               disabled={isLoading || isProcessingCamera}
             >
@@ -471,7 +471,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
             onChange={(e) => setText(e.target.value)}
             placeholder={isListening ? "Listening..." : "A lonely star in a cold, dark night..."}
             rows={6}
-            className="w-full p-4 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
+            className="w-full p-4 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
             disabled={isLoading || isListening || isProcessingCamera}
           />
           {speechError && <p className="mt-1 text-xs text-red-400">{speechError}</p>}
@@ -552,7 +552,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                     type="file"
                     accept={currentStandardInputType === 'image' ? 'image/png, image/jpeg, image/gif, image/webp' : 'video/*, audio/*'}
                     onChange={handleFileChange}
-                    className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-cosmic-purple file:text-primary-foreground hover:file:bg-purple-700 disabled:opacity-50"
+                    className="block w-full text-sm text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90 disabled:opacity-50"
                     disabled={isLoading || isProcessingCamera}
                 />
                 <UploadCloudIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
@@ -599,7 +599,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                 onChange={(e) => setAdditionalContext(e.target.value)}
                 placeholder={`Describe the ${currentStandardInputType === 'image' ? 'image' : 'video/audio concept'} or highlight specific elements...`}
                 rows={3}
-                className="w-full p-3 mt-1 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
+                className="w-full p-3 mt-1 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
                 disabled={isLoading || isProcessingCamera}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -661,7 +661,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               step={1}
               value={[positivitySlider ?? 50]}
               onValueChange={(value) => setPositivitySlider(value[0])}
-              className="w-full [&>span>span]:bg-cosmic-purple [&>span]:bg-slate-600"
+              className="w-full [&>span>span]:bg-primary [&>span]:bg-slate-600"
               disabled={isLoading || isProcessingCamera}
             />
              <div className="flex justify-between text-xs text-muted-foreground mt-1 px-1">
@@ -680,12 +680,12 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           3. Select Music Genre (Optional):
         </Label>
         <Select value={selectedGenre} onValueChange={onGenreChange} disabled={isLoading || isProcessingCamera}>
-          <SelectTrigger id={genreSelectId + "-standard"} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 text-galaxy-white">
+          <SelectTrigger id={genreSelectId + "-standard"} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-150 text-galaxy-white">
             <SelectValue placeholder="Select a genre" />
           </SelectTrigger>
           <SelectContent className="bg-nebula-gray border-slate-500 text-galaxy-white">
             {MUSIC_GENRES.map(genre => (
-              <SelectItem key={genre} value={genre} className="hover:bg-cosmic-purple/50 focus:bg-cosmic-purple/60">
+              <SelectItem key={genre} value={genre} className="hover:bg-primary/50 focus:bg-primary/60">
                 {genre}
               </SelectItem>
             ))}
@@ -696,7 +696,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       <Button
         type="submit"
         disabled={isSubmitDisabled}
-        className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-gradient-to-r from-cosmic-purple to-stardust-blue hover:from-purple-700 hover:to-sky-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-nebula-dark focus:ring-stardust-blue disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
+        className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-nebula-dark focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
         size="lg"
       >
         {isLoading ? (
