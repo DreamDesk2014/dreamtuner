@@ -12,14 +12,14 @@ import {
   MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon,
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
   LibraryIcon, PlayIcon, PauseIcon, StopIcon
-} from './icons/HeroIcons';
+} from './icons/HeroIcons'; // Corrected path
 import { Share2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
-import { SparklesIcon as HeroSparklesIcon } from './icons/SparklesIcon';
+import { SparklesIcon as HeroSparklesIcon } from '../icons/SparklesIcon';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from '@/components/ui/separator';
 
@@ -97,7 +97,6 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Initialize synths only once
     synthsRef.current = {
       melody: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsawtooth' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.5 } }).toDestination(),
       bass: new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'fatsine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.5, release: 0.5 }, detune: -1200 }).toDestination(),
@@ -117,7 +116,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
             (synthOrParts as any).dispose();
         }
       });
-      synthsRef.current = { parts: [] }; // Reset for next mount
+      synthsRef.current = { parts: [] };
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
@@ -126,8 +125,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
   useEffect(() => {
     const loadAndScheduleMidi = async () => {
-      if (!params || !synthsRef.current.melody) { 
-        console.warn("Params or synths not ready for MIDI loading.");
+      if (!params || !synthsRef.current.melody || !synthsRef.current.kick || !synthsRef.current.snare || !synthsRef.current.hiHat || !synthsRef.current.bass || !synthsRef.current.chords) { 
         return;
       }
 
@@ -146,12 +144,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       try {
         const midiDataUri = generateMidiFile(params);
         if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
-          throw new Error("Failed to generate valid MIDI data. URI was: " + (midiDataUri ? midiDataUri.substring(0,100) + "..." : "undefined/null"));
-        }
-        
-        if (!MidiFileParser || typeof MidiFileParser.fromUrl !== 'function') {
-          console.error("MidiFileParser.fromUrl is not available.", MidiFileParser);
-          throw new Error("@tonejs/midi or MidiFileParser.fromUrl is not correctly imported or available.");
+          throw new Error("Failed to generate valid MIDI data.");
         }
         
         const parsedMidi = await MidiFileParser.fromUrl(midiDataUri);
@@ -159,19 +152,28 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         Tone.Transport.bpm.value = params.tempoBpm;
 
         const newParts: Tone.Part[] = [];
+        
         const drumEvents: { kick: any[], snare: any[], hiHat: any[] } = { kick: [], snare: [], hiHat: [] };
-        const lastDrumEventTimes = { kick: -1, snare: -1, hiHat: -1 };
-        const epsilon = 0.0001; // Small offset to ensure strictly increasing times
+        const lastDrumEventTimes: { kick: number, snare: number, hiHat: number } = { kick: -1, snare: -1, hiHat: -1 };
+        const epsilon = 0.0001; 
+
 
         parsedMidi.tracks.forEach((track, trackIndex) => {
           if (track.channel === 9) { // Drum track
             track.notes.forEach(note => {
+                if (typeof note.time !== 'number' || typeof note.duration !== 'number' || typeof note.velocity !== 'number') {
+                    console.warn("Skipping drum note with invalid time/duration/velocity:", note);
+                    return;
+                }
                 let drumType: 'kick' | 'snare' | 'hiHat' | null = null;
                 let pitchToPlay: string | number | undefined = undefined;
-
+                
                 if (note.midi === 35 || note.midi === 36) { drumType = 'kick'; pitchToPlay = "C1"; }
                 else if (note.midi === 38 || note.midi === 40) { drumType = 'snare'; }
-                else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { drumType = 'hiHat'; pitchToPlay = note.midi === 46 ? 400 : 250; }
+                else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { 
+                    drumType = 'hiHat'; 
+                    pitchToPlay = note.midi === 46 ? 400 : 250; // Open vs Closed hi-hat freq
+                }
 
                 if (drumType) {
                     let eventTime = note.time;
@@ -193,10 +195,22 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
             else if (synthsRef.current.chords) synth = synthsRef.current.chords; 
             
             if (synth) {
-              const part = new Tone.Part(((time, value) => {
-                synth!.triggerAttackRelease(value.name, value.duration, time, value.velocity);
-              }) as any, track.notes.map(n => ({ time: n.time, name: n.name, duration: n.duration, velocity: n.velocity })));
-              newParts.push(part);
+              const validNotes = track.notes.filter(n => 
+                typeof n.time === 'number' && 
+                typeof n.name === 'string' && 
+                typeof n.duration === 'number' && 
+                typeof n.velocity === 'number'
+              );
+              if (validNotes.length > 0) {
+                const part = new Tone.Part(((time, value) => {
+                  if (value.name) { // Ensure value.name is defined
+                    synth!.triggerAttackRelease(value.name, value.duration, time, value.velocity);
+                  } else {
+                    console.warn("Skipping pitched note with undefined name:", value);
+                  }
+                }) as any, validNotes.map(n => ({ time: n.time, name: n.name, duration: n.duration, velocity: n.velocity })));
+                newParts.push(part);
+              }
             }
           }
         });
@@ -204,22 +218,21 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         // Create and add drum parts from collected events
         if (drumEvents.kick.length > 0 && synthsRef.current.kick) {
             const kickPart = new Tone.Part(((time, value) => {
-                synthsRef.current.kick!.triggerAttackRelease(value.pitch || "C1", value.duration, time, value.velocity);
-            }) as any, drumEvents.kick);
+                if (value.pitch && synthsRef.current.kick) synthsRef.current.kick.triggerAttackRelease(value.pitch as string, value.duration, time, value.velocity);
+            }) as any, drumEvents.kick.sort((a,b) => a.time - b.time)); 
             newParts.push(kickPart);
         }
         if (drumEvents.snare.length > 0 && synthsRef.current.snare) {
             const snarePart = new Tone.Part(((time, value) => {
-                synthsRef.current.snare!.triggerAttackRelease(value.duration, time, value.velocity);
-            }) as any, drumEvents.snare);
+                 if (synthsRef.current.snare) synthsRef.current.snare.triggerAttackRelease(value.duration, time, value.velocity);
+            }) as any, drumEvents.snare.sort((a,b) => a.time - b.time));
             newParts.push(snarePart);
         }
         if (drumEvents.hiHat.length > 0 && synthsRef.current.hiHat) {
             const hiHatPart = new Tone.Part(((time, value) => {
-                 // MetalSynth uses frequency for pitch, not note names directly
-                synthsRef.current.hiHat!.frequency.setValueAtTime(value.pitch || 250, time);
-                synthsRef.current.hiHat!.triggerAttackRelease(value.duration, time, value.velocity);
-            }) as any, drumEvents.hiHat);
+                if (typeof value.pitch === 'number' && synthsRef.current.hiHat) synthsRef.current.hiHat.frequency.setValueAtTime(value.pitch, time);
+                if (synthsRef.current.hiHat) synthsRef.current.hiHat.triggerAttackRelease(value.duration, time, value.velocity);
+            }) as any, drumEvents.hiHat.sort((a,b) => a.time - b.time));
             newParts.push(hiHatPart);
         }
         
@@ -744,4 +757,3 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   );
 };
 
-    
