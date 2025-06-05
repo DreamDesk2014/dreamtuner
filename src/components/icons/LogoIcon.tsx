@@ -1,3 +1,4 @@
+
 import type React from 'react';
 import Image from 'next/image';
 
@@ -16,7 +17,7 @@ export const LogoIcon: React.FC<IconProps> = ({ className, width, height, ...pro
 
   return (
     <Image
-      src="/logo.png" // Assumes your logo is named logo.png and placed in the /public folder
+      src="/logo.png" // Assumes your logo is named logo.png and placed in the (user-created) /public folder
       alt="DreamTuner Logo"
       width={intrinsicWidth} // Base width for the image source
       height={intrinsicHeight} // Base height for the image source

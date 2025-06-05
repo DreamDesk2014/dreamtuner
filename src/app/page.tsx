@@ -34,6 +34,8 @@ export default function DreamTunerPage() {
   const [aiKidsArtError, setAiKidsArtError] = useState<string | null>(null);
   
   const [selectedGenre, setSelectedGenre] = useState<string>(MUSIC_GENRES[0] || '');
+  const [currentKidsMusicParams, setCurrentKidsMusicParams] = useState<MusicParameters | null>(null);
+
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -47,6 +49,7 @@ export default function DreamTunerPage() {
     setAiKidsArtError(null);
     setShowWelcome(true);
     setSelectedGenre(MUSIC_GENRES[0] || ''); 
+    setCurrentKidsMusicParams(null);
   };
 
   const handleStandardModeSubmit = useCallback(async (input: AppInput) => {
@@ -57,6 +60,8 @@ export default function DreamTunerPage() {
     setAiKidsArtUrl(null); 
     setAiKidsArtError(null);
     setIsRenderingAiKidsArt(false);
+    setCurrentKidsMusicParams(null);
+
 
     try {
       const musicResult = await generateMusicParametersAction(input);
@@ -85,7 +90,7 @@ export default function DreamTunerPage() {
     if (artInput) setIsRenderingAiKidsArt(true);
     setError(null);
     setMusicParams(null);
-    setCurrentMusicParams(null); // Clear previous music params for Kids mode share
+    setCurrentKidsMusicParams(null); 
     setAiKidsArtUrl(null);
     setAiKidsArtError(null);
     setShowWelcome(false);
@@ -106,7 +111,7 @@ export default function DreamTunerPage() {
       } else {
         musicParametersResult = musicResult;
         setMusicParams(musicResult);
-        setCurrentMusicParams(musicResult); // Store for Kids mode share
+        setCurrentKidsMusicParams(musicResult); 
         generatedMusicalIdea = musicResult.generatedIdea;
         setError(null);
       }
@@ -177,9 +182,6 @@ export default function DreamTunerPage() {
     }
   }, [musicParams]);
   
-  // Added state for KidsModeTab to hold current music params for sharing
-  const [currentKidsMusicParams, setCurrentMusicParams] = useState<MusicParameters | null>(null);
-
 
   const mainTitle = currentMode === 'kids' ? "DreamTuner Kids!" : "DreamTuner";
   const mainSubtitle = currentMode === 'kids' 
@@ -191,7 +193,6 @@ export default function DreamTunerPage() {
       <NavigationBar />
       <header className="w-full max-w-3xl mb-8 text-center">
         <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2">
-          {/* Removed text-stardust-blue as PNG will have its own colors */}
           <LogoIcon className="w-10 h-10 sm:w-12 sm:h-12" /> 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-stardust-blue to-cosmic-purple font-headline">
             {mainTitle}
@@ -228,7 +229,7 @@ export default function DreamTunerPage() {
               selectedGenre={selectedGenre}
               onGenreChange={setSelectedGenre}
               isClientMounted={isClientMounted}
-              currentMusicParamsFromPage={currentKidsMusicParams} // Pass down the stored music params
+              currentMusicParamsFromPage={currentKidsMusicParams}
             />
           </TabsContent>
         </Tabs>
@@ -290,4 +291,3 @@ export default function DreamTunerPage() {
     </div>
   );
 }
-
