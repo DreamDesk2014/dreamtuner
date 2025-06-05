@@ -22,73 +22,51 @@ import Image from 'next/image';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from '@/components/ui/separator';
 
-interface EventTime { time: number; [key: string]: any; }
+interface MusicOutputDisplayProps {
+  params: MusicParameters;
+  onRegenerateIdea: () => void;
+  isRegeneratingIdea: boolean;
+  standardModeArtUrl: string | null; 
+}
 
-const MIN_TIME_GAP = 0.001; // Adjusted to 0.001 for more robustness
+const MIN_TIME_GAP = 0.001; 
+
+interface EventTime { time: number; [key: string]: any; }
 
 function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[], debugLabel?: string): T[] {
   if (!events || events.length === 0) return [];
 
-  // 1. Create a mutable copy and parse times, handling NaNs early
-  // Ensure that all time properties are numbers before sorting.
-  const processedEvents = events.map(e => {
-    const timeAsNumber = typeof e.time === 'number' ? e.time : parseFloat(e.time as any);
-    if (isNaN(timeAsNumber)) {
-      console.warn(`[${debugLabel}] Invalid time in event, setting to 0 for sorting step:`, e);
-      return { ...e, time: 0, originalTimeInvalid: true }; // Mark invalid, sort to beginning
-    }
-    return { ...e, time: timeAsNumber };
-  }).sort((a, b) => a.time - b.time); // Sort by numeric time
-
-  if (debugLabel) {
-    // console.log(`[${debugLabel}] ensureStrictlyIncreasingTimes - After initial sort & parse:`, JSON.parse(JSON.stringify(processedEvents.map(e => e.time))));
-  }
-
-  // 2. Iterate and enforce strictly increasing times
-  for (let i = 0; i < processedEvents.length; i++) {
-    if (processedEvents[i].originalTimeInvalid) {
-        // Decide how to handle events that had invalid original times.
-        // For now, if it was invalid, its time is 0. If it's the first event, it stays 0.
-        // If not first, it will be adjusted relative to the previous valid event.
-        if (i > 0 && !processedEvents[i-1].originalTimeInvalid) {
-             processedEvents[i].time = processedEvents[i-1].time + MIN_TIME_GAP;
-        } else if (i === 0) {
-            // It's the first event and had an invalid time, already set to 0.
-            // If all events have invalid times, they'll all end up as 0, 0+eps, 0+2eps etc.
-        } else {
-            // This case implies previous events were also invalid.
-            // We'd need a more complex recovery or error strategy.
-            // For now, this might lead to a cascade of 0, eps, 2eps...
-            // This should be rare if `parseFloat` and checks in main loop are good.
-            let lastValidTime = 0;
-            for(let k = i-1; k >=0; k--){
-                if(!processedEvents[k].originalTimeInvalid){
-                    lastValidTime = processedEvents[k].time;
-                    break;
-                }
-            }
-            processedEvents[i].time = lastValidTime + (i - (processedEvents.findIndex((ev,idx) => idx < i && !ev.originalTimeInvalid) )) * MIN_TIME_GAP;
-
-        }
-    }
-
-    if (i > 0) {
-      const prevEventTime = processedEvents[i-1].time;
-      if (processedEvents[i].time <= prevEventTime) {
-        processedEvents[i].time = prevEventTime + MIN_TIME_GAP;
-      }
-    }
-  }
-  
-  const finalEvents = processedEvents.map(e => {
-    const { originalTimeInvalid, ...rest } = e; // Remove temporary property
-    return rest as T;
+  const sortedEvents = [...events].sort((a, b) => {
+    const timeA = typeof a.time === 'number' ? a.time : parseFloat(a.time as any);
+    const timeB = typeof b.time === 'number' ? b.time : parseFloat(b.time as any);
+    if (isNaN(timeA) && isNaN(timeB)) return 0;
+    if (isNaN(timeA)) return -1; // Sort NaNs to the beginning
+    if (isNaN(timeB)) return 1;
+    return timeA - timeB;
   });
 
-  if (debugLabel) {
-    // console.log(`[${debugLabel}] ensureStrictlyIncreasingTimes - After correction:`, JSON.parse(JSON.stringify(finalEvents.map(e => e.time))));
+  const adjustedEvents: T[] = [];
+  let lastAdjustedTime = -Infinity;
+
+  for (const event of sortedEvents) {
+    let eventTime = typeof event.time === 'number' ? event.time : parseFloat(event.time as any);
+
+    if (isNaN(eventTime)) {
+      if (debugLabel) console.warn(`[${debugLabel}] Event with invalid time encountered and skipped:`, event);
+      continue; // Skip events with unparsable time
+    }
+
+    if (eventTime <= lastAdjustedTime) {
+      const originalTime = eventTime;
+      eventTime = lastAdjustedTime + MIN_TIME_GAP;
+      if (debugLabel) {
+        // console.log(`[${debugLabel}] Adjusted time from ${originalTime.toFixed(6)} to ${eventTime.toFixed(6)} for event:`, event);
+      }
+    }
+    adjustedEvents.push({ ...event, time: eventTime });
+    lastAdjustedTime = eventTime;
   }
-  return finalEvents;
+  return adjustedEvents;
 }
 
 
@@ -273,16 +251,17 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         const drumEvents: { kick: EventTime[], snare: EventTime[], hiHat: EventTime[] } = { kick: [], snare: [], hiHat: [] };
         
         parsedMidi.tracks.forEach((track) => {
-          if (track.channel === 9) {
+          if (track.channel === 9) { // Drum track
             track.notes.forEach(note => {
                 const noteTime = parseFloat(note.time as any);
-                const noteDuration = parseFloat(note.duration as any);
+                let noteDuration = parseFloat(note.duration as any);
                 const noteVelocity = parseFloat(note.velocity as any);
 
                 if (isNaN(noteTime) || isNaN(noteDuration) || isNaN(noteVelocity)) {
-                    console.warn("Skipping drum note with invalid time/duration/velocity:", note);
+                    console.warn(`[Drums] Skipping note with invalid time/duration/velocity:`, note);
                     return; 
                 }
+                if (noteDuration <=0) noteDuration = 0.05; // Ensure positive duration for drums
 
                 let drumType: 'kick' | 'snare' | 'hiHat' | null = null;
                 let pitchToPlay: string | number | undefined = undefined;
@@ -291,7 +270,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                 else if (note.midi === 38 || note.midi === 40) { drumType = 'snare'; }
                 else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { 
                     drumType = 'hiHat'; 
-                    pitchToPlay = note.midi === 46 ? 400 : 250;
+                    pitchToPlay = note.midi === 46 ? 400 : 250; // Frequency for MetalSynth
                 }
 
                 if (drumType) {
@@ -301,23 +280,25 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                     else if (drumType === 'hiHat') drumEvents.hiHat.push(event);
                 }
             });
-          } else {
+          } else { // Pitched instrument tracks
             let synth: Tone.PolySynth | undefined;
             const { melody: melodyInstrument, bass: bassInstrument, chordsPad: chordsPadInstrument } = mapInstrumentHintToGM(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids');
+            
             if (track.instrument.number === melodyInstrument && synthsRef.current.melody) synth = synthsRef.current.melody;
             else if (track.instrument.number === bassInstrument && synthsRef.current.bass) synth = synthsRef.current.bass;
             else if (track.instrument.number === chordsPadInstrument && synthsRef.current.chords) synth = synthsRef.current.chords;
-            else if (synthsRef.current.melody) synth = synthsRef.current.melody;
+            else if (synthsRef.current.melody) synth = synthsRef.current.melody; // Fallback to melody synth
 
             if (synth) {
               const trackEvents: EventTime[] = track.notes.map(n => {
                 const noteTime = parseFloat(n.time as any);
                 const noteDuration = parseFloat(n.duration as any);
                 const noteVelocity = parseFloat(n.velocity as any);
+
                 if (typeof n.name === 'string' && !isNaN(noteTime) && !isNaN(noteDuration) && !isNaN(noteVelocity)) {
                   return { time: noteTime, name: n.name, duration: noteDuration, velocity: noteVelocity };
                 }
-                console.warn("Skipping pitched note with invalid properties:", n);
+                console.warn(`[${track.name || 'Pitched'}] Skipping note with invalid properties:`, n);
                 return null;
               }).filter(e => e !== null) as EventTime[];
 
@@ -325,9 +306,15 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
                 const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Track-${track.name || 'pitched'}`);
                 const part = new Tone.Part(((time, value) => {
                   if (value.name && typeof value.name === 'string' && synth) {
-                    synth.triggerAttackRelease(value.name, value.duration, time, value.velocity);
+                    let durationNum = parseFloat(value.duration as any);
+                    if (isNaN(durationNum) || durationNum <= 0) {
+                        console.warn(`[${track.name || 'Pitched'}] Invalid or non-positive duration (${value.duration}), defaulting to 0.05s for note:`, value.name, "@ t:", time);
+                        durationNum = 0.05;
+                    }
+                    const effectiveDuration = Math.max(durationNum, 0.05);
+                    synth.triggerAttackRelease(value.name, effectiveDuration, time, value.velocity);
                   } else {
-                    console.warn("Invalid note data for pitched synth:", value);
+                    console.warn(`[${track.name || 'Pitched'}] Invalid note data for synth:`, value);
                   }
                 }) as any, correctedTrackEvents);
                 newParts.push(part);
@@ -341,7 +328,13 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
             const kickPart = new Tone.Part(((time, value) => {
                 const drumSynth = synthsRef.current.kick;
                 if (drumSynth && value.pitch && (typeof value.pitch === 'string' || typeof value.pitch === 'number')) {
-                     drumSynth.triggerAttackRelease(value.pitch, value.duration, time, value.velocity);
+                    let durationNum = parseFloat(value.duration as any);
+                    if (isNaN(durationNum) || durationNum <= 0) {
+                        console.warn(`[Kick] Invalid or non-positive duration (${value.duration}), defaulting to 0.05s for note:`, value.pitch, "@ t:", time);
+                        durationNum = 0.05;
+                    }
+                    const effectiveDuration = Math.max(durationNum, 0.05);
+                    drumSynth.triggerAttackRelease(value.pitch, effectiveDuration, time, value.velocity);
                 } else {
                     console.warn("[Kick] Invalid pitch or synth not ready", value);
                 }
@@ -352,19 +345,33 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
             const correctedSnareEvents = ensureStrictlyIncreasingTimes(drumEvents.snare, "Snare");
             const snarePart = new Tone.Part(((time, value) => {
                  const drumSynth = synthsRef.current.snare;
-                 if (drumSynth) drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
+                 if (drumSynth) {
+                    let durationNum = parseFloat(value.duration as any);
+                    if (isNaN(durationNum) || durationNum <= 0) {
+                        console.warn(`[Snare] Invalid or non-positive duration (${value.duration}), defaulting to 0.05s @ t:`, time);
+                        durationNum = 0.05;
+                    }
+                    const effectiveDuration = Math.max(durationNum, 0.05);
+                    drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
+                 }
             }) as any, correctedSnareEvents);
             newParts.push(snarePart);
         }
         if (drumEvents.hiHat.length > 0 && synthsRef.current.hiHat) {
             const correctedHiHatEvents = ensureStrictlyIncreasingTimes(drumEvents.hiHat, "HiHat");
             const hiHatPart = new Tone.Part(((time, value) => {
-                const drumSynth = synthsRef.current.hiHat as Tone.MetalSynth; // Cast for frequency
+                const drumSynth = synthsRef.current.hiHat as Tone.MetalSynth; 
                 if (drumSynth) {
-                    if (value.pitch && typeof value.pitch === 'number') {
+                    if (value.pitch && typeof value.pitch === 'number') { // pitch is frequency for MetalSynth
                         drumSynth.frequency.setValueAtTime(value.pitch, time);
                     }
-                    drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
+                    let durationNum = parseFloat(value.duration as any);
+                    if (isNaN(durationNum) || durationNum <= 0) {
+                        console.warn(`[HiHat] Invalid or non-positive duration (${value.duration}), defaulting to 0.05s @ t:`, time);
+                        durationNum = 0.05;
+                    }
+                    const effectiveDuration = Math.max(durationNum, 0.05);
+                    drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
                 }
             }) as any, correctedHiHatEvents);
             newParts.push(hiHatPart);
@@ -913,4 +920,3 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
     });
     return mapping;
 };
-
