@@ -22,11 +22,17 @@ export const NavigationBar: React.FC = () => {
             <InfoIcon className="h-5 w-5 text-slate-400 hover:text-stardust-blue transition-colors" />
           </Button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-md bg-nebula-gray border-slate-700 text-galaxy-white shadow-2xl">
+        <DialogContent 
+          aria-describedby="about-dialog-description" 
+          className="sm:max-w-md bg-nebula-gray border-slate-700 text-galaxy-white shadow-2xl"
+        >
           <DialogHeader>
             <DialogTitle className="text-stardust-blue font-headline text-xl">About DreamTuner</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 text-slate-300 py-3 text-sm leading-relaxed max-h-[60vh] overflow-y-auto pr-3">
+          <div 
+            id="about-dialog-description" 
+            className="space-y-3 text-slate-300 py-3 text-sm leading-relaxed max-h-[60vh] overflow-y-auto pr-3"
+          >
             <p>
               DreamTuner is an innovative application that translates your textual descriptions, images, or video/audio concepts into unique musical parameters.
             </p>

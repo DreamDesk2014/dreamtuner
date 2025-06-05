@@ -1,6 +1,6 @@
 
 // @ts-nocheck - Disabling TypeScript checks for this file due to midi-writer-js typings
-import MidiWriter from 'midi-writer-js';
+import MidiWriter, { Constants as MidiWriterConstants } from 'midi-writer-js';
 import type { MusicParameters, AppInput } from '@/types';
 import { TARGET_TOTAL_MIDI_SECONDS, MIN_SONG_BODY_SECONDS_FOR_CALC } from '@/lib/constants';
 
@@ -391,11 +391,11 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
 const clamp = (num: number, min: number, max: number) => Math.min(Math.max(num, min), max);
 
 const getTPQN = () => {
-    if (MidiWriter && MidiWriter.constants && typeof MidiWriter.constants.TPQN === 'number') {
-        return MidiWriter.constants.TPQN;
+    if (MidiWriterConstants && typeof MidiWriterConstants.TPQN === 'number') {
+        return MidiWriterConstants.TPQN;
     }
     console.warn(
-        `midi-writer-js: MidiWriter.constants.TPQN not found or not a number. Using default value 128. MidiWriter: ${typeof MidiWriter}, MidiWriter.constants: ${typeof MidiWriter?.constants}`
+        `midi-writer-js: MidiWriterConstants.TPQN not found or not a number. Using default value 128. MidiWriterConstants: ${typeof MidiWriterConstants}`
     );
     return 128; 
 };
