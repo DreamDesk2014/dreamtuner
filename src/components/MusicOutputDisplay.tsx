@@ -352,18 +352,59 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     let icon: React.ReactNode; let title: string; let content: React.ReactNode;
     switch(input.type) {
       case 'text':
-        icon = <DocumentTextIcon className="w-6 h-6" />; title = "Original Text & Generated Core";
+        icon = <DocumentTextIcon className="w-6 h-6" />; title = "Original Text &amp; Generated Core";
+        
+        const originalTextContent = input.content || "";
+        const lines = originalTextContent.split('\n');
+        const renderedElements: React.ReactNode[] = [];
+
+        const notePatternRegex = /^\s*([CDEFGABcdefgab][#b♭♯]?[0-9]?)(\s*[-–—]\s*([CDEFGABcdefgab][#b♭♯]?[0-9]?))*\s*$/;
+        const isClearlyNoteLine = (line: string): boolean => {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) return false;
+          if (notePatternRegex.test(trimmedLine)) {
+            const words = trimmedLine.split(/\s+/);
+            const nonNoteWords = words.filter(word => !/^[CDEFGABcdefgab#b♭♯0-9-]+$/.test(word));
+            return nonNoteWords.length < 2;
+          }
+          return false;
+        };
+
+        for (let i = 0; i < lines.length; i++) {
+          const currentLine = lines[i]; 
+          if (!currentLine.trim() && i > 0 && i < lines.length -1 && lines[i-1].trim() && lines[i+1].trim()) {
+             renderedElements.push(<div key={`spacer-${i}`} className="h-1"></div>); // Small spacer for intentional blank lines between content blocks
+          } else if (currentLine.trim()) {
+             renderedElements.push(
+              <p key={`lyric-${i}`} className="text-muted-foreground text-sm whitespace-pre-wrap">
+                {currentLine}
+              </p>
+            );
+            if (i + 1 < lines.length) {
+              const nextLine = lines[i+1];
+              if (isClearlyNoteLine(nextLine.trim())) {
+                renderedElements.push(
+                  <p key={`notes-${i}`} className="text-stardust-blue/90 text-xs whitespace-pre-wrap font-code ml-2 tracking-wider">
+                    {nextLine}
+                  </p>
+                );
+                i++; 
+              }
+            }
+          }
+        }
+        
         content = (
           <>
-            <ScrollArea className="h-24 mb-3">
-              <p className="text-muted-foreground text-sm italic whitespace-pre-wrap font-code">{input.content || ""}</p>
+            <ScrollArea className="h-auto max-h-60 mb-3 pr-3"> 
+              {renderedElements.map((el, index) => <React.Fragment key={index}>{el}</React.Fragment>)}
             </ScrollArea>
             <Separator className="my-3 bg-slate-600" />
-            <div className="space-y-1 text-sm">
+            <div className="space-y-1 text-sm mt-3">
               <p><strong className="text-stardust-blue">Generated Musical Idea:</strong> <span className="text-galaxy-white italic">"{params.generatedIdea}"</span></p>
               <p><strong className="text-stardust-blue">Key:</strong> {params.keySignature} {params.mode}</p>
               <p><strong className="text-stardust-blue">Tempo:</strong> {params.tempoBpm} BPM</p>
-              {input.mode === 'standard' && params.selectedGenre && (
+              {params.selectedGenre && (
                 <p><strong className="text-stardust-blue">Selected Genre:</strong> {params.selectedGenre}</p>
               )}
             </div>
@@ -494,7 +535,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         <ParameterCardComponent title="Tempo" value={params.tempoBpm} unit="BPM" icon={<ClockIcon />} />
         <ParameterCardComponent title="Mood Tags" value={params.moodTags || []} icon={params.targetValence > 0 ? <MoodHappyIcon /> : <MoodSadIcon />} />
         <ParameterCardComponent title="Instrument Hints" value={params.instrumentHints || []} icon={<CollectionIcon />} />
-        <ParameterCardComponent title="Valence & Arousal" value={`V: ${params.targetValence.toFixed(2)}, A: ${params.targetArousal.toFixed(2)}`} icon={<LightningBoltIcon />} subText={getValenceArousalDescription(params.targetValence, params.targetArousal)} />
+        <ParameterCardComponent title="Valence &amp; Arousal" value={`V: ${params.targetValence.toFixed(2)}, A: ${params.targetArousal.toFixed(2)}`} icon={<LightningBoltIcon />} subText={getValenceArousalDescription(params.targetValence, params.targetArousal)} />
         <ParameterCardComponent title="Rhythmic Density" value={params.rhythmicDensity} icon={<ScaleIcon />} subText={getRhythmicDensityDescription(params.rhythmicDensity)} />
         <ParameterCardComponent title="Harmonic Complexity" value={params.harmonicComplexity} icon={<CogIcon />} subText={getHarmonicComplexityDescription(params.harmonicComplexity)} />
         {params.selectedGenre && params.originalInput.mode === 'standard' && (
@@ -540,4 +581,3 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
 };
 
     
-

@@ -680,6 +680,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
 
     const tracksToInclude = [melodyTrack, bassTrack, chordsPadTrack, drumTrack];
     if (arpeggioTrackHasEvents) { 
+        arpeggioTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.arpeggioSynth }));
         tracksToInclude.push(arpeggioTrack);
     }
 
