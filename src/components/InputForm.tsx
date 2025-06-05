@@ -70,7 +70,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isProcessingCamera, setIsProcessingCamera] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null); // To keep track of the active stream
+  const streamRef = useRef<MediaStream | null>(null); 
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -109,7 +109,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
     const startCameraStream = async () => {
       setCameraError(null);
-      setHasCameraPermission(null); // Reset to indicate requesting permission
+      setHasCameraPermission(null); 
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         const msg = 'Camera access is not supported by your browser.';
@@ -121,16 +121,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        streamRef.current = stream; // Store ref for explicit stop actions if needed elsewhere
-        currentStreamForCleanup = stream; // Use local var for this effect's cleanup scope
+        streamRef.current = stream; 
+        currentStreamForCleanup = stream; 
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.load(); // Call load before play
+          videoRef.current.load(); 
           await videoRef.current.play().catch(playError => {
             console.warn('Video play() promise rejected (this might be ok if autoplay works):', playError);
-            // Potentially set a less critical error or just log it, as autoplay might still function.
-            // If play is absolutely essential, setCameraError here.
           });
         }
         setHasCameraPermission(true);
@@ -160,7 +158,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       if (videoRef.current) {
         videoRef.current.srcObject = null;
       }
-      streamRef.current = null; // Clear the main ref as well
+      streamRef.current = null; 
     };
 
     if (showCameraPreview && (currentStandardInputType === 'image' || currentStandardInputType === 'video')) {
@@ -169,10 +167,10 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       stopLocalStream();
     }
 
-    return () => { // Cleanup function for the effect
+    return () => { 
       stopLocalStream();
     };
-  }, [showCameraPreview, currentStandardInputType]); // Dependencies for the effect
+  }, [showCameraPreview, currentStandardInputType]); 
 
 
   const handleToggleCameraPreview = () => {
@@ -192,6 +190,12 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       toast({ variant: "destructive", title: "Camera Error", description: "Camera not ready or no permission." });
       return;
     }
+     if (videoRef.current.readyState < videoRef.current.HAVE_METADATA || videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+      toast({ variant: "destructive", title: "Camera Not Ready", description: "Camera is still initializing. Please wait a moment and try again." });
+      setIsProcessingCamera(false); // Reset loading state if it was set
+      return;
+    }
+
     setIsProcessingCamera(true);
     setFileError(null);
 
@@ -199,6 +203,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
     const context = canvas.getContext('2d');
+
     if (context) {
       context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.9); 
@@ -220,9 +225,11 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         }
       } else {
         setFileError("Failed to create image file from camera capture.");
+        toast({variant: "destructive", title: "Capture Error", description: "Failed to create image file."});
       }
     } else {
       setFileError("Failed to get canvas context for capturing photo.");
+      toast({variant: "destructive", title: "Capture Error", description: "Failed to get canvas context."});
     }
     
     setShowCameraPreview(false); 
@@ -473,7 +480,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                             <AlertDescription>{cameraError}</AlertDescription>
                         </Alert>
                     )}
-                     {hasCameraPermission === null && !cameraError && ( // While requesting permission
+                     {hasCameraPermission === null && !cameraError && ( 
                         <Alert variant="default" className="mt-3 bg-slate-700 border-slate-600 text-slate-300">
                             <AlertTitle>Camera Access</AlertTitle>
                             <AlertDescription>Requesting camera permission... Please allow access in your browser.</AlertDescription>
@@ -686,3 +693,5 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     </form>
   );
 };
+
+    
