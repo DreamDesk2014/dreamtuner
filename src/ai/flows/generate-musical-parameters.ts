@@ -118,7 +118,10 @@ const prompt = ai.definePrompt({
   - generatedIdea: A brief, fun, and imaginative textual description (maximum 20 words) inspired by the drawing (if valid){{#if voiceDescription}} and/or the voice hint{{/if}}{{#if drawingSoundSequence}} and accompanying sounds{{/if}}. If only a voice hint is present, the idea should be based solely on that {{#if drawingSoundSequence}}and the sounds{{/if}}. If only sounds, base it on the sounds.
 
   {{#if genre}}
-  The user has also selected a musical genre: '{{{genre}}}'. Try to subtly incorporate this genre if it complements the playful nature, but prioritize the kid-friendly parameters above.
+  The user has also selected a musical genre: '{{{genre}}}'.
+  Your PRIMARY GOAL in Kids Mode is to create music that is inherently playful, simple, and joyful, using the kid-friendly parameters outlined (major keys, happy moods, toy-like instruments, low complexity).
+  If the selected genre (e.g., '{{{genre}}}') can provide a *very subtle hint* that enhances this playful, child-like nature WITHOUT making it sound complex or mature, you may use it for slight inspiration.
+  However, the core kid-friendly sound MUST NOT be compromised. If the genre '{{{genre}}}' is generally too mature or complex (e.g., "Metal", "Complex Jazz"), you should largely ignore it and stick to the default playful Kids Mode sound. The musical output must always sound appropriate for a young child.
   {{/if}}
 
 {{else}}
