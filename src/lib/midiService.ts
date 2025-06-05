@@ -341,16 +341,10 @@ export const generateMidiFile = (params: MusicParameters): string => {
 
     const instruments = mapInstrumentHintToGM(params.instrumentHints, params.selectedGenre, isKidsMode);
     melodyTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.melody }));
-    if (!isKidsMode || params.harmonicComplexity > 0.1) {
-        bassTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.bass }));
-    }
-    if (!isKidsMode || params.harmonicComplexity > 0.2) {
-        chordsPadTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.chordsPad }));
-    }
-    if (!isKidsMode || params.harmonicComplexity > 0.3) {
-         arpeggioTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.arpeggioSynth }));
-    }
+    bassTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.bass }));
+    chordsPadTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.chordsPad }));
     drumTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.drums, channel: 10 }));
+    // Arpeggio track ProgramChangeEvent will be added later if the track is used.
 
     const melodyOctave = isKidsMode ? 5 : 4;
     const bassOctave = isKidsMode ? 3 : 2;
@@ -363,11 +357,10 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const measuresInBaseProgression = 4; 
     const secondsPerBaseProgression = measuresInBaseProgression * secondsPerMeasure;
     
-    const outroDurationMeasures = 2; // 2 measures for sustained chords/notes
+    const outroDurationMeasures = 2; 
     const outroDurationSeconds = outroDurationMeasures * secondsPerMeasure;
 
     let targetSongBodySeconds = TARGET_TOTAL_MIDI_SECONDS - outroDurationSeconds;
-    // Ensure targetSongBodySeconds is not too short, especially if outro is long due to slow tempo
     targetSongBodySeconds = Math.max(targetSongBodySeconds, Math.max(MIN_SONG_BODY_SECONDS_FOR_CALC, secondsPerBaseProgression));
 
 
@@ -377,10 +370,10 @@ export const generateMidiFile = (params: MusicParameters): string => {
     
     const calculateDynamicVelocity = (base: number, minVel: number, maxVel: number, randomRangeBase: number) => {
         const valenceMod = targetValence * 15; 
-        const arousalMod = targetArousal * 10;  
-        let dynamicBase = clamp(base + valenceMod + arousalMod, minVel - 15, maxVel + 15);
+        const arousalMod = targetArousal * 20;  
+        let dynamicBase = clamp(base + valenceMod + arousalMod, minVel - 20, maxVel + 20);
         
-        const randomRange = randomRangeBase + Math.abs(targetArousal * (randomRangeBase / 1.5)); 
+        const randomRange = randomRangeBase + Math.abs(targetArousal * (randomRangeBase)); 
         return clamp(
             dynamicBase - (randomRange / 2) + Math.floor(Math.random() * randomRange),
             minVel,
@@ -572,9 +565,9 @@ export const generateMidiFile = (params: MusicParameters): string => {
                 const beatStartTick = measureStartTick + beat * TPQN;
                 let kickVel = calculateDynamicVelocity(95, 70, 120, 15);
                 let snareVel = calculateDynamicVelocity(85, 60, 110, 15);
-                let hiHatBaseVel = 60 + targetArousal * 20; 
+                let hiHatBaseVel = 60 + targetArousal * 20 + (isKidsMode ? -10 : 0); 
 
-                if (isFillMeasure && beat === beatsPerMeasure - 1 && params.rhythmicDensity > 0.3 && measureIndex !== progression.length - 1) { // Ensure fill not on last measure of progression
+                if (isFillMeasure && beat === beatsPerMeasure - 1 && params.rhythmicDensity > 0.3 && measureIndex !== progression.length - 1) { 
                     for(let f=0; f<4; f++) {
                         drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '16', velocity: calculateDynamicVelocity(70 + f*5, 50, 100, 5), channel: 10, tick: beatStartTick + f * Math.floor(TPQN/4) }));
                     }
@@ -626,25 +619,19 @@ export const generateMidiFile = (params: MusicParameters): string => {
     });
     
     // --- OUTRO SECTION ---
-    // These events are added *after* all main body events for each track.
-    // Durations '0.5' = 2 whole notes (2 measures), '1' = 1 whole note (1 measure)
-
     const tonicKeyName = params.keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || params.keySignature.toUpperCase();
     const finalModeIsMinor = params.mode.toLowerCase().includes('minor');
 
     // 1. Final Sustained Chord (Pad Track)
-    if (!isKidsMode || params.harmonicComplexity > 0.2) {
-        const finalPadOctave = isKidsMode ? 3 : 2;
-        const finalTonicChordForPad = getChordProgressionWithDetails(tonicKeyName, finalModeIsMinor ? 'minor' : 'major', 1, finalPadOctave, 0.1, isKidsMode)[0];
-
-        if (finalTonicChordForPad && finalTonicChordForPad.notes.length > 0) {
-            const finalPadVelocity = calculateDynamicVelocity(isKidsMode ? 30 : 40, 20, isKidsMode ? 55 : 65, 5);
-            chordsPadTrack.addEvent(new MidiWriter.NoteEvent({
-                pitch: finalTonicChordForPad.notes,
-                duration: '0.5', 
-                velocity: finalPadVelocity
-            }));
-        }
+    const finalPadOctave = isKidsMode ? 3 : 2;
+    const finalTonicChordForPad = getChordProgressionWithDetails(tonicKeyName, finalModeIsMinor ? 'minor' : 'major', 1, finalPadOctave, 0.1, isKidsMode)[0];
+    if (finalTonicChordForPad && finalTonicChordForPad.notes.length > 0) {
+        const finalPadVelocity = calculateDynamicVelocity(isKidsMode ? 30 : 40, 20, isKidsMode ? 55 : 65, 5);
+        chordsPadTrack.addEvent(new MidiWriter.NoteEvent({
+            pitch: finalTonicChordForPad.notes,
+            duration: '0.5', 
+            velocity: finalPadVelocity
+        }));
     }
 
     // 2. Final Sustained Note (Melody Track)
@@ -660,34 +647,39 @@ export const generateMidiFile = (params: MusicParameters): string => {
     }
 
     // 3. Final Sustained Note (Bass Track)
-    if (!isKidsMode || params.harmonicComplexity > 0.1) {
-        const finalBassOctave = isKidsMode ? 2 : 1;
-        const finalBassNoteMidi = robustNoteToMidi(tonicKeyName + finalBassOctave);
-        if (isValidMidiNumber(finalBassNoteMidi)) {
-            const finalBassVelocity = calculateDynamicVelocity(isKidsMode ? 45 : 55, 35, isKidsMode ? 65 : 75, 5);
-            bassTrack.addEvent(new MidiWriter.NoteEvent({
-                pitch: [finalBassNoteMidi],
-                duration: '0.5', 
-                velocity: finalBassVelocity
-            }));
-        }
+    const finalBassOctave = isKidsMode ? 2 : 1;
+    const finalBassNoteMidi = robustNoteToMidi(tonicKeyName + finalBassOctave);
+    if (isValidMidiNumber(finalBassNoteMidi)) {
+        const finalBassVelocity = calculateDynamicVelocity(isKidsMode ? 45 : 55, 35, isKidsMode ? 65 : 75, 5);
+        bassTrack.addEvent(new MidiWriter.NoteEvent({
+            pitch: [finalBassNoteMidi],
+            duration: '0.5', 
+            velocity: finalBassVelocity
+        }));
     }
     
     // 4. Final Cymbal Crash (Drum Track)
     const finalDrumVelocity = calculateDynamicVelocity(isKidsMode ? 70 : 90, 50, isKidsMode ? 90 : 110, 10);
     drumTrack.addEvent(new MidiWriter.NoteEvent({
-        pitch: [crashCymbal],
+        pitch: [crashCymbal], 
         duration: '1', 
         velocity: finalDrumVelocity,
         channel: 10
     }));
 
 
-    const tracksToInclude = [melodyTrack];
-    if (!isKidsMode || params.harmonicComplexity > 0.1) tracksToInclude.push(bassTrack);
-    if (!isKidsMode || params.harmonicComplexity > 0.2) tracksToInclude.push(chordsPadTrack);
-    if (!isKidsMode || params.harmonicComplexity > 0.3) tracksToInclude.push(arpeggioTrack);
-    tracksToInclude.push(drumTrack);
+    const tracksToInclude = [melodyTrack, bassTrack, chordsPadTrack, drumTrack];
+    if (!isKidsMode || params.harmonicComplexity > 0.3) { 
+        // Only add arpeggio track if it had content and program change if it's included
+        if (arpeggioTrack.events.length > 0 || progression.some(chordDef => {
+            const numArpNotesPerBeat = isKidsMode ? (params.harmonicComplexity > 0.2 ? 1: 0) : (params.harmonicComplexity > 0.7 ? 2 : (params.harmonicComplexity > 0.4 ? 1 : 0));
+            return numArpNotesPerBeat > 0 || (params.harmonicComplexity > 0.1 && !isKidsMode);
+        })) {
+            arpeggioTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.arpeggioSynth }), 0); // Add at beginning of track
+            tracksToInclude.push(arpeggioTrack);
+        }
+    }
+
 
     const writer = new MidiWriter.Writer(tracksToInclude);
     try {
