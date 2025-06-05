@@ -2,11 +2,11 @@
 "use client";
 import React, { useRef, useEffect, useState, useImperativeHandle, forwardRef, useCallback, useLayoutEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Eraser, Paintbrush, Trash2 } from 'lucide-react';
+import { Eraser, Paintbrush, Trash2, Minus, Plus, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DrawingCanvasProps {
-  backgroundColor?: string;
+  initialBackgroundColor?: string; // Changed from backgroundColor to initialBackgroundColor
   isKidsMode?: boolean;
   onDrawingActivity?: (hasContent: boolean) => void;
   canvasContainerClassName?: string;
@@ -24,16 +24,19 @@ interface CanvasPath {
   isErasing: boolean;
 }
 
-const DEFAULT_BRUSH_COLOR = '#000000';
-const DEFAULT_BRUSH_SIZE = 5;
+const DEFAULT_BRUSH_COLOR = '#000000'; // Black
 const ERASER_SIZE = 20;
+const BRUSH_SIZES = { Small: 5, Medium: 10, Large: 15 };
+type BrushSizeName = keyof typeof BRUSH_SIZES;
 
 const COLOR_TO_NOTE_MAP: Record<string, { frequency: number; name: string }> = {
-  '#000000': { frequency: 261.63, name: 'C4' }, // Black
   '#FF0000': { frequency: 293.66, name: 'D4' }, // Red
+  '#FFA500': { frequency: 440.00, name: 'A4' }, // Orange
   '#FFFF00': { frequency: 329.63, name: 'E4' }, // Yellow
   '#00FF00': { frequency: 349.23, name: 'F4' }, // Green
   '#0000FF': { frequency: 392.00, name: 'G4' }, // Blue
+  '#800080': { frequency: 493.88, name: 'B4' }, // Purple
+  '#000000': { frequency: 261.63, name: 'C4' }, // Black (last, so C4 is default if needed)
 };
 const NOTE_DURATION_MS = 150;
 const NOTE_DURATION_MS_WHILE_DRAWING = 100;
@@ -57,7 +60,8 @@ export const DrawingCanvas = forwardRef<
 
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentColor, setCurrentColor] = useState(DEFAULT_BRUSH_COLOR);
-  const [currentLineWidth, setCurrentLineWidth] = useState(DEFAULT_BRUSH_SIZE);
+  const [currentBrushSizeName, setCurrentBrushSizeName] = useState<BrushSizeName>('Small');
+  const [currentLineWidth, setCurrentLineWidth] = useState(BRUSH_SIZES.Small);
   const [isErasing, setIsErasing] = useState(false);
   
   const pathsRef = useRef<CanvasPath[]>([]);
@@ -72,12 +76,14 @@ export const DrawingCanvas = forwardRef<
   const distanceSinceLastNoteRef = useRef(0);
   const activeStrokeColorRef = useRef<string | null>(null);
 
-  const colors = [
-    { name: 'Black', value: '#000000' },
-    { name: 'Red', value: '#FF0000' },
-    { name: 'Yellow', value: '#FFFF00' },
-    { name: 'Green', value: '#00FF00' },
-    { name: 'Blue', value: '#0000FF' },
+  const colorsForDisplay: { name: string; value: string; noteLabel?: string }[] = [
+    { name: 'Red', value: '#FF0000', noteLabel: COLOR_TO_NOTE_MAP['#FF0000']?.name },
+    { name: 'Orange', value: '#FFA500', noteLabel: COLOR_TO_NOTE_MAP['#FFA500']?.name },
+    { name: 'Yellow', value: '#FFFF00', noteLabel: COLOR_TO_NOTE_MAP['#FFFF00']?.name },
+    { name: 'Green', value: '#00FF00', noteLabel: COLOR_TO_NOTE_MAP['#00FF00']?.name },
+    { name: 'Blue', value: '#0000FF', noteLabel: COLOR_TO_NOTE_MAP['#0000FF']?.name },
+    { name: 'Purple', value: '#800080', noteLabel: COLOR_TO_NOTE_MAP['#800080']?.name },
+    { name: 'Black', value: '#000000', noteLabel: COLOR_TO_NOTE_MAP['#000000']?.name },
   ];
 
   const getCanvasContext = useCallback(() => canvasRef.current?.getContext('2d') || null, []);
@@ -92,23 +98,19 @@ export const DrawingCanvas = forwardRef<
     ctx.globalCompositeOperation = path.isErasing ? 'destination-out' : 'source-over';
     
     if (path.isErasing && ctx.strokeStyle === backgroundColorRef.current) {
-        // For eraser, ensure it "clears" to transparent if background is not opaque, or to bg color
-        // This is a complex topic if full transparency is needed. For now, "destination-out" is primary.
-        // Setting strokeStyle to black for destination-out is common practice.
         ctx.strokeStyle = "rgba(0,0,0,1)";
     }
 
-
-    if (path.points.length === 1) { // Draw a dot
+    if (path.points.length === 1) { 
       const point = path.points[0];
       ctx.beginPath();
       ctx.arc(point.x, point.y, ctx.lineWidth / 2, 0, 2 * Math.PI);
-      ctx.fillStyle = path.isErasing ? backgroundColorRef.current : path.color; // Eraser dot uses bg color
-      if (path.isErasing) { // For eraser dot, fill with background
-          ctx.globalCompositeOperation = 'source-over'; // Temporarily switch to draw bg color
+      ctx.fillStyle = path.isErasing ? backgroundColorRef.current : path.color; 
+      if (path.isErasing) { 
+          ctx.globalCompositeOperation = 'source-over'; 
           ctx.fillStyle = backgroundColorRef.current;
           ctx.fill();
-          ctx.globalCompositeOperation = 'destination-out'; // Switch back if needed for future strokes
+          ctx.globalCompositeOperation = 'destination-out'; 
       } else {
           ctx.fill();
       }
@@ -121,7 +123,7 @@ export const DrawingCanvas = forwardRef<
       ctx.lineTo(path.points[i].x, path.points[i].y);
     }
     ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over'; // Reset composite operation
+    ctx.globalCompositeOperation = 'source-over'; 
   }, []); 
 
   const redrawCanvas = useCallback(() => {
@@ -133,11 +135,9 @@ export const DrawingCanvas = forwardRef<
     const { width: physicalWidth, height: physicalHeight } = canvas;
     
     ctx.save();
-    // Reset transform to identity for clearing
     const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Use the DPR for transform
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); 
     
-    // Clear with logical coordinates
     ctx.fillStyle = backgroundColorRef.current;
     ctx.fillRect(0, 0, physicalWidth/dpr, physicalHeight/dpr);
 
@@ -145,20 +145,20 @@ export const DrawingCanvas = forwardRef<
     if (currentPathRef.current && currentPathRef.current.points.length > 0) {
       drawPath(ctx, currentPathRef.current);
     }
-    ctx.restore(); // Restore after drawing everything, including the transform
+    ctx.restore(); 
   }, [getCanvasContext, drawPath]);
   
   useEffect(() => {
     backgroundColorRef.current = initialBackgroundColor;
     redrawCanvas();
-  }, [initialBackgroundColor]); // Dependency only on initialBackgroundColor
+  }, [initialBackgroundColor, redrawCanvas]); 
 
   useEffect(() => {
     if (onDrawingActivity) {
       const hasContent = pathsRef.current.length > 0 || (currentPathRef.current !== null && currentPathRef.current.points.length > 0);
       onDrawingActivity(hasContent);
     }
-  }, [pathsRef.current.length, currentPathRef.current?.points.length, onDrawingActivity]);
+  }, [pathsRef, currentPathRef, onDrawingActivity]); // Simpler deps
 
 
   useEffect(() => {
@@ -185,12 +185,11 @@ export const DrawingCanvas = forwardRef<
     let animationFrameId: number;
 
     const handleResize = () => {
-      // Cancel any pending animation frame to avoid multiple resizes/redraws
       cancelAnimationFrame(animationFrameId);
       animationFrameId = requestAnimationFrame(() => {
         const { width: logicalWidth, height: logicalHeight } = container.getBoundingClientRect();
         
-        if (logicalWidth === 0 || logicalHeight === 0) return; // Avoid issues if container is hidden
+        if (logicalWidth === 0 || logicalHeight === 0) return; 
 
         const dpr = window.devicePixelRatio || 1;
         canvas.width = Math.floor(logicalWidth * dpr);
@@ -198,7 +197,7 @@ export const DrawingCanvas = forwardRef<
 
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Apply persistent scaling
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0); 
           redrawCanvas(); 
         }
       });
@@ -206,13 +205,13 @@ export const DrawingCanvas = forwardRef<
 
     const observer = new ResizeObserver(handleResize);
     observer.observe(container);
-    handleResize(); // Initial size setup
+    handleResize(); 
 
     return () => {
       observer.unobserve(container);
-      cancelAnimationFrame(animationFrameId); // Cleanup on unmount
+      cancelAnimationFrame(animationFrameId); 
     };
-  }, [redrawCanvas]); // redrawCanvas is stable due to its own useCallback dependencies
+  }, [redrawCanvas]); 
 
 
   const playToneForColor = (color: string, durationMs: number = NOTE_DURATION_MS) => {
@@ -254,14 +253,13 @@ export const DrawingCanvas = forwardRef<
     activeStrokeColorRef.current = newPathColor;
 
     const newPath: CanvasPath = {
-      points: [currentPoint], // Start with a single point for dot drawing
+      points: [currentPoint], 
       color: newPathColor,
       lineWidth: isErasing ? ERASER_SIZE : currentLineWidth,
       isErasing: isErasing,
     };
     currentPathRef.current = newPath;
     
-    // Draw the initial point/dot immediately
     drawPath(ctx, newPath);
 
     if (isKidsMode && !isErasing) {
@@ -283,7 +281,6 @@ export const DrawingCanvas = forwardRef<
 
     const currentPoint = { x: eventX, y: eventY };
     
-    // Draw only the new segment
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -292,14 +289,14 @@ export const DrawingCanvas = forwardRef<
     ctx.globalCompositeOperation = currentPathRef.current.isErasing ? 'destination-out' : 'source-over';
     
     if (currentPathRef.current.isErasing && ctx.strokeStyle === backgroundColorRef.current) {
-      ctx.strokeStyle = "rgba(0,0,0,1)"; // For destination-out eraser
+      ctx.strokeStyle = "rgba(0,0,0,1)"; 
     }
 
     ctx.beginPath();
     ctx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
     ctx.lineTo(currentPoint.x, currentPoint.y);
     ctx.stroke();
-    ctx.restore(); // Restore to base scaled state
+    ctx.restore(); 
 
     currentPathRef.current.points.push(currentPoint); 
 
@@ -319,8 +316,6 @@ export const DrawingCanvas = forwardRef<
 
   const stopDrawing = () => {
     if (isDrawing && currentPathRef.current && currentPathRef.current.points.length > 0) { 
-      // If it was just a dot (single point), it's already drawn by startDrawing.
-      // If it was a line, currentPathRef already contains all points.
       pathsRef.current = [...pathsRef.current, currentPathRef.current];
     }
     currentPathRef.current = null;
@@ -328,7 +323,6 @@ export const DrawingCanvas = forwardRef<
     lastPointRef.current = null;
     activeStrokeColorRef.current = null;
     distanceSinceLastNoteRef.current = 0;
-    // redrawCanvas(); // No need to redraw full canvas here if segments were drawn, unless clearing currentPath display
     if (onDrawingActivity) onDrawingActivity(pathsRef.current.length > 0);
   };
 
@@ -345,8 +339,6 @@ export const DrawingCanvas = forwardRef<
         clientX = event.clientX;
         clientY = event.clientY;
     }
-    // No need to scale by DPR here, as event coordinates are already in CSS pixels
-    // And our canvas drawing operations are on a context scaled by DPR.
     return { x: clientX - rect.left, y: clientY - rect.top };
   };
 
@@ -361,7 +353,7 @@ export const DrawingCanvas = forwardRef<
     draw(x, y);
   };
   
-  const handleMouseLeave = () => { // Ensure drawing stops if mouse leaves canvas
+  const handleMouseLeave = () => { 
     if (isDrawing) {
       stopDrawing();
     }
@@ -369,7 +361,7 @@ export const DrawingCanvas = forwardRef<
 
   const handleTouchStart = (event: React.TouchEvent<HTMLCanvasElement>) => {
     if (event.touches.length === 0) return;
-    event.preventDefault(); // Still good for preventing unwanted default touch actions
+    event.preventDefault(); 
     const { x, y } = getRelativeCoords(event);
     startDrawing(x, y);
   };
@@ -398,13 +390,19 @@ export const DrawingCanvas = forwardRef<
     lastPointRef.current = null;
     activeStrokeColorRef.current = null;
     distanceSinceLastNoteRef.current = 0;
-    if (isDrawing) setIsDrawing(false); // Ensure drawing state is reset
+    if (isDrawing) setIsDrawing(false); 
     if (onDrawingActivity) onDrawingActivity(false);
-  }, [redrawCanvas, isKidsMode, onDrawingActivity, isDrawing]); // Added isDrawing
+  }, [redrawCanvas, isKidsMode, onDrawingActivity, isDrawing]);
 
   const toggleEraser = () => {
     setIsErasing(!isErasing);
     if (isDrawing) stopDrawing(); 
+  };
+  
+  const handleBrushSizeChange = (sizeName: BrushSizeName) => {
+    setCurrentBrushSizeName(sizeName);
+    setCurrentLineWidth(BRUSH_SIZES[sizeName]);
+    setIsErasing(false); // Switch back to brush if eraser was active
   };
 
   useImperativeHandle(ref, () => ({
@@ -417,21 +415,16 @@ export const DrawingCanvas = forwardRef<
       const logicalHeight = container.offsetHeight;
 
       const tempCanvas = document.createElement('canvas');
-      // For getDataURL, we want the logical size, not DPR scaled physical size,
-      // unless the consumer expects a high-res image. For now, logical is fine.
       tempCanvas.width = logicalWidth; 
       tempCanvas.height = logicalHeight;
       const tempCtx = tempCanvas.getContext('2d');
 
       if (!tempCtx) return 'data:,';
 
-      // Draw with original background color on temp canvas
       tempCtx.fillStyle = backgroundColorRef.current;
       tempCtx.fillRect(0, 0, logicalWidth, logicalHeight);
       
-      // Draw paths onto the temp canvas (these paths are in logical coords)
       pathsRef.current.forEach(p => drawPath(tempCtx, p));
-      // If a path is currently being drawn, include it too.
       if (currentPathRef.current && currentPathRef.current.points.length > 0) {
          drawPath(tempCtx, currentPathRef.current)
       }
@@ -465,50 +458,78 @@ export const DrawingCanvas = forwardRef<
               display: 'block',
               width: '100%', 
               height: '100%',
-              cursor: 'crosshair',
+              cursor: isErasing ? 'grab' : 'crosshair', // Indicate eraser differently
               touchAction: 'none', 
           }}
         />
       </div>
-      <div className="flex space-x-2 items-center">
-        {colors.map(color => (
+      <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-2 items-center">
+        <div className="flex space-x-1 items-center">
+          {colorsForDisplay.map(color => (
+            <Button
+              key={color.name}
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                if (isDrawing) stopDrawing(); 
+                setIsErasing(false);
+                setCurrentColor(color.value);
+                // setCurrentLineWidth(BRUSH_SIZES.Small); // Keep current brush size
+              }}
+              className={cn(
+                "w-8 h-10 rounded-md border-2 flex flex-col justify-center items-center p-1",
+                currentColor === color.value && !isErasing ? 'ring-2 ring-offset-2 ring-accent' : 'border-gray-300',
+                color.value === '#FFFFFF' || color.value === '#FFFF00' ? 'text-black' : 'text-white' // Text color for visibility
+              )}
+              style={{ backgroundColor: color.value }}
+              aria-label={`Select color ${color.name}${color.noteLabel ? ` (${color.noteLabel})` : ''}`}
+            >
+              {currentColor === color.value && !isErasing && <Paintbrush className="w-3 h-3 mb-0.5" />}
+              {isKidsMode && color.noteLabel && (
+                <span className="text-xs font-mono leading-tight">{color.noteLabel}</span>
+              )}
+            </Button>
+          ))}
+        </div>
+        <div className="flex space-x-1 items-center">
+            {(Object.keys(BRUSH_SIZES) as BrushSizeName[]).map(sizeName => (
+                <Button
+                    key={sizeName}
+                    variant="outline"
+                    size="icon"
+                    onClick={() => handleBrushSizeChange(sizeName)}
+                    className={`w-8 h-10 p-1 ${currentBrushSizeName === sizeName && !isErasing ? 'bg-accent text-accent-foreground' : ''}`}
+                    aria-label={`Brush size ${sizeName}`}
+                >
+                    {sizeName === 'Small' && <Circle className="w-2 h-2 fill-current" />}
+                    {sizeName === 'Medium' && <Circle className="w-3 h-3 fill-current" />}
+                    {sizeName === 'Large' && <Circle className="w-4 h-4 fill-current" />}
+                </Button>
+            ))}
+        </div>
+        <div className="flex space-x-1 items-center">
           <Button
-            key={color.name}
             variant="outline"
             size="icon"
-            onClick={() => {
-              if (isDrawing) stopDrawing(); 
-              setIsErasing(false);
-              setCurrentColor(color.value);
-              setCurrentLineWidth(DEFAULT_BRUSH_SIZE);
-            }}
-            className={`w-8 h-8 rounded-full border-2 ${currentColor === color.value && !isErasing ? 'ring-2 ring-offset-2 ring-accent' : 'border-gray-300'}`}
-            style={{ backgroundColor: color.value }}
-            aria-label={`Select color ${color.name}`}
+            onClick={toggleEraser}
+            className={`w-8 h-10 p-2 ${isErasing ? 'bg-accent text-accent-foreground' : ''}`}
+            aria-label={isErasing ? "Switch to Brush" : "Switch to Eraser"}
           >
-            {currentColor === color.value && !isErasing && <Paintbrush className="w-4 h-4 text-white mix-blend-difference" />}
+            <Eraser className="w-5 h-5" />
           </Button>
-        ))}
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={toggleEraser}
-          className={`p-2 ${isErasing ? 'bg-accent text-accent-foreground' : ''}`}
-          aria-label={isErasing ? "Switch to Brush" : "Switch to Eraser"}
-        >
-          <Eraser className="w-5 h-5" />
-        </Button>
-        <Button
-          variant="outline"
-          onClick={clearCanvas}
-          className="p-2"
-          aria-label="Clear Canvas"
-        >
-          <Trash2 className="w-5 h-5 mr-1 sm:mr-2" /> Clear
-        </Button>
+          <Button
+            variant="outline"
+            onClick={clearCanvas}
+            className="h-10 px-3"
+            aria-label="Clear Canvas"
+          >
+            <Trash2 className="w-5 h-5 mr-1 sm:mr-2" /> Clear
+          </Button>
+        </div>
       </div>
     </div>
   );
 });
 
 DrawingCanvas.displayName = 'DrawingCanvas';
+

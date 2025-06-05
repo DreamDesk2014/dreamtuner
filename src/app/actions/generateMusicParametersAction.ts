@@ -38,6 +38,16 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
       }
     }
     
+    // Add mood slider values if present (for standard mode)
+    if (input.mode === 'standard') {
+      if (input.userEnergy !== undefined) {
+        flowInput.userEnergy = input.userEnergy;
+      }
+      if (input.userPositivity !== undefined) {
+        flowInput.userPositivity = input.userPositivity;
+      }
+    }
+    
     const aiResult: GenerateMusicalParametersOutput = await generateMusicalParametersFlow(flowInput);
 
     const resultForClient: MusicParameters = {
@@ -65,3 +75,4 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
     return { error: `Failed to generate music parameters: ${errorMessage}` };
   }
 }
+

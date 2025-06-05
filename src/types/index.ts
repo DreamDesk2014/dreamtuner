@@ -14,6 +14,9 @@ export interface FilePreview {
 export interface BaseAppInput {
   genre?: string;
   mode: 'standard' | 'kids';
+  // For Standard Mode mood sliders
+  userEnergy?: number; // Mapped from 0-100 to -1.0 to 1.0
+  userPositivity?: number; // Mapped from 0-100 to -1.0 to 1.0
 }
 
 export type AppInput = BaseAppInput & (
@@ -38,7 +41,9 @@ export interface MusicParameters extends AIOutput {
 export interface FlowInput extends FlowInputTypeOriginal {
   voiceDescription?: string;
   additionalContext?: string;
-  drawingSoundSequence?: string; 
+  drawingSoundSequence?: string;
+  userEnergy?: number;
+  userPositivity?: number;
 }
 
 export interface GeminiMusicParamsResponse {
@@ -63,3 +68,4 @@ export interface RenderKidsDrawingInput extends Omit<RenderKidsDrawingInputOrigi
   drawingSoundSequence?: string;
 }
 export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}
+

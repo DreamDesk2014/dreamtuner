@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useId, useEffect } from 'react';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { DocumentTextIcon, PhotographIcon, VideoCameraIcon, XCircleIcon, UploadCloudIcon } from './icons/HeroIcons';
-import { Mic, MicOff } from 'lucide-react';
+import { Mic, MicOff, RotateCcw } from 'lucide-react';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
 import type { InputType as StandardInputType, AppInput, FilePreview } from '@/types';
 import { MAX_IMAGE_FILE_SIZE_BYTES, MAX_IMAGE_FILE_SIZE_MB, MUSIC_GENRES } from '@/lib/constants';
@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Slider } from "@/components/ui/slider";
+import { Separator } from '@/components/ui/separator';
 
 interface InputFormProps {
   onSubmit: (input: AppInput) => Promise<void> | void;
@@ -30,6 +32,12 @@ const readFileAsDataURL = (file: File): Promise<string> => {
   });
 };
 
+// Map 0-100 slider value to -1.0 to 1.0
+const mapSliderToFloat = (value: number | undefined): number | undefined => {
+  if (value === undefined || value === 50) return undefined; // 50 is neutral, treat as "not set"
+  return (value - 50) / 50;
+};
+
 export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selectedGenre, onGenreChange }) => {
   const [currentStandardInputType, setCurrentStandardInputType] = useState<StandardInputType>('text');
   const [text, setText] = useState<string>('');
@@ -37,6 +45,10 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const [filePreview, setFilePreview] = useState<FilePreview | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isClientMounted, setIsClientMounted] = useState(false);
+
+  // State for mood sliders (0-100 range)
+  const [energySlider, setEnergySlider] = useState<number | undefined>(50); // Default to neutral (50)
+  const [positivitySlider, setPositivitySlider] = useState<number | undefined>(50); // Default to neutral (50)
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -46,6 +58,8 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const textInputId = useId();
   const additionalContextId = useId();
   const genreSelectId = useId();
+  const energySliderId = useId();
+  const positivitySliderId = useId();
 
   const {
     transcript,
@@ -110,7 +124,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           setFilePreview(null);
           event.target.value = '';
         }
-      } else if (currentStandardInputType === 'video') { // This now handles both video and audio concepts
+      } else if (currentStandardInputType === 'video') { 
          if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
           setFileError('Invalid file type. Please select a video or audio file.');
           setFilePreview(null);
@@ -128,7 +142,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     e.preventDefault();
     if (isLoading || isListening) return; 
 
-    let appInputPartial: Omit<AppInput, 'mode' | 'genre'> | null = null;
+    let appInputPartial: Omit<AppInput, 'mode' | 'genre' | 'userEnergy' | 'userPositivity'> | null = null;
 
     if (currentStandardInputType === 'text' && text.trim()) {
       appInputPartial = { type: 'text', content: text.trim() };
@@ -145,7 +159,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         fileDetails: {...filePreview, url: filePreview.url },
         additionalContext: additionalContext.trim() || undefined,
       };
-    } else if (currentStandardInputType === 'video' && filePreview) { // 'video' type covers video/audio concepts
+    } else if (currentStandardInputType === 'video' && filePreview) { 
       appInputPartial = { 
         type: 'video', 
         fileDetails: filePreview,
@@ -154,7 +168,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     }
 
     if (appInputPartial) {
-      onSubmit({ ...appInputPartial, genre: selectedGenre } as AppInput); 
+      const finalAppInput: AppInput = { 
+        ...appInputPartial, 
+        genre: selectedGenre, 
+        mode: 'standard', // InputForm is only for standard mode
+        userEnergy: mapSliderToFloat(energySlider),
+        userPositivity: mapSliderToFloat(positivitySlider),
+      };
+      onSubmit(finalAppInput); 
     } else {
       if (currentStandardInputType === 'text') setFileError("Please enter some text or use voice input.");
       else setFileError("Please select a file.");
@@ -190,6 +211,9 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     const fileInput = document.getElementById(fileInputId) as HTMLInputElement;
     if (fileInput) fileInput.value = '';
   };
+
+  const resetEnergySlider = () => setEnergySlider(50);
+  const resetPositivitySlider = () => setPositivitySlider(50);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -319,10 +343,75 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           </div>
         </div>
       )}
+      
+      <Separator className="my-6 bg-slate-700" />
 
-      <div className="mt-6">
+      <div>
+        <Label className="block text-lg font-medium text-stardust-blue mb-1">
+          2. Fine-tune Mood (Optional):
+        </Label>
+        <p className="text-xs text-muted-foreground mb-4">Override AI's mood detection if you have a specific feeling in mind.</p>
+        <div className="space-y-5">
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <Label htmlFor={energySliderId} className="text-sm font-medium text-slate-300">
+                Energy: <span className="text-xs text-muted-foreground">({energySlider !== 50 ? ((energySlider ?? 50)/10).toFixed(1) : "AI Decides"})</span>
+              </Label>
+              {energySlider !== 50 && (
+                <Button type="button" variant="ghost" size="sm" onClick={resetEnergySlider} className="text-xs h-auto p-1 text-slate-400 hover:text-stardust-blue">
+                  <RotateCcw className="w-3 h-3 mr-1" /> Reset
+                </Button>
+              )}
+            </div>
+            <Slider
+              id={energySliderId}
+              min={0} max={100}
+              step={1}
+              value={[energySlider ?? 50]}
+              onValueChange={(value) => setEnergySlider(value[0])}
+              className="w-full [&>span>span]:bg-stardust-blue [&>span]:bg-slate-600"
+              disabled={isLoading}
+            />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1 px-1">
+              <span>Low</span>
+              <span>Medium</span>
+              <span>High</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <Label htmlFor={positivitySliderId} className="text-sm font-medium text-slate-300">
+                Positivity: <span className="text-xs text-muted-foreground">({positivitySlider !== 50 ? ((positivitySlider ?? 50)/10).toFixed(1) : "AI Decides"})</span>
+              </Label>
+               {positivitySlider !== 50 && (
+                <Button type="button" variant="ghost" size="sm" onClick={resetPositivitySlider} className="text-xs h-auto p-1 text-slate-400 hover:text-stardust-blue">
+                  <RotateCcw className="w-3 h-3 mr-1" /> Reset
+                </Button>
+              )}
+            </div>
+            <Slider
+              id={positivitySliderId}
+              min={0} max={100}
+              step={1}
+              value={[positivitySlider ?? 50]}
+              onValueChange={(value) => setPositivitySlider(value[0])}
+              className="w-full [&>span>span]:bg-cosmic-purple [&>span]:bg-slate-600"
+              disabled={isLoading}
+            />
+             <div className="flex justify-between text-xs text-muted-foreground mt-1 px-1">
+              <span>Negative</span>
+              <span>Neutral</span>
+              <span>Positive</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <Separator className="my-6 bg-slate-700" />
+      
+      <div>
         <Label htmlFor={genreSelectId + "-standard"} className="block text-lg font-medium text-stardust-blue mb-3">
-          2. Select Music Genre (Optional):
+          3. Select Music Genre (Optional):
         </Label>
         <Select value={selectedGenre} onValueChange={onGenreChange} disabled={isLoading}>
           <SelectTrigger id={genreSelectId + "-standard"} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 text-galaxy-white">
@@ -362,3 +451,4 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     </form>
   );
 };
+

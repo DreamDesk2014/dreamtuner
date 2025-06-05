@@ -4,6 +4,7 @@
 /**
  * @fileOverview Generates musical parameters based on user input (text, image, video, audio),
  * and supports a 'kids' mode for interpreting drawings with optional voice hints and sound sequences.
+ * Also supports user-defined energy (arousal) and positivity (valence) overrides.
  *
  * - generateMusicalParameters - A function that handles the generation of musical parameters.
  * - GenerateMusicalParametersInput - The input type for the generateMusicalParameters function.
@@ -32,6 +33,8 @@ const GenerateMusicalParametersInputSchema = z.object({
   voiceDescription: z.string().optional().describe("Optional voice-derived text description, especially for Kids Mode drawings."),
   additionalContext: z.string().optional().describe("Optional textual context provided by the user for an image, video, or audio input in standard mode."),
   drawingSoundSequence: z.string().optional().describe("A comma-separated sequence of musical notes (e.g., C4,E4,G4) played when the child used different colors while drawing. Available only in Kids Mode."),
+  userEnergy: z.number().min(-1).max(1).optional().describe("Optional user-defined energy level for the music (-1.0 low to 1.0 high). If provided, this should strongly influence targetArousal."),
+  userPositivity: z.number().min(-1).max(1).optional().describe("Optional user-defined positivity level for the music (-1.0 negative to 1.0 positive). If provided, this should strongly influence targetValence."),
 });
 export type GenerateMusicalParametersInput = z.infer<
   typeof GenerateMusicalParametersInputSchema
@@ -51,10 +54,10 @@ const GenerateMusicalParametersOutputSchema = z.object({
     .describe('A value between 0 and 1 representing the harmonic complexity.'),
   targetValence: z
     .number()
-    .describe('A value between -1 and 1 representing the valence of the music.'),
+    .describe("A value between -1 and 1 representing the valence of the music. If the user provided a 'userPositivity' value, this should directly reflect it."),
   targetArousal: z
     .number()
-    .describe('A value between -1 and 1 representing the arousal of the music.'),
+    .describe("A value between -1 and 1 representing the arousal of the music. If the user provided a 'userEnergy' value, this should directly reflect it."),
   generatedIdea: z.string().describe('A short description of the musical piece.'),
 });
 export type GenerateMusicalParametersOutput = z.infer<
@@ -99,7 +102,7 @@ const prompt = ai.definePrompt({
 
   {{#if drawingSoundSequence}}
     Additionally, as the child interacted (e.g. drew with different colors), this sequence of musical tones was played: {{{drawingSoundSequence}}}.
-    Use these tones as a subtle inspirational cue for the melody, rhythm, or overall playful character of the music. For example, if the tones are generally ascending, it might suggest a more uplifting feel. If they are sparse, it might suggest a calmer rhythm.
+    Use these tones (e.g., {{{drawingSoundSequence}}}) as a subtle inspirational cue for the melody, rhythm, or overall playful character of the music. For example, if the tones are generally ascending, it might suggest a more uplifting feel. If they are sparse, it might suggest a calmer rhythm.
   {{/if}}
 
   Translate these visual elements (if drawing exists and is valid) and/or the voice hint (if exists) and/or sound sequence (if exists) into simple, playful, and melody-focused musical parameters.
@@ -157,20 +160,27 @@ const prompt = ai.definePrompt({
   {{#if genre}}
   The user has specified a musical genre: '{{{genre}}}'.
   Please ensure the generated musical parameters are stylistically appropriate for this genre, while still reflecting the core essence of the primary input (text, image, or video/audio concept).
-  {{else}}
-  No specific musical genre was provided. You have creative freedom to suggest parameters based purely on the input's perceived essence.
+  {{/if}}
+
+  {{#if userEnergy}}
+  The user has explicitly set a target energy level (arousal) of approximately {{{userEnergy}}} (on a scale of -1.0 to 1.0).
+  Ensure the 'targetArousal' in your output closely matches this value.
+  {{/if}}
+  {{#if userPositivity}}
+  The user has explicitly set a target positivity level (valence) of approximately {{{userPositivity}}} (on a scale of -1.0 to 1.0).
+  Ensure the 'targetValence' in your output closely matches this value.
   {{/if}}
 
   For all inputs (unless in Kids mode, which has its own output rules), generate the following musical parameters:
   - keySignature: The musical key and its quality (e.g., "C# major", "F minor").
   - mode: The musical mode, typically "major" or "minor".
   - tempoBpm: The tempo in Beats Per Minute (e.g., 120).
-  - moodTags: An array of descriptive tags for the mood (e.g., ["epic", "uplifting", "mysterious"]).
+  - moodTags: An array of descriptive tags for the mood. {{#if userEnergy}}If userEnergy is high, lean towards energetic tags. If low, calmer tags.{{/if}} {{#if userPositivity}}If userPositivity is high, lean towards positive tags. If low, negative/somber tags.{{/if}}
   - instrumentHints: An array of suggested instruments (e.g., ["Piano", "Strings", "Synth Pad"]).
-  - rhythmicDensity: A numerical value between 0.0 (very sparse, few notes) and 1.0 (very dense, many notes).
+  - rhythmicDensity: A numerical value between 0.0 (very sparse, few notes) and 1.0 (very dense, many notes). {{#if userEnergy}}Higher userEnergy might suggest higher rhythmic density, lower userEnergy might suggest lower density.{{/if}}
   - harmonicComplexity: A numerical value between 0.0 (simple, diatonic harmony) and 1.0 (complex, dissonant harmony).
-  - targetValence: A numerical value between -1.0 (highly negative emotion) and 1.0 (highly positive emotion).
-  - targetArousal: A numerical value between -1.0 (low energy, calm) and 1.0 (high energy, intense).
+  - targetValence: A numerical value between -1.0 (highly negative emotion) and 1.0 (highly positive emotion). {{#if userPositivity}}This MUST primarily reflect the userPositivity value if provided.{{else}}Derive this from the input content's perceived emotional tone.{{/if}}
+  - targetArousal: A numerical value between -1.0 (low energy, calm) and 1.0 (high energy, intense). {{#if userEnergy}}This MUST primarily reflect the userEnergy value if provided.{{else}}Derive this from the input content's perceived energy level.{{/if}}
   - generatedIdea: A brief, evocative textual description (maximum 30 words) of the musical piece envisioned from these parameters.
 {{/if}}
 
@@ -196,3 +206,4 @@ const generateMusicalParametersFlow = ai.defineFlow(
     return output!;
   }
 );
+
