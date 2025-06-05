@@ -221,14 +221,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         <Label className="block text-lg font-medium text-stardust-blue mb-3">
           1. Choose Input Type:
         </Label>
-        <div className="flex space-x-2 mb-6 bg-nebula-gray/50 p-1 rounded-lg shadow">
+        <div className="flex flex-wrap gap-2 mb-6 bg-nebula-gray/50 p-1 rounded-lg shadow">
           {inputOptions.map(opt => (
             <Button
               key={opt.type}
               type="button"
               variant={currentStandardInputType === opt.type ? "default" : "ghost"}
               onClick={() => handleInputTypeChange(opt.type)}
-              className={`flex-1 p-3 text-sm font-medium flex items-center justify-center transition-all duration-150 
+              className={`flex-1 p-3 text-sm font-medium flex items-center justify-center transition-all duration-150 min-w-[100px] 
                 ${currentStandardInputType === opt.type ? 'bg-cosmic-purple text-primary-foreground shadow-md' : 'text-slate-300 hover:bg-nebula-gray'}`}
               aria-pressed={currentStandardInputType === opt.type}
               disabled={isLoading}
@@ -353,12 +353,12 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         <p className="text-xs text-muted-foreground mb-4">Override AI's mood detection if you have a specific feeling in mind.</p>
         <div className="space-y-5">
           <div>
-            <div className="flex justify-between items-center mb-1">
+            <div className="flex flex-col items-start sm:flex-row sm:justify-between sm:items-center mb-1 gap-1 sm:gap-0">
               <Label htmlFor={energySliderId} className="text-sm font-medium text-slate-300">
-                Energy: <span className="text-xs text-muted-foreground">({energySlider !== 50 ? ((energySlider ?? 50)/10).toFixed(1) : "AI Decides"})</span>
+                Energy: <span className="text-xs text-muted-foreground">({energySlider !== 50 ? ((energySlider ?? 50)/10 -5).toFixed(1) : "AI Decides"})</span>
               </Label>
               {energySlider !== 50 && (
-                <Button type="button" variant="ghost" size="sm" onClick={resetEnergySlider} className="text-xs h-auto p-1 text-slate-400 hover:text-stardust-blue">
+                <Button type="button" variant="ghost" size="sm" onClick={resetEnergySlider} className="text-xs h-auto p-1 text-slate-400 hover:text-stardust-blue self-start sm:self-center">
                   <RotateCcw className="w-3 h-3 mr-1" /> Reset
                 </Button>
               )}
@@ -379,12 +379,12 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
             </div>
           </div>
           <div>
-            <div className="flex justify-between items-center mb-1">
+            <div className="flex flex-col items-start sm:flex-row sm:justify-between sm:items-center mb-1 gap-1 sm:gap-0">
               <Label htmlFor={positivitySliderId} className="text-sm font-medium text-slate-300">
-                Positivity: <span className="text-xs text-muted-foreground">({positivitySlider !== 50 ? ((positivitySlider ?? 50)/10).toFixed(1) : "AI Decides"})</span>
+                Positivity: <span className="text-xs text-muted-foreground">({positivitySlider !== 50 ? ((positivitySlider ?? 50)/10 - 5).toFixed(1) : "AI Decides"})</span>
               </Label>
                {positivitySlider !== 50 && (
-                <Button type="button" variant="ghost" size="sm" onClick={resetPositivitySlider} className="text-xs h-auto p-1 text-slate-400 hover:text-stardust-blue">
+                <Button type="button" variant="ghost" size="sm" onClick={resetPositivitySlider} className="text-xs h-auto p-1 text-slate-400 hover:text-stardust-blue self-start sm:self-center">
                   <RotateCcw className="w-3 h-3 mr-1" /> Reset
                 </Button>
               )}
@@ -451,4 +451,3 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     </form>
   );
 };
-
