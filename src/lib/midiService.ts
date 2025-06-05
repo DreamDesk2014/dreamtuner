@@ -449,13 +449,14 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const progression = getChordProgressionWithDetails(params.keySignature, params.mode, numProgressionCycles, chordOctave, harmonicComplexity, params.selectedGenre, isKidsMode);
     
     const calculateDynamicVelocity = (base: number, minVel: number, maxVel: number, randomRangeBase: number) => {
-        const valenceMod = targetValence * 15 * (isKidsMode ? 0.5 : 1); 
-        const arousalMod = targetArousal * 20 * (isKidsMode ? 0.7 : 1);  
-        let dynamicBase = clamp(base + valenceMod + arousalMod, minVel - 20, maxVel + 20);
+        const valenceMod = targetValence * 10 * (isKidsMode ? 0.5 : 1); // Reduced valence impact
+        const arousalMod = targetArousal * 25 * (isKidsMode ? 0.7 : 1.2); // Increased arousal impact slightly for non-kids
+        let dynamicBase = clamp(base + valenceMod + arousalMod, minVel - 10, maxVel + 10); // Tighter intermediate clamp
         
-        const randomRange = randomRangeBase + Math.abs(targetArousal * (randomRangeBase * (isKidsMode ? 0.5 : 1))); 
+        // Increased random range influence by arousal
+        const randomRange = randomRangeBase + Math.abs(targetArousal * (randomRangeBase * (isKidsMode ? 0.75 : 1.5))); 
         return clamp(
-            dynamicBase - (randomRange / 2) + Math.floor(Math.random() * randomRange),
+            Math.round(dynamicBase - (randomRange / 2) + Math.random() * randomRange), // Use Math.round for integer velocities
             minVel,
             maxVel
         );
@@ -466,7 +467,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
 
     // Chords/Pad Track
     progression.forEach(chordDef => {
-        const chordVelocity = calculateDynamicVelocity(isKidsMode ? 40 : 50, 30, isKidsMode ? 70 : 85, 10);
+        const chordVelocity = calculateDynamicVelocity(isKidsMode ? 40 : 50, isKidsMode ? 25 : 30, isKidsMode ? 70 : 85, isKidsMode ? 8 : 12); // Slightly wider random range
         if (chordDef.notes.length > 0) {
             const notesToPlay = isKidsMode ? [chordDef.notes[0]] : chordDef.notes; 
             if(notesToPlay.length > 0 && isValidMidiNumber(notesToPlay[0])) {
@@ -483,7 +484,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     // Bass Track
     progression.forEach(chordDef => {
         const bassNoteMidi = robustNoteToMidi(midiToNoteName(chordDef.rootNoteMidi).replace(/[0-9]+$/, String(bassOctave)));
-        const bassVelocity = calculateDynamicVelocity(isKidsMode ? 60 : 70, 40, isKidsMode ? 85 : 100, 15);
+        const bassVelocity = calculateDynamicVelocity(isKidsMode ? 60 : 70, isKidsMode ? 35 : 40, isKidsMode ? 85 : 105, isKidsMode ? 12 : 18); // Wider range
         
         if (!isValidMidiNumber(bassNoteMidi)) return;
 
@@ -491,23 +492,23 @@ export const generateMidiFile = (params: MusicParameters): string => {
             bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '1', velocity: bassVelocity}));
         } else if (genreLower && (genreLower.includes('rock') || genreLower.includes('pop') || genreLower.includes('metal') || genreLower.includes('country'))) {
             for (let i = 0; i < beatsPerMeasure; i++) { 
-                 bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '4', velocity: calculateDynamicVelocity(70, 50, 100, 5)}));
+                 bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '4', velocity: calculateDynamicVelocity(75, 55, 110, 8)})); // More varied for individual beats
             }
         } else if (genreLower && genreLower.includes('electronic')) {
              if (rhythmicDensity > 0.6) { 
                 for (let i = 0; i < beatsPerMeasure * 2; i++) { // 8th notes
-                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '8', velocity: calculateDynamicVelocity(70, 50, 100, 10)}));
+                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '8', velocity: calculateDynamicVelocity(70, 50, 105, 12)}));
                 }
             } else { // Quarter notes
                  for (let i = 0; i < beatsPerMeasure; i++) {
-                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '4', velocity: calculateDynamicVelocity(70, 50, 100, 5)}));
+                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '4', velocity: calculateDynamicVelocity(70, 50, 100, 8)}));
                 }
             }
         } else if (genreLower && genreLower.includes('jazz')) { // Walking bass idea
             const scaleForWalking = getScaleNotesForKey(midiToNoteName(chordDef.rootNoteMidi), chordDef.quality, bassOctave, params.selectedGenre, rhythmicDensity, harmonicComplexity, isKidsMode);
             for (let i = 0; i < beatsPerMeasure; i++) {
                 let noteChoice = bassNoteMidi;
-                if (i > 0 && scaleForWalking.length > 0) { // Simple stepwise motion for non-root beats
+                if (i > 0 && scaleForWalking.length > 0) { 
                     const prevNoteIndexInScale = scaleForWalking.indexOf(bassTrack.notes[bassTrack.notes.length-1]?.pitch[0] || bassNoteMidi);
                     if (prevNoteIndexInScale !== -1) {
                          noteChoice = scaleForWalking[(prevNoteIndexInScale + (Math.random() < 0.5 ? 1 : -1) + scaleForWalking.length) % scaleForWalking.length];
@@ -516,18 +517,16 @@ export const generateMidiFile = (params: MusicParameters): string => {
                     }
                 }
                  if (!isValidMidiNumber(noteChoice)) noteChoice = bassNoteMidi;
-                 bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [noteChoice], duration: '4', velocity: calculateDynamicVelocity(65, 40, 90, 15)}));
+                 bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [noteChoice], duration: '4', velocity: calculateDynamicVelocity(65, 40, 95, 18)})); // Wider random for jazz
             }
-        } else if (genreLower && (genreLower.includes('funk') || genreLower.includes('soul'))) { // Syncopated bass
-            // Example: X . X . X X . X (as 8ths)
-            const durations = ['8', '8d', '16', '8', '8', '8']; // Simplified
+        } else if (genreLower && (genreLower.includes('funk') || genreLower.includes('soul'))) { 
+            const durations = ['8', '8d', '16', '8', '8', '8']; 
             const pitches = [bassNoteMidi, bassNoteMidi, bassNoteMidi + (Math.random() < 0.3 ? 7:0), bassNoteMidi, bassNoteMidi, bassNoteMidi];
-            let currentTick = 0;
             for(let i=0; i < durations.length; i++) {
-                if (Math.random() > 0.2 || i === 0) { // some rests
-                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [pitches[i % pitches.length]], duration: durations[i % durations.length], velocity: calculateDynamicVelocity(75, 55, 110, 10)}));
+                if (Math.random() > 0.2 || i === 0) { 
+                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [pitches[i % pitches.length]], duration: durations[i % durations.length], velocity: calculateDynamicVelocity(80, 60, 115, 12)}));
                 } else {
-                     bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [pitches[i % pitches.length]], duration: durations[i % durations.length], wait: durations[i % durations.length]})); // Effectively a rest
+                     bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [pitches[i % pitches.length]], duration: durations[i % durations.length], wait: durations[i % durations.length]})); 
                 }
             }
         }
@@ -574,18 +573,17 @@ export const generateMidiFile = (params: MusicParameters): string => {
             if (!isValidMidiNumber(pitchMidi)) continue;
 
             let currentDuration = baseDuration;
-            let currentVelocity = calculateDynamicVelocity(isKidsMode ? 70 : 75, isKidsMode ? 50 : 40, isKidsMode ? 95 : 115, isKidsMode ? 15 : 20);
+            let currentVelocity = calculateDynamicVelocity(isKidsMode ? 70 : 80, isKidsMode ? 45 : 35, isKidsMode ? 100 : 120, isKidsMode ? 18 : 25); // Wider range for melody
 
 
-            if (!isKidsMode && baseDuration === '4' && rhythmicDensity > 0.8 && Math.random() < 0.25 && i < notesInMeasure -1) { 
+            if (!isKidsMode && baseDuration === '4' && rhythmicDensity > 0.8 && Math.random() < 0.3 && i < notesInMeasure -1) { // Increased chance for subdivision
                  melodyTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [pitchMidi], duration: '8', velocity: currentVelocity }));
                 
                 let nextPitchMidi = currentChordScaleMidi.length > 0 ? currentChordScaleMidi[Math.floor(Math.random() * currentChordScaleMidi.length)] : mainScaleNotesMidi[Math.floor(Math.random() * mainScaleNotesMidi.length)];
                 if(!isValidMidiNumber(nextPitchMidi) && mainScaleNotesMidi.length > 0) nextPitchMidi = mainScaleNotesMidi[0];
                 else if (!isValidMidiNumber(nextPitchMidi)) nextPitchMidi = DEFAULT_MIDI_NOTE;
 
-                melodyTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [nextPitchMidi], duration: '8', velocity: calculateDynamicVelocity(isKidsMode ? 65 : 70, isKidsMode ? 45 : 35, isKidsMode ? 90 : 110, isKidsMode ? 10 : 15) }));
-                // i++; // This was causing issues by skipping beats, removed
+                melodyTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [nextPitchMidi], duration: '8', velocity: calculateDynamicVelocity(isKidsMode ? 65 : 75, isKidsMode ? 40 : 30, isKidsMode ? 95 : 115, isKidsMode ? 12 : 18) }));
             } else {
                 melodyTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [pitchMidi], duration: currentDuration, velocity: currentVelocity }));
             }
@@ -606,7 +604,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
                 for (let subBeat = 0; subBeat < numArpNotesPerBeat; subBeat++) {
                     const pitchMidi = arpNotesMidi[(beat * numArpNotesPerBeat + subBeat) % arpNotesMidi.length];
                      if (!isValidMidiNumber(pitchMidi)) continue;
-                    const arpVelocity = calculateDynamicVelocity(isKidsMode ? 50 : 60, 30, isKidsMode ? 75 : 90, 10);
+                    const arpVelocity = calculateDynamicVelocity(isKidsMode ? 50 : 65, isKidsMode ? 25 : 30, isKidsMode ? 75 : 95, isKidsMode ? 10 : 15);
                     arpeggioTrack.addEvent(new MidiWriter.NoteEvent({
                         pitch: [pitchMidi],
                         duration: numArpNotesPerBeat === 2 ? '16' : (isKidsMode && numArpNotesPerBeat === 1 ? '4' : '8'),
@@ -618,7 +616,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
              const pitchMidi = arpNotesMidi[0];
              if (!isValidMidiNumber(pitchMidi)) return;
              arpeggioTrackHasEvents = true;
-             const arpVelocity = calculateDynamicVelocity(isKidsMode ? 45 : 55, 25, isKidsMode ? 70 : 85, 5);
+             const arpVelocity = calculateDynamicVelocity(isKidsMode ? 45 : 60, isKidsMode ? 20 : 25, isKidsMode ? 70 : 85, 8);
              arpeggioTrack.addEvent(new MidiWriter.NoteEvent({
                 pitch: [pitchMidi], 
                 duration: chordDef.measureDuration || '1',
@@ -648,15 +646,15 @@ export const generateMidiFile = (params: MusicParameters): string => {
             for (let beat = 0; beat < beatsPerMeasure; beat++) {
                 const beatStartTick = measureStartTick + beat * TPQN;
                 if (beat === 0 || beat === 2) { 
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(70, 50, 90, 5), channel: 10, tick: beatStartTick }));
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(70, 50, 90, 8), channel: 10, tick: beatStartTick }));
                 }
                 if (hasShaker) { 
                     for(let sub = 0; sub < 2; sub++) {
-                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [KID_INSTRUMENTS.SHAKER_NOTE], duration: '8', velocity: calculateDynamicVelocity(50, 30, 70, 10), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
+                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [KID_INSTRUMENTS.SHAKER_NOTE], duration: '8', velocity: calculateDynamicVelocity(55, 35, 75, 12), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
                     }
                 } else if (hasTambourine) { 
                      if (beat === 1 || beat === 3) {
-                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [KID_INSTRUMENTS.TAMBOURINE_NOTE], duration: '4', velocity: calculateDynamicVelocity(60, 40, 80, 5), channel: 10, tick: beatStartTick }));
+                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [KID_INSTRUMENTS.TAMBOURINE_NOTE], duration: '4', velocity: calculateDynamicVelocity(60, 40, 80, 8), channel: 10, tick: beatStartTick }));
                     }
                 }
             }
@@ -668,28 +666,28 @@ export const generateMidiFile = (params: MusicParameters): string => {
             // Minimal or no drums
             if (rhythmicDensity > 0.2 && genreLower.includes('folk')) { // Light percussion for folk if some density
                 drumTrackHasEvents = true;
-                if (measureIndex % 2 === 0) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '1', velocity: calculateDynamicVelocity(50, 30, 70, 5), channel: 10, tick: measureStartTick }));
+                if (measureIndex % 2 === 0) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '1', velocity: calculateDynamicVelocity(55, 35, 75, 8), channel: 10, tick: measureStartTick }));
             } else if (rhythmicDensity > 0.1 && genreLower.includes('ambient')) {
                  drumTrackHasEvents = true;
-                 if (measureIndex % 4 === 0) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [crashCymbal], duration: '1', velocity: calculateDynamicVelocity(40, 20, 60, 10), channel: 10, tick: measureStartTick, channel: 10 }));
+                 if (measureIndex % 4 === 0) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [crashCymbal], duration: '1', velocity: calculateDynamicVelocity(45, 25, 65, 12), channel: 10, tick: measureStartTick, channel: 10 }));
             }
             // Otherwise, no drums for these genres by default
         }
         else { // For other genres with drums
             drumTrackHasEvents = true;
             if (measureIndex === 0 || (measureIndex > 0 && measureIndex % 8 === 0 && !isFillMeasure)) { 
-                drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [crashCymbal], duration: '2', velocity: calculateDynamicVelocity(100, 80, 120, 10), channel: 10, tick: measureStartTick }));
+                drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [crashCymbal], duration: '2', velocity: calculateDynamicVelocity(105, 85, 125, 12), channel: 10, tick: measureStartTick }));
             }
              for (let beat = 0; beat < beatsPerMeasure; beat++) {
                 const beatStartTick = measureStartTick + beat * TPQN;
-                let kickVel = calculateDynamicVelocity(95, 70, 120, 15);
-                let snareVel = calculateDynamicVelocity(85, 60, 110, 15);
-                let hiHatBaseVel = 60 + targetArousal * 20; 
-                let hiHatVel = calculateDynamicVelocity(hiHatBaseVel, 30, 90, 10);
+                let kickVel = calculateDynamicVelocity(100, 75, 125, 18);
+                let snareVel = calculateDynamicVelocity(90, 65, 115, 18);
+                let hiHatBaseVel = 65 + targetArousal * 25; // More sensitive to arousal
+                let hiHatVel = calculateDynamicVelocity(hiHatBaseVel, 30, 95, 15);
 
                 if (isFillMeasure && beat === beatsPerMeasure - 1 && measureIndex !== progression.length - 1) { 
                     for(let f=0; f<4; f++) {
-                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '16', velocity: calculateDynamicVelocity(70 + f*5, 50, 100, 5), channel: 10, tick: beatStartTick + f * Math.floor(TPQN/4) }));
+                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '16', velocity: calculateDynamicVelocity(75 + f*7, 55, 105, 8), channel: 10, tick: beatStartTick + f * Math.floor(TPQN/4) }));
                     }
                     continue; 
                 }
@@ -698,34 +696,34 @@ export const generateMidiFile = (params: MusicParameters): string => {
                 if (genreLower?.includes("rock") || genreLower?.includes("metal") || genreLower?.includes("country")) {
                     if (beat === 0 || beat === 2) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: kickVel, channel: 10, tick: beatStartTick }));
                     if (beat === 1 || beat === 3) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '4', velocity: snareVel, channel: 10, tick: beatStartTick }));
-                    for(let sub = 0; sub < 2; sub++) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8', velocity: clamp(hiHatVel - (sub*10) + Math.floor(Math.random()*16-8), 30, 90), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
+                    for(let sub = 0; sub < 2; sub++) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8', velocity: clamp(hiHatVel - (sub*12) + Math.floor(Math.random()*20-10), 30, 95), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
                 } else if (genreLower?.includes("pop") || genreLower?.includes("funk") || genreLower?.includes("soul")) {
                     if (beat === 0 || (beat === 2 && Math.random() < 0.7)) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: kickVel, channel: 10, tick: beatStartTick }));
                     if (beat === 1 || beat === 3) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '4', velocity: snareVel, channel: 10, tick: beatStartTick })); 
                     const numHiHats = rhythmicDensity > 0.7 ? 4 : 2; 
-                    for(let sub = 0; sub < numHiHats; sub++) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: numHiHats === 4 ? '16' : '8', velocity: clamp(hiHatVel - (sub % 2 === 1 ? 15:0) + Math.floor(Math.random()*12-6), 30, 90), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/numHiHats)}));
+                    for(let sub = 0; sub < numHiHats; sub++) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: numHiHats === 4 ? '16' : '8', velocity: clamp(hiHatVel - (sub % 2 === 1 ? 18:0) + Math.floor(Math.random()*15-7), 30, 95), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/numHiHats)}));
                 } else if (genreLower?.includes("electronic") || genreLower?.includes("reggae")) { 
                     drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: kickVel + (genreLower.includes("electronic") ? 5: -5), channel: 10, tick: beatStartTick })); // Four on the floor for electronic
                     if (beat === 1 || beat === 3) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '4', velocity: snareVel, channel: 10, tick: beatStartTick })); 
                     if (genreLower.includes("reggae") && beat === 2) { // Reggae skank on offbeat
-                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '8d', velocity: snareVel -10, channel: 10, tick: beatStartTick + Math.floor(TPQN/2)}));
+                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '8d', velocity: snareVel -15, channel: 10, tick: beatStartTick + Math.floor(TPQN/2)}));
                     }
                     const hiHatPattern = rhythmicDensity > 0.6 ? (genreLower.includes("electronic") ? 4 : 2) : 2; // 16ths for dense electronic
                     const hiHatDuration = hiHatPattern === 4 ? '16' : '8';
-                    for(let sub = 0; sub < hiHatPattern; sub++) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: hiHatDuration, velocity: clamp(hiHatVel - 10 + Math.floor(Math.random()*8-4), 30, 85), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/hiHatPattern)}));
+                    for(let sub = 0; sub < hiHatPattern; sub++) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: hiHatDuration, velocity: clamp(hiHatVel - 12 + Math.floor(Math.random()*10-5), 30, 90), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/hiHatPattern)}));
                 } else if (genreLower?.includes("jazz")) { 
-                     if (beat === 0 || beat === 2) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: kickVel - 20, channel: 10, tick: beatStartTick }));
-                    if (beat === 1 || beat === 3) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '4', velocity: snareVel - 20, channel: 10, tick: beatStartTick }));
+                     if (beat === 0 || beat === 2) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: kickVel - 25, channel: 10, tick: beatStartTick }));
+                    if (beat === 1 || beat === 3) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '4', velocity: snareVel - 25, channel: 10, tick: beatStartTick }));
                     // Basic swing ride: X . X X . X X . (as 8th notes, with first of pair longer)
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [rideCymbal], duration: '4d', velocity: clamp(hiHatVel-15 + Math.floor(Math.random()*10-5), 30, 80), channel: 10, tick: beatStartTick })); 
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [rideCymbal], duration: '8', velocity: clamp(hiHatVel-20 + Math.floor(Math.random()*8-4), 25, 75), channel: 10, tick: beatStartTick + Math.floor(TPQN * 0.66) })); // Approx 2/3 for swing feel
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [rideCymbal], duration: '4d', velocity: clamp(hiHatVel-18 + Math.floor(Math.random()*12-6), 30, 85), channel: 10, tick: beatStartTick })); 
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [rideCymbal], duration: '8', velocity: clamp(hiHatVel-25 + Math.floor(Math.random()*10-5), 25, 80), channel: 10, tick: beatStartTick + Math.floor(TPQN * 0.66) })); // Approx 2/3 for swing feel
                 } else if (genreLower?.includes("blues")) { // Shuffle feel
-                    if (beat === 0 || beat === 2) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: kickVel -10 , channel: 10, tick: beatStartTick }));
-                    if (beat === 1 || beat === 3) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '4', velocity: snareVel -10, channel: 10, tick: beatStartTick }));
+                    if (beat === 0 || beat === 2) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: kickVel -15 , channel: 10, tick: beatStartTick }));
+                    if (beat === 1 || beat === 3) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '4', velocity: snareVel -15, channel: 10, tick: beatStartTick }));
                     // Shuffle hi-hat: Long-short
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8t', velocity: clamp(hiHatVel + Math.floor(Math.random()*12-6), 30, 90), channel: 10, tick: beatStartTick })); 
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8t', velocity: clamp(hiHatVel -15 + Math.floor(Math.random()*12-6), 25, 85), channel: 10, tick: beatStartTick + Math.floor((TPQN / 3 * 2)) })); 
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8t', velocity: clamp(hiHatVel -10 + Math.floor(Math.random()*12-6), 25, 85), channel: 10, tick: beatStartTick + Math.floor((TPQN / 3 * 1)) })); // Adding missing middle triplet for full shuffle feel
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8t', velocity: clamp(hiHatVel + Math.floor(Math.random()*15-7), 30, 95), channel: 10, tick: beatStartTick })); 
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8t', velocity: clamp(hiHatVel -18 + Math.floor(Math.random()*15-7), 25, 90), channel: 10, tick: beatStartTick + Math.floor((TPQN / 3 * 2)) })); 
+                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8t', velocity: clamp(hiHatVel -12 + Math.floor(Math.random()*15-7), 25, 90), channel: 10, tick: beatStartTick + Math.floor((TPQN / 3 * 1)) })); // Adding missing middle triplet for full shuffle feel
                 } else { // Default fallback if genre not specifically handled above
                     if (beat === 0 || (beat === 2 && rhythmicDensity > 0.4)) {
                         drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: kickVel, channel: 10, tick: beatStartTick }));
@@ -734,9 +732,9 @@ export const generateMidiFile = (params: MusicParameters): string => {
                         drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '4', velocity: snareVel, channel: 10, tick: beatStartTick }));
                     }
                     if (rhythmicDensity > 0.6) { 
-                        for(let sub = 0; sub < 2; sub++) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8', velocity: clamp(hiHatVel - (sub*10) + Math.floor(Math.random()*16-8), 30, 90), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
+                        for(let sub = 0; sub < 2; sub++) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8', velocity: clamp(hiHatVel - (sub*12) + Math.floor(Math.random()*20-10), 30, 95), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
                     } else if (rhythmicDensity > 0.2) { 
-                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '4', velocity: clamp(hiHatVel + Math.floor(Math.random()*12-6), 30, 90), channel: 10, tick: beatStartTick }));
+                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '4', velocity: clamp(hiHatVel + Math.floor(Math.random()*15-7), 30, 95), channel: 10, tick: beatStartTick }));
                     }
                 }
             }
@@ -752,7 +750,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const finalPadOctave = isKidsMode ? 3 : (genreLower?.includes('jazz') ? 3 : 2);
     const finalTonicChordForPad = getChordProgressionWithDetails(tonicKeyName, finalModeIsMinor ? 'minor' : 'major', 1, finalPadOctave, 0.1, params.selectedGenre, isKidsMode)[0];
     if (finalTonicChordForPad && finalTonicChordForPad.notes.length > 0) {
-        const finalPadVelocity = calculateDynamicVelocity(isKidsMode ? 30 : 40, 20, isKidsMode ? 55 : 65, 5);
+        const finalPadVelocity = calculateDynamicVelocity(isKidsMode ? 30 : 35, 15, isKidsMode ? 55 : 60, 5); // Softer end
         chordsPadTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: finalTonicChordForPad.notes,
             duration: finalNoteDuration, 
@@ -764,7 +762,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const finalMelodyOctave = isKidsMode ? 4 : (genreLower?.includes('jazz') ? 4 : 3);
     const finalMelodyNoteMidi = robustNoteToMidi(tonicKeyName + finalMelodyOctave);
     if (isValidMidiNumber(finalMelodyNoteMidi)) {
-        const finalMelodyVelocity = calculateDynamicVelocity(isKidsMode ? 35 : 45, 25, isKidsMode ? 60 : 70, 5);
+        const finalMelodyVelocity = calculateDynamicVelocity(isKidsMode ? 35 : 40, 20, isKidsMode ? 60 : 65, 5); // Softer end
         melodyTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: [finalMelodyNoteMidi],
             duration: finalNoteDuration, 
@@ -776,7 +774,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const finalBassOctave = isKidsMode ? 2 : 1;
     const finalBassNoteMidi = robustNoteToMidi(tonicKeyName + finalBassOctave);
     if (isValidMidiNumber(finalBassNoteMidi)) {
-        const finalBassVelocity = calculateDynamicVelocity(isKidsMode ? 45 : 55, 35, isKidsMode ? 65 : 75, 5);
+        const finalBassVelocity = calculateDynamicVelocity(isKidsMode ? 45 : 50, 30, isKidsMode ? 65 : 70, 5); // Softer end
         bassTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: [finalBassNoteMidi],
             duration: finalNoteDuration, 
@@ -786,7 +784,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     
     // 4. Final Cymbal Crash (Drum Track) - Only if drums were used
     if (drumTrackHasEvents || isKidsMode) { // Kids mode might have implied percussion
-        const finalDrumVelocity = calculateDynamicVelocity(isKidsMode ? 70 : 90, 50, isKidsMode ? 90 : 110, 10);
+        const finalDrumVelocity = calculateDynamicVelocity(isKidsMode ? 70 : 85, 45, isKidsMode ? 90 : 105, 10); // Softer end
         drumTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: [crashCymbal], 
             duration: finalNoteDuration, 
