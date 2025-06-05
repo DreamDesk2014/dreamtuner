@@ -1,8 +1,8 @@
 
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-// import * as Tone from 'tone'; // Tone.js imports commented out
-// import { Midi as MidiFileParser } from '@tonejs/midi'; // Tone.js imports commented out
+import * as Tone from 'tone';
+import { Midi as MidiFileParser } from '@tonejs/midi';
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
@@ -11,13 +11,12 @@ import { toast } from '@/hooks/use-toast';
 import {
   MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon,
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
-  LibraryIcon, ExclamationCircleIcon // Replaced AlertTriangle with ExclamationCircleIcon
-  // PlayIcon, PauseIcon, StopIcon commented out
+  LibraryIcon, PlayIcon, PauseIcon, StopIcon, ExclamationCircleIcon
 } from './icons/HeroIcons';
 import { Share2 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-// import { Progress } from "@/components/ui/progress"; // Progress bar commented out
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -32,53 +31,55 @@ interface MusicOutputDisplayProps {
   standardModeArtUrl: string | null;
 }
 
-// MIN_TIME_GAP and ensureStrictlyIncreasingTimes are no longer needed here if Tone.js playback is disabled
-// const MIN_TIME_GAP = 0.001;
-// interface EventTime { time: number; [key: string]: any; }
+interface EventTime { time: number; [key: string]: any; }
 
-/*
+const MIN_TIME_GAP = 0.001; // Epsilon for time adjustments
+
 function ensureStrictlyIncreasingTimes(events: EventTime[], label = "Track"): EventTime[] {
-  const sorted = [...events].sort((a, b) => {
+  if (!events || events.length === 0) {
+    return [];
+  }
+  // First, sort by time to handle cases where events might not be pre-sorted.
+  const sortedEvents = [...events].sort((a, b) => {
     const timeA = typeof a.time === 'number' ? a.time : parseFloat(a.time as any);
     const timeB = typeof b.time === 'number' ? b.time : parseFloat(b.time as any);
     if (isNaN(timeA) && isNaN(timeB)) return 0;
-    if (isNaN(timeA)) return 1;
-    if (isNaN(timeB)) return -1;
+    if (isNaN(timeA)) return 1; // Treat NaN as greater
+    if (isNaN(timeB)) return -1; // Treat NaN as greater
     return timeA - timeB;
   });
 
+  const adjustedEvents: EventTime[] = [];
   let lastTime = -Infinity;
-  const epsilon = 0.001; // MIN_TIME_GAP
 
-  return sorted.map((event, idx) => {
-    const originalEventTime = typeof event.time === 'number' ? event.time : parseFloat(event.time as any);
-    let newTime = originalEventTime;
+  for (let i = 0; i < sortedEvents.length; i++) {
+    const event = sortedEvents[i];
+    let newTime = typeof event.time === 'number' ? event.time : parseFloat(event.time as any);
 
     if (isNaN(newTime)) {
-      console.warn(`[${label}] Event with invalid time encountered at index ${idx}:`, event, `Setting time to ${lastTime + epsilon}`);
-      newTime = lastTime + epsilon;
+      console.warn(`[${label}] Event with invalid time encountered at original index for event:`, event, `Setting time to ${lastTime + MIN_TIME_GAP}`);
+      newTime = lastTime + MIN_TIME_GAP;
     } else if (newTime <= lastTime) {
-      newTime = lastTime + epsilon;
-      // console.warn(`[${label}] Adjusted overlapping note time from ${originalEventTime} -> ${newTime} (index: ${idx})`);
+      // console.warn(`[${label}] Adjusted overlapping note time from ${event.time} -> ${lastTime + MIN_TIME_GAP} (index: ${i})`);
+      newTime = lastTime + MIN_TIME_GAP;
     }
     
+    adjustedEvents.push({ ...event, time: newTime });
     lastTime = newTime;
-    return { ...event, time: newTime };
-  });
+  }
+  return adjustedEvents;
 }
-*/
+
 
 interface SynthConfigurations {
-  melody: any; // Partial<Tone.SynthOptions>;
-  bass: any; // Partial<Tone.SynthOptions>;
-  chords: any; // Partial<Tone.SynthOptions>;
-  kick: any; // Partial<Tone.MembraneSynthOptions>;
-  snare: any; // Partial<Tone.NoiseSynthOptions>;
-  hiHat: any; // Partial<Tone.MetalSynthOptions>;
+  melody: any; 
+  bass: any; 
+  chords: any; 
+  kick: any; 
+  snare: any; 
+  hiHat: any; 
 }
 
-// getSynthConfigurations might still be useful if we re-enable player or for other purposes
-// For now, its Tone-specific parts are not directly used for playback.
 const getSynthConfigurations = (
   instrumentHints: string[] = [],
   genre: string = '',
@@ -126,15 +127,16 @@ const getSynthConfigurations = (
     }
 
     hintsLower.forEach(hint => {
-      if (hint.includes('piano')) {
-        configs.melody = { oscillator: { type: 'fmsine', harmonicity: 2.1, modulationIndex: 10, detune: 2 }, envelope: { attack: 0.005, decay: 0.7, sustain: 0.05, release: 0.4 }, volume: -3 };
+      if (hint.includes('piano') && !isKidsMode) { // Piano hint, not in kids mode
+        // Melody is handled by sampler, chords might still be synth or sampler if piano is also for chords.
+        // For simplicity, keep chords synth here unless explicitly handled by sampler logic later
         if (!genreLower.includes('jazz')) configs.chords = { oscillator: { type: 'fmsine', harmonicity: 2.5, modulationIndex: 8 }, volume: -12, envelope: { attack: 0.01, decay: 0.8, sustain: 0.1, release: 0.5 } };
       } else if (hint.includes('strings') || hint.includes('pad') && !hint.includes('synth pad')) {
         configs.melody = { oscillator: { type: 'fatsawtooth', count: 5, spread: 30 }, envelope: { attack: 0.3, decay: 0.1, sustain: 0.9, release: 1.2 }, volume: -6 };
         configs.chords = { oscillator: { type: 'fatsawtooth', count: 7, spread: 50 }, volume: -10, envelope: { attack: 0.5, decay: 0.2, sustain: 0.9, release: 1.5 } };
       } else if (hint.includes('synth lead') && !isKidsMode) {
         configs.melody = { oscillator: { type: 'pwm', modulationFrequency: 0.3 }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.7, release: 0.6 }, volume: 0 };
-      } else if (hint.includes('acoustic guitar')) {
+      } else if (hint.includes('acoustic guitar') && !isKidsMode) { // Acoustic Guitar
          configs.melody = { oscillator: { type: 'fmtriangle', harmonicity: 1.2, modulationIndex: 12 }, envelope: { attack: 0.01, decay: 0.25, sustain: 0.01, release: 0.15}, volume: -4 };
          configs.chords = { oscillator: { type: 'fmtriangle', harmonicity: 1.5, modulationIndex: 10 }, volume: -10, envelope: { attack: 0.02, decay: 0.4, sustain: 0.05, release: 0.25} };
       } else if (hint.includes('flute')) {
@@ -150,6 +152,7 @@ const getSynthConfigurations = (
   return configs;
 };
 
+
 export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, onRegenerateIdea, isRegeneratingIdea, standardModeArtUrl }) => {
   const [midiError, setMidiError] = useState<string | null>(null);
   const [isGeneratingMidiForDownload, setIsGeneratingMidiForDownload] = useState<boolean>(false);
@@ -158,17 +161,15 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
   const [isSharing, setIsSharing] = useState<boolean>(false);
   const [shareError, setShareError] = useState<string | null>(null);
 
-  // Comment out Tone.js specific state
-  // const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  // const [isLoadingTone, setIsLoadingTone] = useState<boolean>(false);
-  // const [toneError, setToneError] = useState<string | null>(null);
-  // const [playbackProgress, setPlaybackProgress] = useState<number>(0);
-  // const [currentMidiDuration, setCurrentMidiDuration] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isLoadingTone, setIsLoadingTone] = useState<boolean>(false);
+  const [toneError, setToneError] = useState<string | null>(null);
+  const [playbackProgress, setPlaybackProgress] = useState<number>(0);
+  const [currentMidiDuration, setCurrentMidiDuration] = useState<number>(0);
+  const [pianoSamplesLoaded, setPianoSamplesLoaded] = useState(false);
 
-  // Comment out Tone.js synth refs
-  /*
   const synthsRef = useRef<{
-    melody?: Tone.PolySynth,
+    melody?: Tone.PolySynth | Tone.Sampler,
     bass?: Tone.PolySynth,
     chords?: Tone.PolySynth,
     kick?: Tone.MembraneSynth,
@@ -177,20 +178,27 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     parts: (Tone.Part | Tone.Sequence)[]
   }>({parts: []});
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  */
 
-  // Comment out Tone.js initialization useEffect
-  /*
+  const generatePianoSampleUrls = () => {
+    const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const salamanderFileNotes = ["C", "Cs", "D", "Ds", "E", "F", "Fs", "G", "Gs", "A", "As", "B"];
+    const urls: Record<string, string> = {};
+    for (let octave = 1; octave <= 7; octave++) {
+      notes.forEach((note, index) => {
+        urls[`${note}${octave}`] = `${salamanderFileNotes[index]}${octave}.mp3`;
+      });
+    }
+    return urls;
+  };
+
+
   useEffect(() => {
-    synthsRef.current = {
-      melody: new Tone.PolySynth(Tone.Synth).toDestination(),
-      bass: new Tone.PolySynth(Tone.Synth, { detune: -1200 }).toDestination(),
-      chords: new Tone.PolySynth(Tone.Synth).toDestination(),
-      kick: new Tone.MembraneSynth().toDestination(),
-      snare: new Tone.NoiseSynth().toDestination(),
-      hiHat: new Tone.MetalSynth().toDestination(),
-      parts: []
-    };
+    // Initialize non-sampler synths
+    synthsRef.current.bass = new Tone.PolySynth(Tone.Synth, { detune: -1200 }).toDestination();
+    synthsRef.current.chords = new Tone.PolySynth(Tone.Synth).toDestination();
+    synthsRef.current.kick = new Tone.MembraneSynth().toDestination();
+    synthsRef.current.snare = new Tone.NoiseSynth().toDestination();
+    synthsRef.current.hiHat = new Tone.MetalSynth().toDestination();
 
     return () => {
       if (Tone.Transport.state === 'started') {
@@ -203,204 +211,223 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
             (synthOrParts as any).dispose();
         }
       });
-      synthsRef.current = { parts: [] };
+      synthsRef.current = { parts: [] }; // Reset parts array
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
       }
     };
   }, []);
-  */
 
-  // Comment out loadAndScheduleMidi and its related useEffects
-  /*
+
   const loadAndScheduleMidi = useCallback(async () => {
-    if (!params || !synthsRef.current.melody || !synthsRef.current.kick || !synthsRef.current.snare || !synthsRef.current.hiHat || !synthsRef.current.bass || !synthsRef.current.chords) {
-    setToneError("Synths not initialized yet.");
-    return;
-  }
-
-  setIsLoadingTone(true);
-  setToneError(null);
-  setIsPlaying(false);
-  setPlaybackProgress(0);
-  setCurrentMidiDuration(0);
-
-  if (Tone.Transport.state === 'started') Tone.Transport.stop();
-  Tone.Transport.cancel(0);
-  Tone.Transport.position = 0;
-  synthsRef.current.parts.forEach(part => part.dispose());
-  synthsRef.current.parts = [];
-
-  try {
-    const synthConfigs = getSynthConfigurations(
-      params.instrumentHints,
-      params.selectedGenre,
-      params.originalInput.mode === 'kids'
-    );
-
-    synthsRef.current.melody?.set(synthConfigs.melody);
-    synthsRef.current.bass?.set(synthConfigs.bass);
-    synthsRef.current.chords?.set(synthConfigs.chords);
-    synthsRef.current.kick?.set(synthConfigs.kick);
-    synthsRef.current.snare?.set(synthConfigs.snare);
-    synthsRef.current.hiHat?.set(synthConfigs.hiHat);
-
-    const midiDataUri = generateMidiFile(params);
-    if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
-      throw new Error("Failed to generate valid MIDI data.");
+    if (!params || !synthsRef.current.kick || !synthsRef.current.snare || !synthsRef.current.hiHat || !synthsRef.current.bass || !synthsRef.current.chords ) {
+      setToneError("Core synths not initialized yet.");
+      return;
     }
 
-    const parsedMidi = await MidiFileParser.fromUrl(midiDataUri);
-    setCurrentMidiDuration(parsedMidi.duration);
-    Tone.Transport.bpm.value = params.tempoBpm;
+    setIsLoadingTone(true);
+    setToneError(null);
+    setIsPlaying(false);
+    setPlaybackProgress(0);
+    setCurrentMidiDuration(0);
+    setPianoSamplesLoaded(false);
 
-    const newParts: (Tone.Part)[] = [];
+    if (Tone.Transport.state === 'started') Tone.Transport.stop();
+    Tone.Transport.cancel(0);
+    Tone.Transport.position = 0;
+    synthsRef.current.parts.forEach(part => part.dispose());
+    synthsRef.current.parts = [];
 
-    // For drum parts - collect events first, then create one part per drum type
-    const drumEvents: { kick: EventTime[], snare: EventTime[], hiHat: EventTime[] } = { kick: [], snare: [], hiHat: [] };
-    
-    parsedMidi.tracks.forEach((track) => {
-      if (track.channel === 9) { // Drum track (MIDI channel 10, 0-indexed)
-        track.notes.forEach(note => {
-          const noteTimeInput = note.time;
-          const noteDurationInput = note.duration;
-          const noteVelocityInput = note.velocity;
+    try {
+      const synthConfigs = getSynthConfigurations(
+        params.instrumentHints,
+        params.selectedGenre,
+        params.originalInput.mode === 'kids'
+      );
 
-          const noteTime = parseFloat(noteTimeInput as any);
-          let noteDuration = parseFloat(noteDurationInput as any);
-          const noteVelocity = parseFloat(noteVelocityInput as any);
+      // Dispose previous melody synth/sampler
+      synthsRef.current.melody?.dispose();
 
-          if (isNaN(noteTime) || isNaN(noteDuration) || isNaN(noteVelocity)) {
-            console.warn(`[Drums] Skipping note with invalid time/duration/velocity:`, note);
-            return;
-          }
-          if (noteDuration <= 0) {
-            // console.warn(`[Drums] Note with non-positive duration (${noteDurationInput}) encountered, defaulting to 0.05s for note:`, note, "@ t:", noteTime);
-            noteDuration = 0.05;
-          }
+      const usePianoSampler = params.instrumentHints.some(h => h.toLowerCase().includes('piano')) && params.originalInput.mode !== 'kids';
 
+      if (usePianoSampler) {
+        console.log("Using Piano Sampler for melody");
+        const pianoSampler = new Tone.Sampler({
+            urls: generatePianoSampleUrls(),
+            baseUrl: "https://tonejs.github.io/audio/salamander/",
+            release: 1,
+            onload: () => {
+                console.log('Piano samples loaded successfully for melody track.');
+                setPianoSamplesLoaded(true);
+                if (Tone.Transport.state === 'paused' && isPlaying) { // Auto-play if was meant to play
+                  Tone.Transport.start();
+                }
+            }
+        }).toDestination();
+        pianoSampler.volume.value = -3;
+        synthsRef.current.melody = pianoSampler;
+      } else {
+          console.log("Using PolySynth for melody");
+          synthsRef.current.melody = new Tone.PolySynth(Tone.Synth).toDestination();
+          synthsRef.current.melody.set(synthConfigs.melody);
+          setPianoSamplesLoaded(true); // Consider non-sampler as "loaded" for playback readiness
+      }
+      
+      synthsRef.current.bass?.set(synthConfigs.bass);
+      synthsRef.current.chords?.set(synthConfigs.chords);
+      synthsRef.current.kick?.set(synthConfigs.kick);
+      synthsRef.current.snare?.set(synthConfigs.snare);
+      synthsRef.current.hiHat?.set(synthConfigs.hiHat);
 
-          let drumType: 'kick' | 'snare' | 'hiHat' | null = null;
-          let pitchToPlay: string | number | undefined = undefined;
+      const midiDataUri = generateMidiFile(params);
+      if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
+        throw new Error("Failed to generate valid MIDI data.");
+      }
 
-          // GM Drum Map common notes
-          if (note.midi === 35 || note.midi === 36) { drumType = 'kick'; pitchToPlay = "C1"; } // Bass Drum 1, Acoustic Bass Drum
-          else if (note.midi === 38 || note.midi === 40) { drumType = 'snare'; } // Acoustic Snare, Electric Snare
-          else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { // Closed Hi-Hat, Pedal Hi-Hat, Open Hi-Hat
-            drumType = 'hiHat';
-            pitchToPlay = note.midi === 46 ? 400 : 250; // Higher freq for open hi-hat
-          }
+      const parsedMidi = await MidiFileParser.fromUrl(midiDataUri);
+      setCurrentMidiDuration(parsedMidi.duration);
+      Tone.Transport.bpm.value = params.tempoBpm;
 
-          if (drumType) {
-            const event: EventTime = { time: noteTime, duration: Math.max(noteDuration, 0.05), velocity: noteVelocity, pitch: pitchToPlay };
-            if (drumType === 'kick') drumEvents.kick.push(event);
-            else if (drumType === 'snare') drumEvents.snare.push(event);
-            else if (drumType === 'hiHat') drumEvents.hiHat.push(event);
-          }
-        });
-      } else { // Pitched instrument tracks
-        let synth: Tone.PolySynth | undefined;
-        const { melody: melodyInstrument, bass: bassInstrument, chordsPad: chordsPadInstrument } = mapInstrumentHintToGM(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids');
-
-        if (track.instrument.number === melodyInstrument && synthsRef.current.melody) synth = synthsRef.current.melody;
-        else if (track.instrument.number === bassInstrument && synthsRef.current.bass) synth = synthsRef.current.bass;
-        else if (track.instrument.number === chordsPadInstrument && synthsRef.current.chords) synth = synthsRef.current.chords;
-        else if (synthsRef.current.melody) synth = synthsRef.current.melody; // Fallback to melody synth
-
-        if (synth) {
-          const trackEvents: EventTime[] = track.notes.map(n => {
-            const noteTimeInput = n.time;
-            const noteDurationInput = n.duration;
-            const noteVelocityInput = n.velocity;
-            const noteNameInput = n.name;
+      const newParts: (Tone.Part)[] = [];
+      const drumEvents: { kick: EventTime[], snare: EventTime[], hiHat: EventTime[] } = { kick: [], snare: [], hiHat: [] };
+      
+      parsedMidi.tracks.forEach((track) => {
+        if (track.channel === 9) { 
+          track.notes.forEach(note => {
+            const noteTimeInput = note.time;
+            const noteDurationInput = note.duration;
+            const noteVelocityInput = note.velocity;
 
             const noteTime = parseFloat(noteTimeInput as any);
             let noteDuration = parseFloat(noteDurationInput as any);
             const noteVelocity = parseFloat(noteVelocityInput as any);
 
-            if (typeof noteNameInput === 'string' && !isNaN(noteTime) && !isNaN(noteDuration) && !isNaN(noteVelocity)) {
-              if (noteDuration <=0) {
-                  // console.warn(`[${track.name || 'Pitched'}] Note with non-positive duration (${noteDurationInput}) encountered, defaulting to 0.05s for note:`, n.name, "@ t:", noteTime);
-                  noteDuration = 0.05;
-              }
-              return { time: noteTime, name: noteNameInput, duration: Math.max(noteDuration, 0.05), velocity: noteVelocity };
+            if (isNaN(noteTime) || isNaN(noteDuration) || isNaN(noteVelocity)) {
+              console.warn(`[Drums] Skipping note with invalid time/duration/velocity:`, note);
+              return;
             }
-            // console.warn(`[${track.name || 'Pitched'}] Skipping note with invalid properties:`, n);
-            return null;
-          }).filter(e => e !== null) as EventTime[];
+            let effectiveDuration = Math.max(noteDuration > 0 ? noteDuration : 0.05, 0.05);
 
-          if (trackEvents.length > 0) {
-            const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Track-${track.name || 'pitched'}`);
-            const part = new Tone.Part(((time, value) => {
-              if (value.name && typeof value.name === 'string' && synth) {
-                const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05); // Ensure min duration
-                synth.triggerAttackRelease(value.name, effectiveDuration, time, value.velocity);
-              } else {
-                // console.warn(`[${track.name || 'Pitched'}] Invalid note data for synth:`, value);
+            let drumType: 'kick' | 'snare' | 'hiHat' | null = null;
+            let pitchToPlay: string | number | undefined = undefined;
+
+            if (note.midi === 35 || note.midi === 36) { drumType = 'kick'; pitchToPlay = "C1"; } 
+            else if (note.midi === 38 || note.midi === 40) { drumType = 'snare'; } 
+            else if (note.midi === 42 || note.midi === 44 || note.midi === 46) { 
+              drumType = 'hiHat';
+              pitchToPlay = note.midi === 46 ? 400 : 250; 
+            }
+
+            if (drumType) {
+              const event: EventTime = { time: noteTime, duration: effectiveDuration, velocity: noteVelocity, pitch: pitchToPlay };
+              if (drumType === 'kick') drumEvents.kick.push(event);
+              else if (drumType === 'snare') drumEvents.snare.push(event);
+              else if (drumType === 'hiHat') drumEvents.hiHat.push(event);
+            }
+          });
+        } else { 
+          let activeSynth: Tone.PolySynth | Tone.Sampler | undefined;
+          const { melody: melodyInstrument, bass: bassInstrument, chordsPad: chordsPadInstrument } = mapInstrumentHintToGM(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids');
+
+          if (track.instrument.number === melodyInstrument && synthsRef.current.melody) activeSynth = synthsRef.current.melody;
+          else if (track.instrument.number === bassInstrument && synthsRef.current.bass) activeSynth = synthsRef.current.bass;
+          else if (track.instrument.number === chordsPadInstrument && synthsRef.current.chords) activeSynth = synthsRef.current.chords;
+          else if (synthsRef.current.melody) activeSynth = synthsRef.current.melody; 
+
+          if (activeSynth) {
+            const trackEvents: EventTime[] = track.notes.map(n => {
+              const noteTimeInput = n.time;
+              const noteDurationInput = n.duration;
+              const noteVelocityInput = n.velocity;
+              const noteNameInput = n.name;
+
+              const noteTime = parseFloat(noteTimeInput as any);
+              let noteDuration = parseFloat(noteDurationInput as any);
+              const noteVelocity = parseFloat(noteVelocityInput as any);
+
+              if (typeof noteNameInput === 'string' && !isNaN(noteTime) && !isNaN(noteDuration) && !isNaN(noteVelocity)) {
+                let effectiveDuration = Math.max(noteDuration > 0 ? noteDuration : 0.05, 0.05);
+                return { time: noteTime, name: noteNameInput, duration: effectiveDuration, velocity: noteVelocity };
               }
-            }) as any, correctedTrackEvents);
-            newParts.push(part);
+              console.warn(`[${track.name || 'Pitched'}] Skipping note with invalid properties:`, n);
+              return null;
+            }).filter(e => e !== null) as EventTime[];
+
+            if (trackEvents.length > 0) {
+              const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Track-${track.name || 'pitched'}`);
+              const part = new Tone.Part(((time, value) => {
+                if (value.name && typeof value.name === 'string' && activeSynth) {
+                  const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05);
+                  activeSynth.triggerAttackRelease(value.name, effectiveDuration, time, value.velocity);
+                } else {
+                  console.warn(`[${track.name || 'Pitched'}] Invalid note data for synth:`, value);
+                }
+              }) as any, correctedTrackEvents);
+              newParts.push(part);
+            }
           }
         }
+      });
+
+      if (drumEvents.kick.length > 0 && synthsRef.current.kick) {
+        const correctedKickEvents = ensureStrictlyIncreasingTimes(drumEvents.kick, "Kick");
+        const kickPart = new Tone.Part(((time, value) => {
+          const drumSynth = synthsRef.current.kick;
+          if (drumSynth && value.pitch && (typeof value.pitch === 'string' || typeof value.pitch === 'number')) {
+              const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05);
+              drumSynth.triggerAttackRelease(value.pitch as string, effectiveDuration, time, value.velocity);
+          } else { console.warn("[Kick] Invalid pitch or synth not ready", value); }
+        }) as any, correctedKickEvents);
+        newParts.push(kickPart);
       }
-    });
-
-    // Create parts for collected drum events
-    if (drumEvents.kick.length > 0 && synthsRef.current.kick) {
-      const correctedKickEvents = ensureStrictlyIncreasingTimes(drumEvents.kick, "Kick");
-      const kickPart = new Tone.Part(((time, value) => {
-        const drumSynth = synthsRef.current.kick;
-        if (drumSynth && value.pitch && (typeof value.pitch === 'string' || typeof value.pitch === 'number')) {
+      if (drumEvents.snare.length > 0 && synthsRef.current.snare) {
+        const correctedSnareEvents = ensureStrictlyIncreasingTimes(drumEvents.snare, "Snare");
+        const snarePart = new Tone.Part(((time, value) => {
+          const drumSynth = synthsRef.current.snare;
+          if (drumSynth) {
             const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05);
-            drumSynth.triggerAttackRelease(value.pitch, effectiveDuration, time, value.velocity);
-        } else {
-            // console.warn("[Kick] Invalid pitch or synth not ready", value);
-        }
-      }) as any, correctedKickEvents);
-      newParts.push(kickPart);
-    }
-    if (drumEvents.snare.length > 0 && synthsRef.current.snare) {
-      const correctedSnareEvents = ensureStrictlyIncreasingTimes(drumEvents.snare, "Snare");
-      const snarePart = new Tone.Part(((time, value) => {
-        const drumSynth = synthsRef.current.snare as Tone.NoiseSynth; // Correct type
-        if (drumSynth) {
-          const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05);
-          drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity); // Correct signature
-        }
-      }) as any, correctedSnareEvents);
-      newParts.push(snarePart);
-    }
-    if (drumEvents.hiHat.length > 0 && synthsRef.current.hiHat) {
-      const correctedHiHatEvents = ensureStrictlyIncreasingTimes(drumEvents.hiHat, "HiHat");
-      const hiHatPart = new Tone.Part(((time, value) => {
-        const drumSynth = synthsRef.current.hiHat as Tone.MetalSynth;
-        if (drumSynth) {
-          if (value.pitch && typeof value.pitch === 'number') {
-            drumSynth.frequency.setValueAtTime(value.pitch, time);
+            drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
           }
-          const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05);
-          drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
-        }
-      }) as any, correctedHiHatEvents);
-      newParts.push(hiHatPart);
+        }) as any, correctedSnareEvents);
+        newParts.push(snarePart);
+      }
+      if (drumEvents.hiHat.length > 0 && synthsRef.current.hiHat) {
+        const correctedHiHatEvents = ensureStrictlyIncreasingTimes(drumEvents.hiHat, "HiHat");
+        const hiHatPart = new Tone.Part(((time, value) => {
+          const drumSynth = synthsRef.current.hiHat as Tone.MetalSynth;
+          if (drumSynth) {
+            if (value.pitch && typeof value.pitch === 'number') {
+              drumSynth.frequency.setValueAtTime(value.pitch, time);
+            }
+            const effectiveDuration = Math.max(parseFloat(value.duration as any), 0.05);
+            drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
+          }
+        }) as any, correctedHiHatEvents);
+        newParts.push(hiHatPart);
+      }
+
+      newParts.forEach(part => part.start(0));
+      synthsRef.current.parts = newParts;
+
+    } catch (error) {
+      console.error("Tone.js MIDI loading/scheduling error:", error);
+      setToneError(error instanceof Error ? error.message : "Error loading or scheduling MIDI with Tone.js");
+    } finally {
+      setIsLoadingTone(false);
+      // If not using sampler, or if sampler already loaded, pianoSamplesLoaded will be true.
+      // If using sampler and it's still loading, this won't auto-play yet.
+      if (!usePianoSampler && isPlaying) { // if it was supposed to be playing and not using sampler
+          Tone.Transport.start();
+      }
     }
-
-    newParts.forEach(part => part.start(0));
-    synthsRef.current.parts = newParts;
-
-  } catch (error) {
-    console.error("Tone.js MIDI loading/scheduling error:", error);
-    setToneError(error instanceof Error ? error.message : "Error loading or scheduling MIDI with Tone.js");
-  } finally {
-    setIsLoadingTone(false);
-  }
-  }, [params]); 
+  }, [params, isPlaying]); // Added isPlaying to deps to handle auto-play after sample load
 
   useEffect(() => {
     if (params) {
       loadAndScheduleMidi();
     }
-  }, [params, loadAndScheduleMidi]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]); // loadAndScheduleMidi is memoized and will be called when params change
 
   const updateProgress = useCallback(() => {
     if (!isPlaying || !currentMidiDuration) {
@@ -409,7 +436,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
     }
     const progress = (Tone.Transport.seconds / currentMidiDuration) * 100;
     setPlaybackProgress(Math.min(progress, 100));
-  }, [currentMidiDuration, isPlaying, playbackProgress]);
+  }, [currentMidiDuration, isPlaying]);
 
   useEffect(() => {
     const endOfTransportHandler = () => {
@@ -419,26 +446,26 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
-      Tone.Transport.position = 0; // Reset position for next play
+      Tone.Transport.position = 0; 
     };
     Tone.Transport.on('stop', endOfTransportHandler);
     return () => {
       Tone.Transport.off('stop', endOfTransportHandler);
     };
   }, []);
-  */
 
-  // Comment out playback control handlers
-  /*
   const handlePlayPause = async () => {
-    if (isLoadingTone) return;
+    if (isLoadingTone || !pianoSamplesLoaded) { // Don't allow play if Tone is loading or piano samples aren't ready
+        toast({title: "Player Loading", description: "Player is still loading resources, please wait."});
+        return;
+    }
     if (!currentMidiDuration) {
       setToneError("MIDI data not loaded or duration is zero.");
       return;
     }
 
     if (Tone.Transport.state !== 'started') {
-      await Tone.start(); // Ensure AudioContext is running
+      await Tone.start(); 
       Tone.Transport.start();
       setIsPlaying(true);
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
@@ -462,9 +489,8 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       clearInterval(progressIntervalRef.current);
       progressIntervalRef.current = null;
     }
-    Tone.Transport.position = 0; // Always reset position on stop
+    Tone.Transport.position = 0; 
   };
-  */
 
   const handleDownloadMidi = () => {
     setMidiError(null); setIsGeneratingMidiForDownload(true);
@@ -726,13 +752,15 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
     return "Very Complex";
   };
 
-  // const playButtonDisabled = isLoadingTone || !currentMidiDuration; // Commented out
-  // const showLoadingSpinnerInPlayButton = isLoadingTone; // Commented out
-  // let statusMessage = ""; // Commented out
-  // if (toneError) statusMessage = `Player Error: ${toneError}`;
-  // else if (isLoadingTone) statusMessage = "Preparing your tune...";
-  // else if (!isPlaying && currentMidiDuration > 0 && playbackProgress < 1) statusMessage = "Ready to play.";
-  // else if (!isPlaying && currentMidiDuration > 0 && playbackProgress >= 100) statusMessage = "Playback finished. Play again?";
+  const playButtonDisabled = isLoadingTone || !currentMidiDuration || !pianoSamplesLoaded;
+  const showLoadingSpinnerInPlayButton = isLoadingTone || (params.instrumentHints.some(h => h.toLowerCase().includes('piano')) && !pianoSamplesLoaded && params.originalInput.mode !== 'kids');
+  
+  let statusMessage = "";
+  if (toneError) statusMessage = `Player Error: ${toneError}`;
+  else if (isLoadingTone) statusMessage = "Preparing your tune...";
+  else if (showLoadingSpinnerInPlayButton) statusMessage = "Loading piano samples...";
+  else if (!isPlaying && currentMidiDuration > 0 && playbackProgress < 1) statusMessage = "Ready to play.";
+  else if (!isPlaying && currentMidiDuration > 0 && playbackProgress >= 100) statusMessage = "Playback finished. Play again?";
 
 
   return (
@@ -781,15 +809,21 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
           <CardTitle className="text-lg font-semibold text-stardust-blue text-center">Listen to Your Tune</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* MIDI Player Controls Removed/Commented Out */}
-           <Alert variant="default" className="bg-muted/30 border-slate-600 text-slate-300">
-            <ExclamationCircleIcon className="h-5 w-5 text-amber-400" />
-            <AlertTitle className="text-amber-400">Player Under Development</AlertTitle>
-            <AlertDescription>
-              In-browser MIDI playback is temporarily unavailable while we fine-tune it.
-              You can still download the MIDI file below to listen with your preferred MIDI player.
-            </AlertDescription>
-          </Alert>
+            <div className="flex items-center justify-center space-x-2 my-4">
+                <Button onClick={handlePlayPause} disabled={playButtonDisabled || showLoadingSpinnerInPlayButton} variant="outline" size="icon" className="w-12 h-12 rounded-full border-stardust-blue text-stardust-blue hover:bg-stardust-blue/10">
+                {showLoadingSpinnerInPlayButton ? (
+                    <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle>
+                        <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" fill="currentColor"></path>
+                    </svg>
+                ) : isPlaying ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
+                </Button>
+                <Button onClick={handleStop} disabled={isLoadingTone || !currentMidiDuration} variant="outline" size="icon" className="w-12 h-12 rounded-full border-slate-500 text-slate-300 hover:bg-slate-700/50">
+                    <StopIcon className="w-6 h-6" />
+                </Button>
+            </div>
+            <Progress value={playbackProgress} className="w-full h-2 mt-3 mb-1 [&>span]:bg-stardust-blue" />
+            <p className="text-xs text-center text-muted-foreground h-4">{statusMessage}</p>
         </CardContent>
       </Card>
 
@@ -851,11 +885,11 @@ const ParameterCardComponent: React.FC<{title: string; value: any; icon: React.R
 );
 
 const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: boolean = false): { melody: number; bass: number; chordsPad: number; arpeggioSynth: number } => {
-    let mapping = { melody: 80, bass: 38, chordsPad: 89, arpeggioSynth: 81 };
+    let mapping = { melody: 80, bass: 38, chordsPad: 89, arpeggioSynth: 81 }; // Default to Synth Lead, Synth Bass, Synth Pad, Synth Pluck
     const genreLower = genre?.toLowerCase();
 
     if (isKidsMode) {
-        mapping = { melody: 13, bass: 24, chordsPad: 8, arpeggioSynth: 74 };
+        mapping = { melody: 13, bass: 24, chordsPad: 8, arpeggioSynth: 74 }; // Xylo, Ukulele, Celesta, Recorder
         (hints || []).forEach(hint => {
             const hLower = hint.toLowerCase();
             if (/xylophone/i.test(hLower)) mapping.melody = 13;
@@ -870,13 +904,13 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
 
 
     if (genreLower) {
-        if (genreLower.includes("rock")) { mapping = { melody: 27, bass: 34, chordsPad: 27, arpeggioSynth: 27 }; }
-        else if (genreLower.includes("pop")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81 }; }
-        else if (genreLower.includes("jazz")) { mapping = { melody: 1, bass: 32, chordsPad: 1, arpeggioSynth: 52 }; }
+        if (genreLower.includes("rock")) { mapping = { melody: 27, bass: 34, chordsPad: 27, arpeggioSynth: 27 }; } // Electric Guitar, Picked Bass, EG, EG
+        else if (genreLower.includes("pop")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81 }; } // Synth Lead, Synth Bass, Pad (New Age), Synth Lead
+        else if (genreLower.includes("jazz")) { mapping = { melody: 1, bass: 32, chordsPad: 1, arpeggioSynth: 52 }; } // Piano, Acoustic Bass, Piano, Voice Aahs
         else if (genreLower.includes("electronic")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81 }; }
-        else if (genreLower.includes("ambient")) { mapping = { melody: 90, bass: 90, chordsPad: 89, arpeggioSynth: 99 }; }
-        else if (genreLower.includes("classical") || genreLower.includes("cinematic")) { mapping = { melody: 40, bass: 42, chordsPad: 48, arpeggioSynth: 49 }; }
-        else if (genreLower.includes("folk")) { mapping = { melody: 24, bass: 32, chordsPad: 24, arpeggioSynth: 73 }; }
+        else if (genreLower.includes("ambient")) { mapping = { melody: 90, bass: 90, chordsPad: 89, arpeggioSynth: 99 }; } // Pad (Warm), Pad (Warm), Pad (New Age), FX (Crystal)
+        else if (genreLower.includes("classical") || genreLower.includes("cinematic")) { mapping = { melody: 40, bass: 42, chordsPad: 48, arpeggioSynth: 49 }; } // Violin, Cello, Strings, Strings
+        else if (genreLower.includes("folk")) { mapping = { melody: 24, bass: 32, chordsPad: 24, arpeggioSynth: 73 }; } // Acoustic Guitar, Acoustic Bass, AG, Flute
     }
 
     (hints || []).forEach(hint => {
@@ -911,5 +945,3 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
     });
     return mapping;
 };
-
-

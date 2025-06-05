@@ -145,11 +145,6 @@ function getScaleNotesForKey(
     } else {
         intervals = (mode.toLowerCase().includes('minor')) ? STANDARD_MINOR_INTERVALS : STANDARD_MAJOR_INTERVALS;
     }
-     if (!intervals) { 
-        console.warn("Intervals not assigned in getScaleNotesForKey, defaulting to Major intervals. Inputs:", {keySignature, mode, genre, isKidsMode});
-        intervals = STANDARD_MAJOR_INTERVALS;
-    }
-
 
     return intervals.map(interval => {
         const currentMidiValue = rootMidiBase + interval;
@@ -200,26 +195,35 @@ function getChordProgressionWithDetails(
             normalizedRootMidiPitch + fifthInterval
         ];
         
+        // Add Root one octave higher for richness if not kids mode and some complexity (but not for dominant 7ths which already have 4 notes with 7th)
+        if (!isKidsMode && harmonicComplexity > 0.3 && quality !== 'dominant7th' && !isDominant7thOverride) {
+            const rootOctaveUp = normalizedRootMidiPitch + 12;
+            if (isValidMidiNumber(rootOctaveUp)) {
+                chordMidiNumbers.push(rootOctaveUp);
+            }
+        }
+        
         const useSeventh = harmonicComplexity > 0.6 || isDominant7thOverride || (genreLower?.includes('jazz') && harmonicComplexity > 0.3);
 
         if (useSeventh && !isKidsMode) {
-            if (seventhInterval === null) { // Calculate default seventh if not dominant7th
-                 seventhInterval = (quality === 'major' || quality === 'minor') ? 10 : (quality === 'diminished' ? 9 : 11); // Minor 7th for major/minor, diminished 7th for dim, major 7th for aug
+            if (seventhInterval === null) { 
+                 seventhInterval = (quality === 'major' || quality === 'minor') ? 10 : (quality === 'diminished' ? 9 : 11); 
             }
-             chordMidiNumbers.push(normalizedRootMidiPitch + seventhInterval);
+             const seventhNote = normalizedRootMidiPitch + seventhInterval;
+             if(isValidMidiNumber(seventhNote)) chordMidiNumbers.push(seventhNote);
         }
         
-        if (genreLower?.includes('rock') && harmonicComplexity < 0.4) { // Power chords
+        if (genreLower?.includes('rock') && harmonicComplexity < 0.4 && !isKidsMode) { 
              chordMidiNumbers = [normalizedRootMidiPitch, normalizedRootMidiPitch + fifthInterval];
-        }
+             const rootOctaveDown = normalizedRootMidiPitch - 12; // Common for power chords to have lower root
+             if (isValidMidiNumber(rootOctaveDown)) chordMidiNumbers.unshift(rootOctaveDown);
 
-
-        if (isKidsMode) { 
-             chordMidiNumbers = [normalizedRootMidiPitch, normalizedRootMidiPitch + thirdInterval, normalizedRootMidiPitch + fifthInterval];
+        } else if (isKidsMode) { 
+             chordMidiNumbers = [normalizedRootMidiPitch, normalizedRootMidiPitch + thirdInterval, normalizedRootMidiPitch + fifthInterval].slice(0,3); // Ensure only 3 notes for kids
         }
         
-        const validatedNotes = chordMidiNumbers.filter(isValidMidiNumber);
-        if (validatedNotes.length < (genreLower?.includes('rock') && harmonicComplexity < 0.4 ? 2:1) && chordMidiNumbers.length >=1 ) { 
+        const validatedNotes = chordMidiNumbers.filter(isValidMidiNumber).sort((a,b) => a-b); // Sort for consistency
+        if (validatedNotes.length === 0 && chordMidiNumbers.length >=1 ) { 
              return { notes: [normalizedRootMidiPitch].filter(isValidMidiNumber), quality, rootNoteMidi: normalizedRootMidiPitch };
         }
         return { notes: validatedNotes, quality, rootNoteMidi: normalizedRootMidiPitch };
@@ -245,50 +249,50 @@ function getChordProgressionWithDetails(
     } else if (genreLower?.includes('jazz')) {
         if (mode.toLowerCase().includes('minor')) {
              baseProgression = [
-                { ...buildChord(2, 'diminished', baseOctave), duration: defaultDuration, measureDuration: '1' }, // ii° (half-diminished often)
-                { ...buildChord(7, 'dominant7th', baseOctave, true), duration: defaultDuration, measureDuration: '1' }, // V7
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, // i
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }  // i (extra measure for feel)
+                { ...buildChord(2, 'diminished', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(7, 'dominant7th', baseOctave, true), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }  
             ];
         } else {
             baseProgression = [
-                { ...buildChord(2, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' },  // ii
-                { ...buildChord(7, 'dominant7th', baseOctave, true), duration: defaultDuration, measureDuration: '1' }, // V7
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // I
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   // I
+                { ...buildChord(2, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(7, 'dominant7th', baseOctave, true), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   
             ];
         }
     } else if (genreLower?.includes('pop') || genreLower?.includes('rock')) {
         if (mode.toLowerCase().includes('minor')) {
-             baseProgression = [ // Common minor pop/rock: i - VI - III - VII
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, // i
-                { ...buildChord(8, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, // VI
-                { ...buildChord(3, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, // III
-                { ...buildChord(10, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }  // VII
+             baseProgression = [ 
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(8, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(3, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(10, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }  
             ];
-        } else { // Common major pop/rock: I - V - vi - IV
+        } else { 
             baseProgression = [ 
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // I
-                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // V
-                { ...buildChord(9, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' },  // vi
-                { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   // IV
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(9, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   
             ];
         }
     }
      else { 
         if (mode.toLowerCase().includes('minor')) {
             baseProgression = [ 
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, // i
-                { ...buildChord(5, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, // iv
-                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, // V (often major dominant in minor)
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }  // i
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(5, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }  
             ];
         } else { 
             baseProgression = [ 
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // I
-                { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // IV
-                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // V
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   // I
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   
             ];
         }
     }
@@ -470,7 +474,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
 
         const chordVelocity = calculateDynamicVelocity(isKidsMode ? 40 : 50, isKidsMode ? 25 : 30, isKidsMode ? 70 : 85, isKidsMode ? 8 : 12); 
         if (chordDef.notes && chordDef.notes.length > 0) {
-            const notesToPlay = isKidsMode ? [chordDef.notes[0]] : chordDef.notes; 
+            const notesToPlay = isKidsMode && chordDef.notes.length > 0 ? [chordDef.notes[0]] : chordDef.notes; 
             if (notesToPlay && notesToPlay.length > 0 && isValidMidiNumber(notesToPlay[0])) {
                  chordsPadTrack.addEvent(new MidiWriter.NoteEvent({ 
                      pitch: notesToPlay, 
@@ -697,7 +701,6 @@ export const generateMidiFile = (params: MusicParameters): string => {
             return; 
         }
         if (!Array.isArray(chordDef.notes)) {
-            // This check is less critical for drums but good for consistency
             console.warn(`chordDef.notes is not an array at measureIndex ${measureIndex} in drumTrack. Defaulting to empty. ChordDef:`, chordDef);
             chordDef.notes = [];
         }
@@ -875,4 +878,3 @@ export const generateMidiFile = (params: MusicParameters): string => {
         return fallbackWriter.dataUri();
     }
 };
-
