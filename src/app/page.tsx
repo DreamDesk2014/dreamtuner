@@ -183,7 +183,6 @@ export default function DreamTunerPage() {
   }, [musicParams]);
   
 
-  const mainTitle = currentMode === 'kids' ? "DreamTuner Kids!" : "DreamTuner";
   const mainSubtitle = currentMode === 'kids' 
     ? "Draw, make sounds, add voice hints! Hear music & see AI art!"
     : "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
@@ -194,8 +193,19 @@ export default function DreamTunerPage() {
       <header className="w-full max-w-3xl mb-8 text-center">
         <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2">
           <LogoIcon className="w-10 h-10 sm:w-12 sm:h-12" /> 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-stardust-blue to-cosmic-purple font-headline">
-            {mainTitle}
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight font-headline">
+            {currentMode === 'kids' ? (
+              <>
+                <span style={{ color: 'rgb(0, 41, 66)' }}>Dream</span>
+                <span style={{ color: 'rgb(41, 171, 226)' }}>Tuner</span>
+                <span style={{ color: 'hsl(var(--accent))' }}> Kids!</span>
+              </>
+            ) : (
+              <>
+                <span style={{ color: 'rgb(0, 41, 66)' }}>Dream</span>
+                <span style={{ color: 'rgb(41, 171, 226)' }}>Tuner</span>
+              </>
+            )}
           </h1>
           <Badge variant="outline" className="border-amber-500 text-amber-400 text-xs sm:text-sm font-semibold px-1.5 py-0.5 sm:px-2">BETA</Badge>
         </div>
