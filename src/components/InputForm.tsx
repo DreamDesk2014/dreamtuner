@@ -47,7 +47,7 @@ const mapSliderToFloat = (value: number | undefined): number | undefined => {
   return (value - 50) / 50;
 };
 
-const MAX_VIDEO_RECORDING_DURATION_MS = 7000; // 7 seconds
+const MAX_VIDEO_RECORDING_DURATION_MS = 4000; // 4 seconds
 
 interface InputFormProps {
   onSubmit: (input: AppInput) => void;
@@ -797,7 +797,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                           disabled={isProcessingCamera || isLoading || !hasCameraPermission || !cameraFeedReady || isRecordingAudio}
                           className={`w-full mt-3 text-primary-foreground disabled:opacity-60 ${isRecordingVideo ? 'bg-red-600 hover:bg-red-700' : 'bg-sky-600 hover:bg-sky-700'}`}
                       >
-                          {isRecordingVideo ? <><VideoOff className="w-5 h-5 mr-2" />{`Stop Recording (${recordingCountdown}s)`}</> : <><Video className="w-5 h-5 mr-2" />Start Recording Video (7s)</>}
+                          {isRecordingVideo ? <><VideoOff className="w-5 h-5 mr-2" />{`Stop Recording (${recordingCountdown}s)`}</> : <><Video className="w-5 h-5 mr-2" />{`Start Recording Video (${MAX_VIDEO_RECORDING_DURATION_MS/1000}s)`}</>}
                       </Button>
                   )}
                   {videoRecordingError && <p className="mt-1 text-xs text-red-400">{videoRecordingError}</p>}
