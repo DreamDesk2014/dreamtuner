@@ -188,7 +188,7 @@ export default function DreamTunerPage() {
     : "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-nebula-dark via-slate-900 to-nebula-dark text-galaxy-white flex flex-col items-center p-4 sm:p-8 font-body">
+    <div className="min-h-screen bg-gradient-to-tr from-gradient-blue-dark to-gradient-blue-light/65 text-galaxy-white flex flex-col items-center p-4 sm:p-8 font-body">
       <NavigationBar />
       <header className="w-full max-w-3xl mb-8 text-center">
         <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2">
@@ -207,7 +207,7 @@ export default function DreamTunerPage() {
               </>
             )}
           </h1>
-          <Badge variant="outline" className="border-amber-500 text-amber-400 text-xs sm:text-sm font-semibold px-1.5 py-0.5 sm:px-2">BETA</Badge>
+          <Badge variant="outline" className="border-amber-500 text-amber-400 text-[10px] sm:text-xs font-semibold px-1 py-px sm:px-1.5 sm:py-0.5">BETA</Badge>
         </div>
         <p className="text-md sm:text-lg text-slate-300">{mainSubtitle}</p>
       </header>
@@ -301,3 +301,4 @@ export default function DreamTunerPage() {
     </div>
   );
 }
+
