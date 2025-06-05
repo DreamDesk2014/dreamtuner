@@ -22,15 +22,15 @@ export const NavigationBar: React.FC = () => {
             <InfoIcon className="h-5 w-5 text-slate-400 hover:text-stardust-blue transition-colors" />
           </Button>
         </DialogTrigger>
-        <DialogContent 
-          aria-describedby="about-dialog-description" 
+        <DialogContent
+          aria-describedby="about-dialog-description"
           className="sm:max-w-md bg-nebula-gray border-slate-700 text-galaxy-white shadow-2xl"
         >
           <DialogHeader>
             <DialogTitle className="text-stardust-blue font-headline text-xl">About DreamTuner</DialogTitle>
           </DialogHeader>
-          <div 
-            id="about-dialog-description" 
+          <div
+            id="about-dialog-description"
             className="space-y-3 text-slate-300 py-3 text-sm leading-relaxed max-h-[60vh] overflow-y-auto pr-3"
           >
             <p>
@@ -49,7 +49,7 @@ export const NavigationBar: React.FC = () => {
               Please note that the <strong>quality of the MIDI playback is an area under active development</strong>, so it might be basic at times as we refine the music generation process.
             </p>
             <p className="font-semibold text-amber-400 pt-2">
-              DreamTuner is currently in <strong>Beta</strong>. We appreciate your feedback as we continue to improve!
+              DreamTuner is currently in <strong>Beta</strong>. We appreciate your feedback as we continue to improve! Some features may not work as expected due to the ongoing development process or environment restrictions.
             </p>
           </div>
           <DialogFooter className="mt-2 pt-4 border-t border-slate-700">
