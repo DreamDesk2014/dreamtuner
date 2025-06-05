@@ -85,6 +85,7 @@ export default function DreamTunerPage() {
     if (artInput) setIsRenderingAiKidsArt(true);
     setError(null);
     setMusicParams(null);
+    setCurrentMusicParams(null); // Clear previous music params for Kids mode share
     setAiKidsArtUrl(null);
     setAiKidsArtError(null);
     setShowWelcome(false);
@@ -105,6 +106,7 @@ export default function DreamTunerPage() {
       } else {
         musicParametersResult = musicResult;
         setMusicParams(musicResult);
+        setCurrentMusicParams(musicResult); // Store for Kids mode share
         generatedMusicalIdea = musicResult.generatedIdea;
         setError(null);
       }
@@ -175,6 +177,10 @@ export default function DreamTunerPage() {
     }
   }, [musicParams]);
   
+  // Added state for KidsModeTab to hold current music params for sharing
+  const [currentKidsMusicParams, setCurrentMusicParams] = useState<MusicParameters | null>(null);
+
+
   const mainTitle = currentMode === 'kids' ? "DreamTuner Kids!" : "DreamTuner";
   const mainSubtitle = currentMode === 'kids' 
     ? "Draw, make sounds, add voice hints! Hear music & see AI art!"
@@ -185,7 +191,8 @@ export default function DreamTunerPage() {
       <NavigationBar />
       <header className="w-full max-w-3xl mb-8 text-center">
         <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2">
-          <LogoIcon className="w-10 h-10 sm:w-12 sm:h-12 text-stardust-blue" />
+          {/* Removed text-stardust-blue as PNG will have its own colors */}
+          <LogoIcon className="w-10 h-10 sm:w-12 sm:h-12" /> 
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-stardust-blue to-cosmic-purple font-headline">
             {mainTitle}
           </h1>
@@ -221,6 +228,7 @@ export default function DreamTunerPage() {
               selectedGenre={selectedGenre}
               onGenreChange={setSelectedGenre}
               isClientMounted={isClientMounted}
+              currentMusicParamsFromPage={currentKidsMusicParams} // Pass down the stored music params
             />
           </TabsContent>
         </Tabs>
