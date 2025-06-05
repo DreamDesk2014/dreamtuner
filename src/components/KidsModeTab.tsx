@@ -203,17 +203,14 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
     }
 
     setIsSharingKidsCreation(true);
-    const filesToShare: File[] = [];
+    const filesToShareAttempt: (File | null)[] = [];
     let shareText = "Check out what I made with DreamTuner Kids!";
     
     try {
       if (aiKidsArtUrlProp) {
         const artFile = dataURLtoFile(aiKidsArtUrlProp, "dreamtuner_ai_art.png");
-        if (artFile) {
-          filesToShare.push(artFile);
-        } else {
-          console.warn("Could not convert AI art to a shareable file.");
-        }
+        filesToShareAttempt.push(artFile);
+        if (!artFile) console.warn("Could not convert AI art to a shareable file.");
       }
 
       if (currentMusicParams) {
@@ -222,33 +219,39 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
           let baseFileName = 'dreamtuner_kids_music';
           if(currentMusicParams.generatedIdea) baseFileName = currentMusicParams.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,25);
           const midiFile = dataURLtoFile(midiDataUri, `${baseFileName}.mid`);
-          if (midiFile) {
-            filesToShare.push(midiFile);
-          } else {
-            console.warn("Could not convert MIDI data to a shareable file for Kids Mode.");
-          }
+          filesToShareAttempt.push(midiFile);
+          if(!midiFile) console.warn("Could not convert MIDI data to a shareable file for Kids Mode.");
         }
         if (currentMusicParams.generatedIdea) {
             shareText += `\nMusical Idea: "${currentMusicParams.generatedIdea}"`;
         }
       }
 
-      if (filesToShare.length === 0) {
+      const validFilesToShare = filesToShareAttempt.filter(file => file !== null) as File[];
+
+      if (validFilesToShare.length === 0) {
         throw new Error("No shareable content could be prepared.");
       }
 
       const shareData: ShareData = {
         title: "My DreamTuner Kids Creation!",
         text: shareText,
-        files: filesToShare,
+        files: validFilesToShare,
       };
-
+      
+      console.log("Attempting to share (Kids Mode):", shareData);
       await navigator.share(shareData);
       toast({ title: "Shared Creation Successfully!" });
 
     } catch (error: any) {
       if (error.name === 'AbortError') {
         toast({ title: "Share Cancelled", variant: "default" });
+      } else if (error.name === 'NotAllowedError') {
+        toast({
+          variant: "destructive",
+          title: "Share Permission Denied",
+          description: "Your browser or OS denied the share permission. This might be due to site settings or because the action wasn't recognized as directly user-initiated.",
+        });
       } else {
         toast({
           variant: "destructive",

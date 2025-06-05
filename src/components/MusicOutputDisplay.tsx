@@ -379,24 +379,38 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
       const midiFileName = `${baseFileName || 'dreamtuner_output'}.mid`;
       
       const midiFile = dataURLtoFile(midiDataUri, midiFileName);
-      if (!midiFile) {
-        throw new Error("Could not convert MIDI data to a shareable file.");
+      
+      const filesToShare: File[] = [];
+      if (midiFile) {
+        filesToShare.push(midiFile);
+      } else {
+        console.warn("Could not convert MIDI data to a shareable file.");
+        // Optionally, inform the user that MIDI file couldn't be prepared for sharing
+      }
+
+      if (filesToShare.length === 0) {
+        throw new Error("No shareable content could be prepared.");
       }
 
       const shareData: ShareData = {
         title: `DreamTuner Music: "${params.generatedIdea}"`,
         text: `Check out this musical idea from DreamTuner!\nIdea: ${params.generatedIdea}\nKey: ${params.keySignature} ${params.mode}, Tempo: ${params.tempoBpm} BPM.`,
-        files: [midiFile],
+        files: filesToShare,
       };
       
-      // Add URL if the app is hosted, for now, it's a placeholder or can be omitted
-      // shareData.url = window.location.href; 
-
+      console.log("Attempting to share:", shareData);
       await navigator.share(shareData);
       toast({ title: "Shared Successfully!" });
+
     } catch (error: any) {
       if (error.name === 'AbortError') {
         toast({ title: "Share Cancelled", variant: "default" });
+      } else if (error.name === 'NotAllowedError') {
+        toast({
+          variant: "destructive",
+          title: "Share Permission Denied",
+          description: "Your browser or OS denied the share permission. This might be due to site settings or because the action wasn't recognized as directly user-initiated.",
+        });
       } else {
         toast({
           variant: "destructive",
