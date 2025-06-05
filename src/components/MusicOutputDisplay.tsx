@@ -349,10 +349,10 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
   };
 
   const renderOriginalInputInfo = (input: AppInput) => {
-    let icon: React.ReactNode; let title: string; let content: React.ReactNode;
+    let icon: React.ReactNode; let title: string; let contentDisplay: React.ReactNode;
     switch(input.type) {
       case 'text':
-        icon = <DocumentTextIcon className="w-6 h-6" />; title = "Original Text &amp; Generated Core";
+        icon = <DocumentTextIcon className="w-6 h-6" />; title = "Original Text & Generated Core";
         
         const originalTextContent = input.content || "";
         const lines = originalTextContent.split('\n');
@@ -373,7 +373,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         for (let i = 0; i < lines.length; i++) {
           const currentLine = lines[i]; 
           if (!currentLine.trim() && i > 0 && i < lines.length -1 && lines[i-1].trim() && lines[i+1].trim()) {
-             renderedElements.push(<div key={`spacer-${i}`} className="h-1"></div>); // Small spacer for intentional blank lines between content blocks
+             renderedElements.push(<div key={`spacer-${i}`} className="h-1"></div>); 
           } else if (currentLine.trim()) {
              renderedElements.push(
               <p key={`lyric-${i}`} className="text-muted-foreground text-sm whitespace-pre-wrap">
@@ -394,9 +394,9 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
           }
         }
         
-        content = (
+        contentDisplay = (
           <>
-            <ScrollArea className="h-auto max-h-60 mb-3 pr-3"> 
+            <ScrollArea className="h-auto max-h-80 mb-3 pr-3"> 
               {renderedElements.map((el, index) => <React.Fragment key={index}>{el}</React.Fragment>)}
             </ScrollArea>
             <Separator className="my-3 bg-slate-600" />
@@ -414,7 +414,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
       case 'image':
         icon = <PhotographIcon className="w-6 h-6" />; 
         title = input.mode === 'kids' ? "Child's Original Concept" : "Original Input Image";
-        content = (<>
+        contentDisplay = (<>
             {input.fileDetails.url && input.fileDetails.size > 0 ? 
                 <>
                     <p className="text-muted-foreground text-sm italic">Drawing: {input.fileDetails.name}</p>
@@ -436,7 +436,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         icon = <VideoCameraIcon className="w-6 h-6" />; title = "Original Input Video/Audio Concept";
         const fileTypeDisplay = input.fileDetails.type.startsWith('video/') ? 'Video' : 
                                 input.fileDetails.type.startsWith('audio/') ? 'Audio' : 'Media';
-        content = <>
+        contentDisplay = <>
             <p className="text-muted-foreground text-sm italic">{fileTypeDisplay} Concept: {input.fileDetails.name} (Analyzed conceptually)</p>
             {input.additionalContext && (
                 <p className="text-muted-foreground text-xs italic mt-2">Additional Context: "{input.additionalContext}"</p>
@@ -452,7 +452,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
             {icon} <CardTitle className="ml-2 text-lg font-semibold">{title}</CardTitle>
           </div>
         </CardHeader>
-        <CardContent>{content}</CardContent>
+        <CardContent>{contentDisplay}</CardContent>
         {params.selectedGenre && (input.type !== 'text' || input.mode === 'kids') && (
           <CardFooter className="border-t border-slate-700 pt-4 flex-col items-start">
             {input.mode === 'kids' ? (
