@@ -198,8 +198,9 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
       try {
         const midiDataUri = generateMidiFile(params);
+        console.log("Generated MIDI Data URI for playback:", midiDataUri); 
         if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
-          setPlayerError("Failed to generate valid MIDI data.");
+          setPlayerError("Failed to generate valid MIDI data. URI was: " + (midiDataUri ? midiDataUri.substring(0,100) + "..." : "undefined/null"));
           setMidiFileStructLoaded(false);
           return;
         }

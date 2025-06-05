@@ -118,58 +118,66 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     let currentStreamForCleanup: MediaStream | null = null;
 
     const startCameraStream = async () => {
-      setCameraError(null);
-      setHasCameraPermission(null);
-      setCameraFeedReady(false); 
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        const msg = 'Camera access is not supported by your browser.';
-        setCameraError(msg);
-        toast({ variant: 'destructive', title: 'Camera Error', description: msg });
-        setHasCameraPermission(false);
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        streamRef.current = stream; 
-        currentStreamForCleanup = stream; 
-
-        if (videoRef.current) {
-          videoRef.current.onplaying = () => {
-            setCameraFeedReady(true);
-          };
-          videoRef.current.onstalled = () => {
-            setCameraFeedReady(false);
-             toast({ variant: 'destructive', title: 'Camera Feed Stalled', description: 'The camera feed stopped unexpectedly.' });
-          };
-          videoRef.current.srcObject = stream;
-          videoRef.current.load(); 
-          await videoRef.current.play().catch(playError => {
-            console.warn('Video play() promise rejected:', playError);
-            setCameraError(`Failed to play camera feed. ${playError.message}`);
-            setHasCameraPermission(false); 
-            setCameraFeedReady(false);
-          });
-        }
-        setHasCameraPermission(true);
-      } catch (err) {
-        console.error("Error accessing camera:", err);
-        let msg = 'Could not access the camera.';
-        if (err instanceof Error) {
-          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            msg = 'Camera permission denied. Please enable it in your browser settings.';
-          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-            msg = 'No camera found. Please ensure a camera is connected and enabled.';
-          } else {
-            msg = `Error accessing camera: ${err.message}`;
-          }
-        }
-        setCameraError(msg);
-        toast({ variant: 'destructive', title: 'Camera Access Failed', description: msg });
-        setHasCameraPermission(false);
+        setCameraError(null);
+        setHasCameraPermission(null);
         setCameraFeedReady(false);
-      }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            const msg = 'Camera access is not supported by your browser.';
+            setCameraError(msg);
+            toast({ variant: 'destructive', title: 'Camera Error', description: msg });
+            setHasCameraPermission(false);
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            streamRef.current = stream;
+            currentStreamForCleanup = stream;
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.onloadedmetadata = async () => {
+                    // Ensure the video element is present and visible before playing
+                    if (videoRef.current && videoRef.current.isConnected) { 
+                        try {
+                            await videoRef.current.play();
+                            // Successfully started playing
+                        } catch (playError: any) {
+                            console.warn('Video play() promise rejected:', playError);
+                            setCameraError(`Failed to play camera feed: ${playError.message}. Try interacting with the page or check browser console.`);
+                            setHasCameraPermission(false); // Assume permission might be the issue or stream is unusable
+                            setCameraFeedReady(false);
+                        }
+                    }
+                };
+                videoRef.current.onplaying = () => { // Moved onplaying here
+                    setCameraFeedReady(true);
+                };
+                videoRef.current.onstalled = () => {
+                    setCameraFeedReady(false);
+                    toast({ variant: 'destructive', title: 'Camera Feed Stalled', description: 'The camera feed stopped unexpectedly.' });
+                };
+                 // videoRef.current.load(); // Not strictly necessary with onloadedmetadata
+            }
+            setHasCameraPermission(true); // Permission granted
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+            let msg = 'Could not access the camera.';
+            if (err instanceof Error) {
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    msg = 'Camera permission denied. Please enable it in your browser settings.';
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    msg = 'No camera found. Please ensure a camera is connected and enabled.';
+                } else {
+                    msg = `Error accessing camera: ${err.message}`;
+                }
+            }
+            setCameraError(msg);
+            toast({ variant: 'destructive', title: 'Camera Access Failed', description: msg });
+            setHasCameraPermission(false);
+            setCameraFeedReady(false);
+        }
     };
 
     const stopLocalStream = (streamToStopRef: React.MutableRefObject<MediaStream | null>, videoElementRef?: React.RefObject<HTMLVideoElement>) => {
@@ -179,6 +187,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       }
       if (videoElementRef?.current) {
         videoElementRef.current.srcObject = null;
+        videoElementRef.current.onloadedmetadata = null; // Clear handler
         videoElementRef.current.onplaying = null;
         videoElementRef.current.onstalled = null;
       }
@@ -191,10 +200,9 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       stopLocalStream(streamRef, videoRef);
     }
 
-    // Cleanup for audio stream when component unmounts or input type changes
     return () => { 
       stopLocalStream(streamRef, videoRef);
-      stopLocalStream(audioStreamRef); // Ensure audio stream is also cleaned up
+      stopLocalStream(audioStreamRef); 
     };
   }, [showCameraPreview, currentStandardInputType]); 
 
@@ -205,7 +213,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     } else {
       setFilePreview(null); 
       setFileError(null);
-      setIsRecordingAudio(false); // Ensure audio recording is off
+      setIsRecordingAudio(false); 
       setHasCameraPermission(null); 
       setCameraError(null);
       setCameraFeedReady(false);
@@ -277,7 +285,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     setIsProcessingCamera(true);
     setFilePreview({
       name: 'live_camera_capture.mp4', 
-      type: 'video/mp4', // This will be interpreted as a video concept
+      type: 'video/mp4', 
       size: 0, 
     });
     setShowCameraPreview(false); 
@@ -302,7 +310,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
 
     if (isRecordingAudio) {
-      // Stop recording
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
       }
@@ -314,7 +321,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       return;
     }
 
-    // Start recording
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setAudioError('Audio recording is not supported by your browser.');
       toast({ variant: 'destructive', title: 'Audio Error', description: 'Not supported.' });
@@ -328,15 +334,15 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       setHasMicrophonePermission(true);
       audioChunksRef.current = [];
       
-      const options = { mimeType: 'audio/webm' }; // prefer webm, browser will fallback if not supported
+      const options = { mimeType: 'audio/webm' }; 
       let recorder;
       try {
         recorder = new MediaRecorder(stream, options);
       } catch (e) {
         console.warn("audio/webm not supported, trying default");
         try {
-            recorder = new MediaRecorder(stream); // try with default
-        } catch (e2) {
+            recorder = new MediaRecorder(stream); 
+        } catch (e2: any) {
             setAudioError(`MediaRecorder error: ${e2.message}. Your browser might not support common audio recording formats.`);
             toast({ variant: 'destructive', title: 'Recording Error', description: `MediaRecorder error. ${e2.message}` });
             stream.getTracks().forEach(track => track.stop());
@@ -364,7 +370,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         });
         setIsRecordingAudio(false);
         toast({ title: "Audio Recorded!", description: "Your audio has been captured." });
-         // Stop the tracks on the audioStreamRef explicitly here after processing
         if (audioStreamRef.current) {
             audioStreamRef.current.getTracks().forEach(track => track.stop());
             audioStreamRef.current = null;
@@ -397,7 +402,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (showCameraPreview) setShowCameraPreview(false); 
-    if (isRecordingAudio) handleToggleAudioRecording(); // Stop recording if active
+    if (isRecordingAudio) handleToggleAudioRecording(); 
 
     const file = event.target.files?.[0];
     if (file) {
@@ -431,18 +436,13 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           setFilePreview(null);
           event.target.value = '';
         }
-      } else if (currentStandardInputType === 'video') { // This tab handles both video and audio files
+      } else if (currentStandardInputType === 'video') { 
          if (!file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
           setFileError('Invalid file type. Please select a video or audio file.');
           setFilePreview(null);
           event.target.value = '';
           return;
         }
-        // For uploaded audio files, we can also generate a data URL if we want to send content
-        // For now, following existing pattern: only data URL for images. Audio file uploads are conceptual.
-        // If file.type.startsWith('audio/'), we could potentially read it as data URL too for AI analysis.
-        // This would require changing how `fileDetails.url` is populated for audio.
-        // For consistency with video, currently uploaded audio is conceptual. Live recorded audio WILL have data URL.
         setFilePreview(fileDetails);
       }
     } else {
@@ -468,28 +468,23 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         type: 'image', 
         content: base64Content, 
         mimeType: filePreview.type,
-        fileDetails: {...filePreview, url: filePreview.url }, // Pass full data URI in url
+        fileDetails: {...filePreview, url: filePreview.url }, 
         additionalContext: additionalContext.trim() || undefined,
       };
     } else if (currentStandardInputType === 'video' && filePreview) { 
-        // This now handles:
-        // 1. Uploaded video (conceptual, no URL in filePreview sent to AI unless we change logic)
-        // 2. Uploaded audio (conceptual, no URL in filePreview sent to AI unless we change logic)
-        // 3. Live camera video concept (no URL)
-        // 4. Live audio recording (filePreview.url WILL contain data URI)
       let contentForFlow: string | undefined = undefined;
       let mimeTypeForFlow: string | undefined = undefined;
 
-      if (filePreview.url && filePreview.type.startsWith('audio/')) { // It's our live recording
+      if (filePreview.url && filePreview.type.startsWith('audio/')) { 
         contentForFlow = filePreview.url.split(',')[1];
         mimeTypeForFlow = filePreview.type;
       }
 
       appInputPartial = { 
-        type: 'video', // Keep type 'video' as flow handles audio subtypes
-        fileDetails: filePreview, // url will contain data URI for recorded audio
-        content: contentForFlow, // Pass base64 audio if available
-        mimeType: mimeTypeForFlow, // Pass mimeType if audio data
+        type: 'video', 
+        fileDetails: filePreview, 
+        content: contentForFlow, 
+        mimeType: mimeTypeForFlow, 
         additionalContext: additionalContext.trim() || undefined,
       };
     }
@@ -527,14 +522,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     const fileInput = document.getElementById(fileInputId) as HTMLInputElement;
     if (fileInput) fileInput.value = '';
     
-    if (showCameraPreview) setShowCameraPreview(false); // This will trigger camera stream stop via useEffect
+    if (showCameraPreview) setShowCameraPreview(false); 
 
-    if (isRecordingAudio) { // Stop audio recording if active
+    if (isRecordingAudio) { 
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop(); // This will trigger onstop, which cleans up audioStreamRef
+        mediaRecorderRef.current.stop(); 
       }
       setIsRecordingAudio(false);
-    } else if (audioStreamRef.current) { // If not recording but stream exists
+    } else if (audioStreamRef.current) { 
         audioStreamRef.current.getTracks().forEach(track => track.stop());
         audioStreamRef.current = null;
     }
@@ -627,7 +622,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
       {(currentStandardInputType === 'image' || currentStandardInputType === 'video') && (
         <div className="space-y-4">
-          {/* Camera Button - common for image & video */}
           {isClientMounted && navigator.mediaDevices?.getUserMedia && ( 
               <div className="mb-2">
                   <Button
@@ -643,7 +637,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               </div>
           )}
 
-          {/* Audio Recording Button - specific to 'video' (audio concept) type */}
           {currentStandardInputType === 'video' && isClientMounted && navigator.mediaDevices?.getUserMedia && !showCameraPreview && (
             <div className="mb-2">
               <Button
@@ -662,7 +655,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           )}
 
 
-          {/* Camera Preview */}
           {showCameraPreview && (
               <Card className="bg-nebula-gray/70 border-slate-600 p-4">
                   <video ref={videoRef} className="w-full aspect-video rounded-md bg-slate-800 border border-slate-500" autoPlay muted playsInline />
@@ -705,7 +697,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               </Card>
           )}
 
-          {/* File Upload - common for image & video/audio, hidden if camera/recording active */}
           {!showCameraPreview && !isRecordingAudio && (
             <div>
                 <Label htmlFor={fileInputId} className="block text-sm font-medium text-stardust-blue mb-1">
@@ -760,7 +751,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
             </Card>
           )}
 
-          {/* Additional Context - common for image & video/audio */}
           {!showCameraPreview && (
             <div>
                 <Label htmlFor={additionalContextId} className="block text-sm font-medium text-stardust-blue">
@@ -906,4 +896,3 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     </form>
   );
 };
-    
