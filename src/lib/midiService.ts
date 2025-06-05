@@ -123,7 +123,7 @@ function getScaleNotesForKey(
     rhythmicDensityForPentatonicHint?: number,
     harmonicComplexity?: number,
     isKidsMode: boolean = false,
-    targetValenceForKids?: number // Added for Kids Mode scale choice
+    targetValenceForKids?: number 
 ): number[] { 
     const baseKeyForScale = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
     const rootMidiBase = robustNoteToMidi(baseKeyForScale + '0') % 12; 
@@ -137,14 +137,14 @@ function getScaleNotesForKey(
         } else if (genreLower?.includes('folk') && typeof targetValenceForKids === 'number' && targetValenceForKids < 0.3) {
              intervals = MINOR_PENTATONIC_INTERVALS;
         }
-        else {
+        else { // Default for kids is major pentatonic, suitable for most "happy" genres.
             intervals = MAJOR_PENTATONIC_INTERVALS;
         }
     } else if (genreLower?.includes('blues')) {
         intervals = BLUES_SCALE_INTERVALS;
     } else if (genreLower?.includes('jazz')) {
         if (mode.toLowerCase().includes('minor')) intervals = DORIAN_INTERVALS;
-        else if (harmonicComplexity && harmonicComplexity > 0.6) intervals = MIXOLYDIAN_INTERVALS; // For dominant feel
+        else if (harmonicComplexity && harmonicComplexity > 0.6) intervals = MIXOLYDIAN_INTERVALS; 
         else intervals = STANDARD_MAJOR_INTERVALS;
     } else if (
         (genreLower?.includes('rock') || genreLower?.includes('pop') || genreLower?.includes('folk')) && 
@@ -208,6 +208,7 @@ function getChordProgressionWithDetails(
         if (!isKidsMode && harmonicComplexity > 0.2 && quality !== 'dominant7th' && !isDominant7thOverride) {
             const rootOctaveUp = normalizedRootMidiPitch + 12;
             if (isValidMidiNumber(rootOctaveUp)) {
+                // Add root octave higher for fuller triads in standard mode
                 chordMidiNumbers.push(rootOctaveUp);
             }
         }
@@ -223,12 +224,12 @@ function getChordProgressionWithDetails(
         }
         
         if (genreLower?.includes('rock') && harmonicComplexity < 0.4 && !isKidsMode) { 
-             chordMidiNumbers = [normalizedRootMidiPitch, normalizedRootMidiPitch + fifthInterval];
+             chordMidiNumbers = [normalizedRootMidiPitch, normalizedRootMidiPitch + fifthInterval]; // Power chords
              const rootOctaveDown = normalizedRootMidiPitch - 12; 
              if (isValidMidiNumber(rootOctaveDown)) chordMidiNumbers.unshift(rootOctaveDown);
 
         } else if (isKidsMode) { 
-             chordMidiNumbers = [normalizedRootMidiPitch, normalizedRootMidiPitch + thirdInterval, normalizedRootMidiPitch + fifthInterval].slice(0,3); 
+             chordMidiNumbers = [normalizedRootMidiPitch, normalizedRootMidiPitch + thirdInterval, normalizedRootMidiPitch + fifthInterval].slice(0,3); // Simple triads for kids
         }
         
         const validatedNotes = chordMidiNumbers.filter(isValidMidiNumber).sort((a,b) => a-b); 
@@ -241,12 +242,12 @@ function getChordProgressionWithDetails(
     let baseProgression: ChordDefinition[] = [];
     const defaultDuration = '1'; 
 
-    if (isKidsMode) { // Primary goal: simple and major-sounding for kids
+    if (isKidsMode) { 
         baseProgression = [
-            { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, // I
-            { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, // IV
-            { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, // V
-            { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }  // I
+            { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+            { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+            { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+            { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }  
         ];
     } else if (genreLower?.includes('blues')) {
         baseProgression = [
@@ -257,55 +258,54 @@ function getChordProgressionWithDetails(
         ];
     } else if (genreLower?.includes('jazz')) {
         if (mode.toLowerCase().includes('minor')) {
-             baseProgression = [ // ii-V-i in minor
-                { ...buildChord(2, 'diminished', baseOctave), duration: defaultDuration, measureDuration: '1' }, // ii° or iiø7
-                { ...buildChord(7, 'dominant7th', baseOctave, true), duration: defaultDuration, measureDuration: '1' }, // V7
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, // i
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }  // i
+             baseProgression = [ 
+                { ...buildChord(2, 'diminished', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(7, 'dominant7th', baseOctave, true), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }  
             ];
-        } else { // ii-V-I in major
+        } else { 
             baseProgression = [
-                { ...buildChord(2, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' },  // ii
-                { ...buildChord(7, 'dominant7th', baseOctave, true), duration: defaultDuration, measureDuration: '1' }, // V7
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // I
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   // I
+                { ...buildChord(2, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(7, 'dominant7th', baseOctave, true), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   
             ];
         }
     } else if (genreLower?.includes('pop') || genreLower?.includes('rock')) {
-        if (mode.toLowerCase().includes('minor')) { // Common pop/rock minor: i-VI-III-VII or i-v-VI-VII
+        if (mode.toLowerCase().includes('minor')) { 
              baseProgression = [ 
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, // i
-                { ...buildChord(8, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, // VI
-                { ...buildChord(3, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, // III
-                { ...buildChord(10, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }  // VII
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(8, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(3, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(10, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }  
             ];
-        } else { // Common pop/rock major: I-V-vi-IV
+        } else { 
             baseProgression = [ 
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // I
-                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // V
-                { ...buildChord(9, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' },  // vi
-                { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   // IV
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(9, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   
             ];
         }
     }
-     else { // Default diatonic progressions
+     else { 
         if (mode.toLowerCase().includes('minor')) {
-            baseProgression = [ // i-iv-V-i
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, // i
-                { ...buildChord(5, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, // iv
-                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, // V (major dominant common in minor)
-                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }  // i
-            ];
-        } else { // I-IV-V-I
             baseProgression = [ 
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // I
-                { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // IV
-                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  // V
-                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   // I
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(5, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }, 
+                { ...buildChord(0, 'minor', baseOctave), duration: defaultDuration, measureDuration: '1' }  
+            ];
+        } else { 
+            baseProgression = [ 
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(5, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(7, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' },  
+                { ...buildChord(0, 'major', baseOctave), duration: defaultDuration, measureDuration: '1' }   
             ];
         }
     }
-
 
     const fullProgression: ChordDefinition[] = [];
     for (let i = 0; i < numCycles; i++) {
@@ -318,13 +318,21 @@ interface InstrumentMapping {
     melody: number; bass: number; chordsPad: number; arpeggioSynth: number; drums: number; 
 }
 
-const KID_INSTRUMENTS = {
-    XYLOPHONE: 13, TOY_PIANO: 8, UKULELE: 24, RECORDER: 74,
-    SIMPLE_SYNTH_LEAD: 80, SIMPLE_SYNTH_PAD: 89, 
-    SHAKER_NOTE: 70, // GM Standard Drums: Maracas
-    TAMBOURINE_NOTE: 54, // GM Standard Drums: Tambourine
-    KIDS_KICK: 36, // Standard kick
-    KIDS_SNARE: 38, // Standard snare
+const KID_INSTRUMENTS = { // General MIDI Patch Numbers
+    XYLOPHONE: 13, TOY_PIANO: 8, // Celesta is also 8
+    UKULELE: 24, RECORDER: 74,
+    SIMPLE_SYNTH_LEAD: 80, // Synth Lead 1 (Square)
+    SIMPLE_SYNTH_PAD: 89,  // Synth Pad 2 (Warm)
+    ACOUSTIC_GUITAR_NYLON: 24, // For gentler "Folk" like sound
+    BRIGHT_ACOUSTIC_PIANO: 0, // If a piano sound is needed, use the brightest default
+
+    // Percussion (Note numbers for GM Drum Channel 10)
+    SHAKER_NOTE: 70, 
+    TAMBOURINE_NOTE: 54, 
+    KIDS_KICK: 36, 
+    KIDS_SNARE: 38, 
+    LIGHT_CYMBAL: 49, // Crash Cymbal 1 for accents
+    CLOSED_HIHAT_KID: 42,
 };
 
 
@@ -339,27 +347,41 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
             bass: KID_INSTRUMENTS.UKULELE, 
             chordsPad: KID_INSTRUMENTS.SIMPLE_SYNTH_PAD, 
             arpeggioSynth: KID_INSTRUMENTS.TOY_PIANO, 
-            drums: 0 // Drum channel will use GM standard drum notes for kick/snare/etc.
+            drums: 0 
         };
 
-        // Subtle genre influence for kids
+        // Genre influence for kids
         if (genreLower) {
             if (genreLower.includes("electronic")) {
                 mapping.melody = KID_INSTRUMENTS.SIMPLE_SYNTH_LEAD;
                 mapping.arpeggioSynth = KID_INSTRUMENTS.SIMPLE_SYNTH_LEAD;
-                mapping.bass = KID_INSTRUMENTS.SIMPLE_SYNTH_LEAD; // Low pitched synth lead for bass
+                mapping.bass = KID_INSTRUMENTS.SIMPLE_SYNTH_LEAD; 
+                mapping.chordsPad = KID_INSTRUMENTS.SIMPLE_SYNTH_PAD;
             } else if (genreLower.includes("rock")) {
-                mapping.melody = KID_INSTRUMENTS.RECORDER; // Could represent a simple "toy guitar" lead
-                mapping.bass = KID_INSTRUMENTS.UKULELE; // Ukulele can be a plucky bass
+                mapping.melody = KID_INSTRUMENTS.RECORDER; 
+                mapping.bass = KID_INSTRUMENTS.UKULELE; 
+                mapping.chordsPad = KID_INSTRUMENTS.TOY_PIANO; 
             } else if (genreLower.includes("pop")) {
                  mapping.melody = KID_INSTRUMENTS.TOY_PIANO;
+                 mapping.bass = KID_INSTRUMENTS.UKULELE;
                  mapping.chordsPad = KID_INSTRUMENTS.SIMPLE_SYNTH_PAD;
+                 mapping.arpeggioSynth = KID_INSTRUMENTS.XYLOPHONE;
             } else if (genreLower.includes("jazz")) {
                 mapping.melody = KID_INSTRUMENTS.TOY_PIANO;
-                mapping.bass = KID_INSTRUMENTS.UKULELE; // Walking bass with ukulele sound
+                mapping.bass = KID_INSTRUMENTS.UKULELE; 
+                mapping.chordsPad = KID_INSTRUMENTS.BRIGHT_ACOUSTIC_PIANO;
             } else if (genreLower.includes("folk")) {
                 mapping.melody = KID_INSTRUMENTS.RECORDER;
+                mapping.bass = KID_INSTRUMENTS.ACOUSTIC_GUITAR_NYLON;
+                mapping.chordsPad = KID_INSTRUMENTS.ACOUSTIC_GUITAR_NYLON;
+            } else if (genreLower.includes("classical") || genreLower.includes("cinematic")){
+                mapping.melody = KID_INSTRUMENTS.RECORDER;
+                mapping.chordsPad = KID_INSTRUMENTS.SIMPLE_SYNTH_PAD;
+                mapping.bass = KID_INSTRUMENTS.UKULELE; // Simple low sound
+            } else if (genreLower.includes("blues")) {
+                mapping.melody = KID_INSTRUMENTS.RECORDER; // Harmonica-like
                 mapping.bass = KID_INSTRUMENTS.UKULELE;
+                mapping.chordsPad = KID_INSTRUMENTS.TOY_PIANO;
             }
         }
 
@@ -368,15 +390,16 @@ const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: bool
             const hLower = hint.toLowerCase();
             if (/xylophone/i.test(hLower)) mapping.melody = KID_INSTRUMENTS.XYLOPHONE;
             else if (/toy piano|celesta|music box/i.test(hLower)) { mapping.melody = KID_INSTRUMENTS.TOY_PIANO; mapping.arpeggioSynth = KID_INSTRUMENTS.TOY_PIANO; }
-            else if (/ukulele/i.test(hLower)) { mapping.melody = KID_INSTRUMENTS.UKULELE; mapping.bass = KID_INSTRUMENTS.UKULELE;}
-            else if (/recorder/i.test(hLower)) mapping.melody = KID_INSTRUMENTS.RECORDER;
+            else if (/ukulele/i.test(hLower) || /guitar/i.test(hLower)) { mapping.melody = KID_INSTRUMENTS.UKULELE; mapping.bass = KID_INSTRUMENTS.UKULELE;}
+            else if (/recorder|flute/i.test(hLower)) mapping.melody = KID_INSTRUMENTS.RECORDER;
             else if (/simple synth|synth lead/i.test(hLower)) mapping.melody = KID_INSTRUMENTS.SIMPLE_SYNTH_LEAD;
             else if (/synth pad/i.test(hLower)) mapping.chordsPad = KID_INSTRUMENTS.SIMPLE_SYNTH_PAD;
+            else if (/piano/i.test(hLower)) { mapping.melody = KID_INSTRUMENTS.BRIGHT_ACOUSTIC_PIANO; mapping.chordsPad = KID_INSTRUMENTS.BRIGHT_ACOUSTIC_PIANO;}
         });
         return mapping;
     }
 
-    // Standard mode instrument mapping (remains unchanged from previous state)
+    // Standard mode instrument mapping 
     if (genreLower) {
         if (genreLower.includes("rock")) { mapping = { melody: 27, bass: 34, chordsPad: 27, arpeggioSynth: 27, drums: 0 }; } 
         else if (genreLower.includes("pop")) { mapping = { melody: 80, bass: 38, chordsPad: 90, arpeggioSynth: 81, drums: 0 }; } 
@@ -529,7 +552,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
         if (!isValidMidiNumber(bassNoteMidi)) return;
 
         if (isKidsMode) {
-            const kidsBassRandomness = 4;
+            const kidsBassRandomness = isKidsMode ? 4 : 6;
             bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '1', velocity: calculateDynamicVelocity(baseBassVelocity, 35, 85, kidsBassRandomness)}));
         } else if (genreLower && (genreLower.includes('rock') || genreLower.includes('pop') || genreLower.includes('metal') || genreLower.includes('country'))) {
             for (let i = 0; i < beatsPerMeasure; i++) { 
@@ -551,7 +574,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
 
             for (let i = 0; i < beatsPerMeasure; i++) {
                 let noteChoice = bassNoteMidi;
-                if (i > 0 && scaleForWalking.length > 0 && bassTrack.notes && bassTrack.notes.length > 0) {
+                 if (i > 0 && scaleForWalking.length > 0 && bassTrack.notes && bassTrack.notes.length > 0) {
                     const prevNoteEvent = bassTrack.notes[bassTrack.notes.length - 1];
                     let pitchToSearchVal: number | undefined;
 
@@ -713,10 +736,12 @@ export const generateMidiFile = (params: MusicParameters): string => {
     
     const kick = isKidsMode ? KID_INSTRUMENTS.KIDS_KICK : 36; 
     const snare = isKidsMode ? KID_INSTRUMENTS.KIDS_SNARE : 38; 
-    const hiHatClosed = 42; 
+    const hiHatClosed = isKidsMode ? KID_INSTRUMENTS.CLOSED_HIHAT_KID : 42; 
     const hiHatOpen = 46; 
-    const crashCymbal = 49; 
+    const crashCymbal = isKidsMode ? KID_INSTRUMENTS.LIGHT_CYMBAL : 49;
     const rideCymbal = 51;
+    const shaker = KID_INSTRUMENTS.SHAKER_NOTE;
+    const tambourine = KID_INSTRUMENTS.TAMBOURINE_NOTE;
     const TPQN = getTPQN();
     let drumTrackHasEvents = false;
 
@@ -726,50 +751,65 @@ export const generateMidiFile = (params: MusicParameters): string => {
 
         const measureStartTick = measureIndex * beatsPerMeasure * TPQN;
         const isFillMeasure = (measureIndex + 1) % 4 === 0 && measureIndex !== progression.length -1 && rhythmicDensity > 0.6 && !isKidsMode; 
-        const baseDrumVelocity = isKidsMode ? 75 : 100;
-        const drumRandomness = isKidsMode ? 3 : 5; // Reduced drum randomness
+        const baseDrumVelocity = isKidsMode ? 70 : 100; // Slightly lower base for kids, was 75
+        const drumRandomness = isKidsMode ? 2 : 5; // Reduced drum randomness for kids
 
         if (isKidsMode) {
             drumTrackHasEvents = true;
-            let hasShaker = false; let hasTambourine = false;
+            let useShaker = false; let useTambourine = false;
             (params.instrumentHints || []).forEach(hint => {
-                if(hint.toLowerCase().includes("shaker")) hasShaker = true;
-                if(hint.toLowerCase().includes("tambourine")) hasTambourine = true;
+                if(hint.toLowerCase().includes("shaker")) useShaker = true;
+                if(hint.toLowerCase().includes("tambourine")) useTambourine = true;
             });
 
             for (let beat = 0; beat < beatsPerMeasure; beat++) {
                 const beatStartTick = measureStartTick + beat * TPQN;
                 
-                // Genre influence on kids drums
-                if (genreLower?.includes("rock") || genreLower?.includes("pop")) {
-                    drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(baseDrumVelocity - 20, 40, 80, drumRandomness), channel: 10, tick: beatStartTick }));
+                if (genreLower?.includes("rock") || genreLower?.includes("pop") || genreLower?.includes("country")) {
+                    if (beat === 0 || beat === 2) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(baseDrumVelocity - 15, 40, 75, drumRandomness), channel: 10, tick: beatStartTick }));
                     if (beat === 1 || beat === 3) {
-                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [KID_INSTRUMENTS.TAMBOURINE_NOTE], duration: '4', velocity: calculateDynamicVelocity(60, 40, 80, drumRandomness), channel: 10, tick: beatStartTick }));
+                         drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [snare], duration: '4', velocity: calculateDynamicVelocity(baseDrumVelocity - 20, 35, 70, drumRandomness), channel: 10, tick: beatStartTick }));
+                         if (useTambourine && rhythmicDensity > 0.1) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [tambourine], duration: '4', velocity: calculateDynamicVelocity(55, 30, 65, drumRandomness), channel: 10, tick: beatStartTick }));
                     }
                 } else if (genreLower?.includes("electronic")) {
-                     if (beat % 2 === 0) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(baseDrumVelocity - 15, 45, 85, drumRandomness), channel: 10, tick: beatStartTick }));
-                     if (hasShaker) { // Use shaker for a lighter electronic feel
+                     if (beat % 2 === 0) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(baseDrumVelocity - 10, 45, 80, drumRandomness), channel: 10, tick: beatStartTick }));
+                     if (useShaker) { 
                         for(let sub = 0; sub < 2; sub++) {
-                            drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [KID_INSTRUMENTS.SHAKER_NOTE], duration: '8', velocity: calculateDynamicVelocity(50, 30, 70, 5), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
+                            drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [shaker], duration: '8', velocity: calculateDynamicVelocity(50, 30, 60, drumRandomness + 2), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
+                        }
+                     } else if (rhythmicDensity > 0.3) { // Simple hi-hat if no shaker
+                        for(let sub = 0; sub < 2; sub++) {
+                            drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [hiHatClosed], duration: '8', velocity: calculateDynamicVelocity(45, 25, 55, drumRandomness), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
                         }
                      }
-                } else { // Default Kids Drum Pattern
-                    if (beat === 0 || beat === 2) { 
-                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(baseDrumVelocity - 10, 50, 90, drumRandomness), channel: 10, tick: beatStartTick }));
-                    }
-                    if (hasShaker) { 
-                        for(let sub = 0; sub < 2; sub++) {
-                            drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [KID_INSTRUMENTS.SHAKER_NOTE], duration: '8', velocity: calculateDynamicVelocity(55, 35, 75, 5), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
+                } else if (genreLower?.includes("jazz") || genreLower?.includes("blues")) {
+                    if (beat === 0 || beat === 2) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(baseDrumVelocity - 20, 35, 70, drumRandomness), channel: 10, tick: beatStartTick }));
+                    if (useShaker) { // Jazz/Blues might use shaker/light hi-hat
+                        for(let sub = 0; sub < (rhythmicDensity > 0.2 ? 2:1); sub++) {
+                            drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [shaker], duration: (rhythmicDensity > 0.2 ? '8':'4'), velocity: calculateDynamicVelocity(50, 30, 60, drumRandomness), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/(rhythmicDensity > 0.2 ? 2:1))}));
                         }
-                    } else if (hasTambourine) { 
+                    }
+                } else if (genreLower?.includes("folk")) {
+                    if (beat === 0 || beat === 2) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(baseDrumVelocity - 25, 30, 65, drumRandomness), channel: 10, tick: beatStartTick }));
+                    if (useTambourine && (beat === 1 || beat === 3)) drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [tambourine], duration: '4', velocity: calculateDynamicVelocity(50, 25, 60, drumRandomness), channel: 10, tick: beatStartTick }));
+                }
+                 else { // Default Kids Drum Pattern - very simple
+                    if (beat === 0 || beat === 2) { 
+                        drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [kick], duration: '4', velocity: calculateDynamicVelocity(baseDrumVelocity - 10, 50, 80, drumRandomness), channel: 10, tick: beatStartTick }));
+                    }
+                    if (useShaker && rhythmicDensity > 0.1) { 
+                        for(let sub = 0; sub < 2; sub++) {
+                            drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [shaker], duration: '8', velocity: calculateDynamicVelocity(55, 35, 70, drumRandomness + 1), channel: 10, tick: beatStartTick + sub * Math.floor(TPQN/2)}));
+                        }
+                    } else if (useTambourine && rhythmicDensity > 0.1) { 
                          if (beat === 1 || beat === 3) {
-                            drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [KID_INSTRUMENTS.TAMBOURINE_NOTE], duration: '4', velocity: calculateDynamicVelocity(60, 40, 80, drumRandomness), channel: 10, tick: beatStartTick }));
+                            drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [tambourine], duration: '4', velocity: calculateDynamicVelocity(60, 40, 75, drumRandomness), channel: 10, tick: beatStartTick }));
                         }
                     }
                 }
             }
             if (measureIndex === 0 || (measureIndex > 0 && measureIndex % 4 === 0 && measureIndex !== progression.length -1 )) {
-                drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [crashCymbal], duration: '2', velocity: calculateDynamicVelocity(baseDrumVelocity - 5, 60, 100, drumRandomness), channel: 10, tick: measureStartTick }));
+                drumTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [crashCymbal], duration: '2', velocity: calculateDynamicVelocity(baseDrumVelocity - 5, 55, 85, drumRandomness), channel: 10, tick: measureStartTick }));
             }
 
         } else if (genreLower && (genreLower.includes('ambient') || genreLower.includes('classical') || (genreLower.includes('folk') && rhythmicDensity < 0.3))) {

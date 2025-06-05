@@ -6,7 +6,7 @@ import { Eraser, Paintbrush, Trash2, Minus, Plus, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface DrawingCanvasProps {
-  initialBackgroundColor?: string; // Changed from backgroundColor to initialBackgroundColor
+  initialBackgroundColor?: string; 
   isKidsMode?: boolean;
   onDrawingActivity?: (hasContent: boolean) => void;
   canvasContainerClassName?: string;
@@ -24,23 +24,24 @@ interface CanvasPath {
   isErasing: boolean;
 }
 
-const DEFAULT_BRUSH_COLOR = '#000000'; // Black
+const DEFAULT_BRUSH_COLOR = '#000000'; 
 const ERASER_SIZE = 20;
 const BRUSH_SIZES = { Small: 5, Medium: 10, Large: 15 };
 type BrushSizeName = keyof typeof BRUSH_SIZES;
 
 const COLOR_TO_NOTE_MAP: Record<string, { frequency: number; name: string }> = {
-  '#FF0000': { frequency: 293.66, name: 'D4' }, // Red
-  '#FFA500': { frequency: 440.00, name: 'A4' }, // Orange
-  '#FFFF00': { frequency: 329.63, name: 'E4' }, // Yellow
-  '#00FF00': { frequency: 349.23, name: 'F4' }, // Green
-  '#0000FF': { frequency: 392.00, name: 'G4' }, // Blue
-  '#800080': { frequency: 493.88, name: 'B4' }, // Purple
-  '#000000': { frequency: 261.63, name: 'C4' }, // Black (last, so C4 is default if needed)
+  '#FF0000': { frequency: 293.66, name: 'D4' }, 
+  '#FFA500': { frequency: 440.00, name: 'A4' }, 
+  '#FFFF00': { frequency: 329.63, name: 'E4' }, 
+  '#00FF00': { frequency: 349.23, name: 'F4' }, 
+  '#0000FF': { frequency: 392.00, name: 'G4' }, 
+  '#800080': { frequency: 493.88, name: 'B4' }, 
+  '#000000': { frequency: 261.63, name: 'C4' }, 
 };
-const NOTE_DURATION_MS = 150;
-const NOTE_DURATION_MS_WHILE_DRAWING = 100;
+const NOTE_DURATION_MS = 250; // Increased from 150
+const NOTE_DURATION_MS_WHILE_DRAWING = 180; // Increased from 100
 const PIXELS_PER_NOTE = 30;
+const TONE_ATTACK_TIME = 0.01; // Short attack time for softer onset
 
 export const DrawingCanvas = forwardRef<
   {
@@ -158,7 +159,7 @@ export const DrawingCanvas = forwardRef<
       const hasContent = pathsRef.current.length > 0 || (currentPathRef.current !== null && currentPathRef.current.points.length > 0);
       onDrawingActivity(hasContent);
     }
-  }, [pathsRef, currentPathRef, onDrawingActivity]); // Simpler deps
+  }, [pathsRef, currentPathRef, onDrawingActivity]); 
 
 
   useEffect(() => {
@@ -227,17 +228,20 @@ export const DrawingCanvas = forwardRef<
 
     const oscillator = audioContextRef.current.createOscillator();
     const gainNode = audioContextRef.current.createGain();
+    const now = audioContextRef.current.currentTime;
 
     oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(noteDetails.frequency, audioContextRef.current.currentTime);
-    gainNode.gain.setValueAtTime(0.2, audioContextRef.current.currentTime); 
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContextRef.current.currentTime + durationMs / 1000);
+    oscillator.frequency.setValueAtTime(noteDetails.frequency, now);
+    
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.2, now + TONE_ATTACK_TIME); // Quick attack
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, now + durationMs / 1000);
 
     oscillator.connect(gainNode);
     gainNode.connect(audioContextRef.current.destination);
 
-    oscillator.start();
-    oscillator.stop(audioContextRef.current.currentTime + durationMs / 1000);
+    oscillator.start(now);
+    oscillator.stop(now + durationMs / 1000);
   };
 
   const startDrawing = (eventX: number, eventY: number) => {
@@ -402,7 +406,7 @@ export const DrawingCanvas = forwardRef<
   const handleBrushSizeChange = (sizeName: BrushSizeName) => {
     setCurrentBrushSizeName(sizeName);
     setCurrentLineWidth(BRUSH_SIZES[sizeName]);
-    setIsErasing(false); // Switch back to brush if eraser was active
+    setIsErasing(false); 
   };
 
   useImperativeHandle(ref, () => ({
@@ -458,7 +462,7 @@ export const DrawingCanvas = forwardRef<
               display: 'block',
               width: '100%', 
               height: '100%',
-              cursor: isErasing ? 'grab' : 'crosshair', // Indicate eraser differently
+              cursor: isErasing ? 'grab' : 'crosshair', 
               touchAction: 'none', 
           }}
         />
@@ -486,7 +490,7 @@ export const DrawingCanvas = forwardRef<
               className={cn(
                 "w-8 h-10 rounded-md border-2 flex flex-col justify-center items-center p-1",
                 currentColor === color.value && !isErasing ? 'ring-2 ring-offset-2 ring-accent' : 'border-gray-300',
-                color.value === '#FFFFFF' || color.value === '#FFFF00' ? 'text-black' : 'text-white' // Text color for visibility
+                color.value === '#FFFFFF' || color.value === '#FFFF00' ? 'text-black' : 'text-white' 
               )}
               style={{ backgroundColor: color.value }}
               aria-label={`Select color ${color.name}${color.noteLabel ? ` (${color.noteLabel})` : ''}`}
