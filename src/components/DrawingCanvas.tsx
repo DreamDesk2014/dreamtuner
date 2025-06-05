@@ -508,9 +508,9 @@ export const DrawingCanvas = forwardRef<
                     className={`w-8 h-10 p-1 ${currentBrushSizeName === sizeName && !isErasing ? 'bg-accent text-accent-foreground' : ''}`}
                     aria-label={`Brush size ${sizeName}`}
                 >
-                    {sizeName === 'Small' && <Circle className="w-2 h-2 fill-current" />}
-                    {sizeName === 'Medium' && <Circle className="w-3 h-3 fill-current" />}
-                    {sizeName === 'Large' && <Circle className="w-5 h-5 fill-current" />}
+                    {sizeName === 'Small' && <Circle className="!w-2 !h-2 fill-current" />}
+                    {sizeName === 'Medium' && <Circle className="!w-3 !h-3 fill-current" />}
+                    {sizeName === 'Large' && <Circle className="!w-5 !h-5 fill-current" />}
                 </Button>
             ))}
         </div>
