@@ -43,6 +43,10 @@ body {
     --sidebar-accent-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
     --sidebar-border: 215 20% 26%; /* Nebula Gray Light #374151 */
     --sidebar-ring: 276 78% 52%; /* Electric Purple #8A2BE2 */
+
+    /* New gradient colors */
+    --gradient-blue-dark: 271 100% 20%; /* Darker Indigo #3A0067 */
+    --gradient-blue-light: 271 80% 55%; /* Lighter Purple-Blue #855CFE */
   }
 
   .dark {
@@ -80,6 +84,9 @@ body {
     --sidebar-accent-foreground: 220 13% 95%;
     --sidebar-border: 215 20% 26%;
     --sidebar-ring: 276 78% 52%;
+
+    --gradient-blue-dark: 271 100% 20%;
+    --gradient-blue-light: 271 80% 55%;
   }
 }
 
