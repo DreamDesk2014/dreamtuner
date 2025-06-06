@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { InfoIcon, Sun, Moon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { logEvent, getSessionId } from '@/lib/firestoreService'; // Import Firestore logging
+import { logEvent, getSessionId, saveContactSubmission } from '@/lib/firestoreService'; // Import saveContactSubmission
 
 export const NavigationBar: React.FC = () => {
   const [contactName, setContactName] = useState('');
@@ -25,6 +25,7 @@ export const NavigationBar: React.FC = () => {
   const [contactMessage, setContactMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   useEffect(() => {
     const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
@@ -60,35 +61,49 @@ export const NavigationBar: React.FC = () => {
     }).catch(console.error);
   };
 
-  const handleAboutOpen = () => {
-    logEvent('user_interactions', {
-      eventName: 'about_dialog_opened',
-      sessionId: getSessionId(),
-    }).catch(console.error);
+  const handleAboutOpenChange = (open: boolean) => {
+    setIsDialogOpen(open);
+    if (open) {
+      logEvent('user_interactions', {
+        eventName: 'about_dialog_opened',
+        sessionId: getSessionId(),
+      }).catch(console.error);
+    }
   };
 
   const handleSubmitContactForm = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-
-    logEvent('user_interactions', {
-        eventName: 'contact_form_submitted',
-        eventDetails: { nameLength: contactName.length, emailProvided: !!contactEmail, messageLength: contactMessage.length },
-        sessionId: getSessionId()
-    }).catch(console.error);
     
-    // Simulate sending the message
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    const submissionDetails = {
+        name: contactName.trim() || undefined, // Send undefined if empty
+        email: contactEmail.trim() || undefined,
+        message: contactMessage.trim() || undefined,
+        sessionId: getSessionId(),
+        clientTimestamp: new Date(),
+    };
 
-    toast({
-      title: 'Message Sent! (Simulated)',
-      description: 'Thank you for your interest. We will log your message.',
-    });
-
-    setContactName('');
-    setContactEmail('');
-    setContactMessage('');
-    setIsSubmitting(false);
+    try {
+        await saveContactSubmission(submissionDetails);
+        toast({
+            title: 'Message Saved!',
+            description: 'Thank you for your feedback. Your message has been stored.',
+        });
+        setContactName('');
+        setContactEmail('');
+        setContactMessage('');
+        // Optionally close the dialog after successful submission
+        // setIsDialogOpen(false); 
+    } catch (error) {
+        toast({
+            variant: "destructive",
+            title: 'Submission Failed',
+            description: 'Could not save your message. Please try again later.',
+        });
+        console.error("Contact form submission error:", error);
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   return (
@@ -96,7 +111,7 @@ export const NavigationBar: React.FC = () => {
       <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
         {theme === 'light' ? <Moon className="h-5 w-5 text-slate-600 hover:text-slate-800 transition-colors" /> : <Sun className="h-5 w-5 text-yellow-400 hover:text-yellow-300 transition-colors" />}
       </Button>
-      <Dialog onOpenChange={(open) => { if (open) handleAboutOpen(); }}>
+      <Dialog open={isDialogOpen} onOpenChange={handleAboutOpenChange}>
         <DialogTrigger asChild>
           <Button variant="ghost" size="icon" aria-label="About DreamTuner">
             <InfoIcon className="h-5 w-5 text-destructive hover:text-destructive/80 transition-colors" />
@@ -149,6 +164,7 @@ export const NavigationBar: React.FC = () => {
                     onChange={(e) => setContactName(e.target.value)}
                     placeholder="Your Name"
                     className="mt-1 bg-input border-border focus:ring-ring focus:border-primary"
+                    disabled={isSubmitting}
                   />
                 </div>
                 <div>
@@ -160,6 +176,7 @@ export const NavigationBar: React.FC = () => {
                     onChange={(e) => setContactEmail(e.target.value)}
                     placeholder="your@email.com"
                     className="mt-1 bg-input border-border focus:ring-ring focus:border-primary"
+                    disabled={isSubmitting}
                   />
                 </div>
                 <div>
@@ -171,6 +188,7 @@ export const NavigationBar: React.FC = () => {
                     placeholder="Your message, feedback, or collaboration ideas..."
                     rows={3}
                     className="mt-1 bg-input border-border focus:ring-ring focus:border-primary resize-none"
+                    disabled={isSubmitting}
                   />
                 </div>
                 <Button 
@@ -178,7 +196,7 @@ export const NavigationBar: React.FC = () => {
                   className="w-full bg-primary hover:bg-primary/80 text-primary-foreground"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? 'Sending...' : 'Send Message (Simulated)'}
+                  {isSubmitting ? 'Saving...' : 'Send Message'}
                 </Button>
               </form>
             </div>
@@ -196,4 +214,3 @@ export const NavigationBar: React.FC = () => {
     </nav>
   );
 };
-
