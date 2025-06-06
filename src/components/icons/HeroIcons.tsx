@@ -1,3 +1,4 @@
+
 import type React from 'react';
 
 interface IconProps extends React.SVGProps<SVGSVGElement> {
@@ -130,3 +131,10 @@ export const UploadCloudIcon: React.FC<IconProps> = ({ className, ...props }) =>
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.338-2.325A5.25 5.25 0 0118 15M5.25 15.75A2.25 2.25 0 003 18.25m16.5-1.5a2.25 2.25 0 00-2.25-2.5" />
   </svg>
 );
+
+export const MusicIcon: React.FC<IconProps> = ({ className, ...props }) => ( // New Icon for WAV
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className || "w-6 h-6"} {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M19.125 4.575c-.412-.813-1.15-1.425-2.025-1.763C16.275 2.5 15.45 2.25 14.625 2.25H9.375c-.825 0-1.65.25-2.475.563-.875.337-1.612.95-2.025 1.762A10.437 10.437 0 004.875 8.25c0 .263.025.525.075.788l.075.262a10.5 10.5 0 002.638 5.462l.262.338c.262.337.538.662.812.975.275.312.55.612.825.912l.338.338a10.438 10.438 0 005.462 2.637l.263.075c.262.05.525.075.787.075.263 0 .525-.025.788-.075l.262-.075a10.5 10.5 0 005.463-2.638l.337-.337c.275-.3.55-.6.825-.913.275-.312.55-.637.812-.975l.263-.337a10.5 10.5 0 002.637-5.463l.075-.262c.05-.263.075-.525.075-.788 0-1.887-.512-3.75-1.425-5.462zM12 15a3 3 0 100-6 3 3 0 000 6z" />
+  </svg>
+);
+

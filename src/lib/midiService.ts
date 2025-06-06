@@ -343,7 +343,7 @@ const KID_INSTRUMENTS = {
 };
 
 
-const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: boolean = false, aiGeneratedIdea?: string): InstrumentMapping => {
+export const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMode: boolean = false, aiGeneratedIdea?: string): InstrumentMapping => {
     let mapping: InstrumentMapping = { melody: 80, bass: 33, chordsPad: 89, arpeggioSynth: 81, drums: 0 }; 
     const genreLower = genre?.toLowerCase();
     const ideaLower = aiGeneratedIdea?.toLowerCase() || "";
@@ -539,6 +539,27 @@ const getTPQN = () => {
     );
     return 128; 
 };
+
+interface EventTime { time: number; [key: string]: any; }
+
+export function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[], trackNameForDebug: string = "Track"): T[] {
+    if (!events || events.length === 0) return [];
+
+    const sortedEvents = [...events].sort((a, b) => a.time - b.time);
+    const correctedEvents: T[] = [sortedEvents[0]];
+    const timeEpsilon = 0.000001; // Small offset for subsequent notes at the same time
+
+    for (let i = 1; i < sortedEvents.length; i++) {
+        const currentEvent = { ...sortedEvents[i] };
+        const prevEventTime = correctedEvents[correctedEvents.length - 1].time;
+
+        if (currentEvent.time <= prevEventTime) {
+            currentEvent.time = prevEventTime + timeEpsilon;
+        }
+        correctedEvents.push(currentEvent);
+    }
+    return correctedEvents;
+}
 
 
 export const generateMidiFile = (params: MusicParameters): string => {
@@ -1070,3 +1091,4 @@ export const generateMidiFile = (params: MusicParameters): string => {
         return fallbackWriter.dataUri();
     }
 };
+
