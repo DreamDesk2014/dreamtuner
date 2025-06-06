@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Download, Share2, Disc3, SlidersHorizontal, Library, Users } from 'lucide-react';
 import { dataURLtoFile } from '@/lib/utils';
 import { generateMidiFile } from '@/lib/midiService';
+import { logEvent, getSessionId } from '@/lib/firestoreService'; // Import Firestore logging
 
 const LOCAL_STORAGE_KEY = 'dreamTunerLastSession';
 
@@ -60,6 +61,13 @@ export default function DreamTunerPage() {
 
   useEffect(() => {
     setIsClientMounted(true);
+    // Log app load event
+    logEvent('user_interactions', { 
+      eventName: 'app_loaded', 
+      eventDetails: { userAgent: navigator.userAgent, initialMode: currentMode },
+      sessionId: getSessionId() 
+    }).catch(console.error);
+
     try {
       const storedSession = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (storedSession) {
@@ -75,12 +83,29 @@ export default function DreamTunerPage() {
         if (sessionData.currentMode === 'kids' && sessionData.musicParams) {
             setCurrentKidsMusicParams(sessionData.musicParams);
         }
+         // Log session restored event
+        logEvent('user_interactions', { 
+          eventName: 'session_restored', 
+          eventDetails: { 
+            hadMusicParams: !!sessionData.musicParams,
+            hadKidsArt: !!sessionData.aiKidsArtUrl,
+            hadStandardArt: !!sessionData.standardModeAiArtUrl,
+            restoredMode: sessionData.currentMode 
+          },
+          sessionId: getSessionId() 
+        }).catch(console.error);
       }
     } catch (e) {
       console.error("Failed to load session from localStorage:", e);
       localStorage.removeItem(LOCAL_STORAGE_KEY); 
+      logEvent('errors', { 
+        eventName: 'localStorage_load_error', 
+        eventDetails: { error: (e instanceof Error ? e.message : String(e)) },
+        sessionId: getSessionId() 
+      }).catch(console.error);
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // CurrentMode is not needed in deps for initial load log
 
   useEffect(() => {
     if (isClientMounted && (musicParams || aiKidsArtUrl || standardModeAiArtUrl)) {
@@ -96,6 +121,11 @@ export default function DreamTunerPage() {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionData));
       } catch (e) {
         console.error("Failed to save session to localStorage:", e);
+         logEvent('errors', { 
+          eventName: 'localStorage_save_error', 
+          eventDetails: { error: (e instanceof Error ? e.message : String(e)) },
+          sessionId: getSessionId() 
+        }).catch(console.error);
       }
     } else if (isClientMounted && !musicParams && !aiKidsArtUrl && !standardModeAiArtUrl && currentMode !== 'comingSoon') {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -125,6 +155,12 @@ export default function DreamTunerPage() {
     if (isClientMounted && newMode === 'comingSoon') { 
         localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
+    // Log mode change event
+    logEvent('user_interactions', { 
+      eventName: 'mode_changed', 
+      eventDetails: { newMode: newMode, previousMode: currentMode }, // currentMode here is the old mode before setCurrentMode completes
+      sessionId: getSessionId()
+    }).catch(console.error);
   };
 
   const handleStandardModeSubmit = useCallback(async (input: AppInput) => {
@@ -134,6 +170,13 @@ export default function DreamTunerPage() {
     setShowWelcome(false);
     resetAllArtStates();
     setCurrentKidsMusicParams(null);
+    
+    const startTime = Date.now();
+    logEvent('user_interactions', { 
+      eventName: 'standard_generation_started', 
+      eventDetails: { inputType: input.type, genre: input.genre, mode: input.mode },
+      sessionId: getSessionId()
+    }).catch(console.error);
 
     try {
       toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas..." });
@@ -141,15 +184,31 @@ export default function DreamTunerPage() {
       if ('error' in musicResult) {
         setError(musicResult.error);
         setMusicParams(null);
+        logEvent('errors', { 
+          eventName: 'standard_music_generation_error', 
+          eventDetails: { error: musicResult.error, inputType: input.type, durationMs: Date.now() - startTime },
+          sessionId: getSessionId()
+        }).catch(console.error);
       } else {
         setMusicParams(musicResult);
         setError(null);
+        logEvent('user_interactions', { 
+          eventName: 'standard_music_generation_success', 
+          eventDetails: { inputType: input.type, durationMs: Date.now() - startTime, idea: musicResult.generatedIdea.substring(0,50) },
+          sessionId: getSessionId()
+        }).catch(console.error);
 
         if (musicResult.generatedIdea) {
           setIsRenderingStandardModeAiArt(true);
           setStandardModeAiArtError(null);
           setStandardModeAiArtUrl(null);
           toast({ title: "AI Artist at Work 🎨", description: "Crafting visual representation..." });
+          const artStartTime = Date.now();
+          logEvent('user_interactions', { 
+            eventName: 'standard_art_generation_started', 
+            eventDetails: { inputType: musicResult.originalInput.type },
+            sessionId: getSessionId()
+          }).catch(console.error);
 
           try {
             const artResult = await renderStandardInputArtAction(
@@ -159,16 +218,31 @@ export default function DreamTunerPage() {
             if ('error' in artResult) {
               setStandardModeAiArtError(artResult.error);
               toast({ variant: "destructive", title: "Standard Art Hiccup", description: `Couldn't create art: ${artResult.error}` });
+              logEvent('errors', { 
+                eventName: 'standard_art_generation_error', 
+                eventDetails: { error: artResult.error, inputType: musicResult.originalInput.type, durationMs: Date.now() - artStartTime },
+                sessionId: getSessionId()
+              }).catch(console.error);
             } else if (artResult.renderedArtDataUrl) {
               setStandardModeAiArtUrl(artResult.renderedArtDataUrl);
               setStandardModeAiArtError(null);
               toast({ title: "Standard Artwork Ready!", description: "Your AI art has been created!" });
+              logEvent('user_interactions', { 
+                eventName: 'standard_art_generation_success', 
+                eventDetails: { inputType: musicResult.originalInput.type, durationMs: Date.now() - artStartTime },
+                sessionId: getSessionId()
+              }).catch(console.error);
             }
           } catch (artErr) {
             console.error("Error rendering standard mode AI art:", artErr);
             const specificArtError = artErr instanceof Error ? `AI art rendering failed: ${artErr.message}` : "Unknown AI art rendering error.";
             setStandardModeAiArtError(specificArtError);
             toast({ variant: "destructive", title: "Standard Art Error", description: "Something went wrong while creating the art." });
+            logEvent('errors', { 
+              eventName: 'standard_art_generation_exception', 
+              eventDetails: { error: specificArtError, inputType: musicResult.originalInput.type, durationMs: Date.now() - artStartTime },
+              sessionId: getSessionId()
+            }).catch(console.error);
           } finally {
             setIsRenderingStandardModeAiArt(false);
           }
@@ -176,12 +250,19 @@ export default function DreamTunerPage() {
       }
     } catch (err) {
       console.error("Error in standard submission process:", err);
-      setError(err instanceof Error ? `Failed process input: ${err.message}.` : "An unknown error occurred.");
+      const errorMessage = err instanceof Error ? `Failed process input: ${err.message}.` : "An unknown error occurred.";
+      setError(errorMessage);
       setMusicParams(null);
+      logEvent('errors', { 
+        eventName: 'standard_submission_exception', 
+        eventDetails: { error: errorMessage, inputType: input.type, durationMs: Date.now() - startTime },
+        sessionId: getSessionId()
+      }).catch(console.error);
     } finally {
       setIsLoadingMusic(false);
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGenre /* Dependencies for useCallback should reflect values it uses from outer scope, getSessionId does not change */]);
 
   const handleKidsModeTuneCreation = useCallback(async (
     musicInput: AppInput,
@@ -199,6 +280,17 @@ export default function DreamTunerPage() {
     setStandardModeAiArtError(null);
     setIsRenderingStandardModeAiArt(false);
     setShowWelcome(false);
+    
+    const overallStartTime = Date.now();
+    logEvent('user_interactions', { 
+      eventName: 'kids_tune_creation_started', 
+      eventDetails: { 
+        hasDrawing: !!artInput?.drawingDataUri, 
+        hasVoiceHint: !!artInput?.originalVoiceHint,
+        genre: musicInput.genre 
+      },
+      sessionId: getSessionId()
+    }).catch(console.error);
 
     let generatedMusicalIdea: string | undefined = undefined;
     let musicParametersResult: MusicParameters | undefined = undefined;
@@ -206,6 +298,7 @@ export default function DreamTunerPage() {
     let artRenderError: string | undefined = undefined;
     let artRenderUrl: string | undefined = undefined;
 
+    const musicStartTime = Date.now();
     try {
       toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas..." });
       const musicResult = await generateMusicParametersAction(musicInput);
@@ -213,12 +306,22 @@ export default function DreamTunerPage() {
         musicGenError = musicResult.error;
         setError(musicResult.error);
         setMusicParams(null);
+        logEvent('errors', { 
+          eventName: 'kids_music_generation_error', 
+          eventDetails: { error: musicResult.error, durationMs: Date.now() - musicStartTime },
+          sessionId: getSessionId()
+        }).catch(console.error);
       } else {
         musicParametersResult = musicResult;
         setMusicParams(musicResult);
         setCurrentKidsMusicParams(musicResult);
         generatedMusicalIdea = musicResult.generatedIdea;
         setError(null);
+         logEvent('user_interactions', { 
+          eventName: 'kids_music_generation_success', 
+          eventDetails: { durationMs: Date.now() - musicStartTime, idea: musicResult.generatedIdea.substring(0,50) },
+          sessionId: getSessionId()
+        }).catch(console.error);
       }
     } catch (err) {
       console.error("Error in music generation for drawing/voice:", err);
@@ -226,12 +329,23 @@ export default function DreamTunerPage() {
       musicGenError = specificError;
       setError(specificError);
       setMusicParams(null);
+      logEvent('errors', { 
+        eventName: 'kids_music_generation_exception', 
+        eventDetails: { error: specificError, durationMs: Date.now() - musicStartTime },
+        sessionId: getSessionId()
+      }).catch(console.error);
     } finally {
       setIsLoadingMusic(false);
     }
 
     if (artInput) {
       artInput.originalMusicalIdea = generatedMusicalIdea;
+      const artStartTime = Date.now();
+      logEvent('user_interactions', { 
+        eventName: 'kids_art_generation_started', 
+        eventDetails: { hasDrawing: !!artInput.drawingDataUri, hasVoiceHint: !!artInput.originalVoiceHint },
+        sessionId: getSessionId()
+      }).catch(console.error);
       try {
         toast({ title: "AI Artist at Work 🎨", description: "Reimagining your concept..." });
         const artResult = await renderKidsDrawingAction(
@@ -244,11 +358,21 @@ export default function DreamTunerPage() {
             artRenderError = artResult.error;
             setAiKidsArtError(artResult.error);
             toast({ variant: "destructive", title: "AI Artist Hiccup", description: `Couldn't create art: ${artResult.error}` });
+            logEvent('errors', { 
+              eventName: 'kids_art_generation_error', 
+              eventDetails: { error: artResult.error, durationMs: Date.now() - artStartTime },
+              sessionId: getSessionId()
+            }).catch(console.error);
         } else if (artResult.renderedDrawingDataUrl) {
             artRenderUrl = artResult.renderedDrawingDataUrl;
             setAiKidsArtUrl(artResult.renderedDrawingDataUrl);
             setAiKidsArtError(null);
             toast({ title: "Artwork Ready!", description: "Your AI art has been created!" });
+            logEvent('user_interactions', { 
+              eventName: 'kids_art_generation_success', 
+              eventDetails: { durationMs: Date.now() - artStartTime },
+              sessionId: getSessionId()
+            }).catch(console.error);
         }
       } catch (err) {
         console.error("Error rendering AI art:", err);
@@ -256,27 +380,57 @@ export default function DreamTunerPage() {
         artRenderError = specificError;
         setAiKidsArtError(specificError);
         toast({ variant: "destructive", title: "AI Artist Error", description: "Something went wrong while creating the art." });
+        logEvent('errors', { 
+          eventName: 'kids_art_generation_exception', 
+          eventDetails: { error: specificError, durationMs: Date.now() - artStartTime },
+          sessionId: getSessionId()
+        }).catch(console.error);
       } finally {
         setIsRenderingAiKidsArt(false);
       }
     } else {
         setIsRenderingAiKidsArt(false);
     }
+     logEvent('user_interactions', { 
+      eventName: 'kids_tune_creation_completed', 
+      eventDetails: { 
+        durationMs: Date.now() - overallStartTime, 
+        musicSuccess: !musicGenError, 
+        artSuccess: artInput ? !artRenderError : undefined 
+      },
+      sessionId: getSessionId()
+    }).catch(console.error);
 
     return { musicError: musicGenError, artError: artRenderError, musicParamsResult: musicParametersResult, artUrlResult: artRenderUrl };
-
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGenre /* Dependencies for useCallback */]);
 
 
   const handleRegenerateIdea = useCallback(async () => {
     if (!musicParams) return;
     setIsRegeneratingIdea(true);
     setError(null);
+    const startTime = Date.now();
+    logEvent('user_interactions', { 
+      eventName: 'regenerate_idea_started', 
+      eventDetails: { currentMode: currentMode, originalIdea: musicParams.generatedIdea.substring(0,50) },
+      sessionId: getSessionId()
+    }).catch(console.error);
     try {
       const result = await regenerateMusicalIdeaAction(musicParams);
       if ('error' in result) {
         setError(result.error);
+        logEvent('errors', { 
+          eventName: 'regenerate_idea_error', 
+          eventDetails: { error: result.error, durationMs: Date.now() - startTime },
+          sessionId: getSessionId()
+        }).catch(console.error);
       } else {
+        logEvent('user_interactions', { 
+          eventName: 'regenerate_idea_success', 
+          eventDetails: { durationMs: Date.now() - startTime, newIdea: result.newIdea.substring(0,50) },
+          sessionId: getSessionId()
+        }).catch(console.error);
         setMusicParams(prevParams => {
           if (!prevParams) return null;
           const updatedParams = { ...prevParams, generatedIdea: result.newIdea };
@@ -286,21 +440,43 @@ export default function DreamTunerPage() {
             setStandardModeAiArtError(null);
             setStandardModeAiArtUrl(null); 
             toast({ title: "AI Artist at Work 🎨", description: "Reimagining visual for new idea..." });
+            const artStartTime = Date.now();
+            logEvent('user_interactions', { 
+              eventName: 'standard_art_regeneration_started', 
+              eventDetails: { inputType: updatedParams.originalInput.type },
+              sessionId: getSessionId()
+            }).catch(console.error);
 
             renderStandardInputArtAction(updatedParams.originalInput, result.newIdea)
               .then(artResult => {
                 if ('error' in artResult) {
                   setStandardModeAiArtError(artResult.error);
                   toast({ variant: "destructive", title: "Standard Art Hiccup", description: `Couldn't update art: ${artResult.error}` });
+                  logEvent('errors', { 
+                    eventName: 'standard_art_regeneration_error', 
+                    eventDetails: { error: artResult.error, durationMs: Date.now() - artStartTime },
+                    sessionId: getSessionId()
+                  }).catch(console.error);
                 } else if (artResult.renderedArtDataUrl) {
                   setStandardModeAiArtUrl(artResult.renderedArtDataUrl);
                   setStandardModeAiArtError(null);
                   toast({ title: "Standard Artwork Updated!", description: "AI art for new idea is ready!" });
+                   logEvent('user_interactions', { 
+                    eventName: 'standard_art_regeneration_success', 
+                    eventDetails: { durationMs: Date.now() - artStartTime },
+                    sessionId: getSessionId()
+                  }).catch(console.error);
                 }
               })
               .catch(artErr => {
                 console.error("Error re-rendering standard mode AI art:", artErr);
-                setStandardModeAiArtError(artErr instanceof Error ? artErr.message : "Unknown error updating art.");
+                const artErrorMessage = artErr instanceof Error ? artErr.message : "Unknown error updating art.";
+                setStandardModeAiArtError(artErrorMessage);
+                 logEvent('errors', { 
+                  eventName: 'standard_art_regeneration_exception', 
+                  eventDetails: { error: artErrorMessage, durationMs: Date.now() - artStartTime },
+                  sessionId: getSessionId()
+                }).catch(console.error);
               })
               .finally(() => {
                 setIsRenderingStandardModeAiArt(false);
@@ -311,11 +487,17 @@ export default function DreamTunerPage() {
       }
     } catch (err) {
       console.error("Error regenerating idea:", err);
-      setError(err instanceof Error ? `Failed to regenerate idea: ${err.message}` : "Unknown error regenerating idea.");
+      const errorMessage = err instanceof Error ? `Failed to regenerate idea: ${err.message}` : "Unknown error regenerating idea.";
+      setError(errorMessage);
+      logEvent('errors', { 
+        eventName: 'regenerate_idea_exception', 
+        eventDetails: { error: errorMessage, durationMs: Date.now() - startTime },
+        sessionId: getSessionId()
+      }).catch(console.error);
     } finally {
       setIsRegeneratingIdea(false);
     }
-  }, [musicParams, currentMode]);
+  }, [musicParams, currentMode, getSessionId]);
 
 
   const handleDownloadStandardArt = () => {
@@ -326,6 +508,10 @@ export default function DreamTunerPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+       logEvent('user_interactions', { 
+        eventName: 'standard_art_downloaded', 
+        sessionId: getSessionId()
+      }).catch(console.error);
     }
   };
 
@@ -334,6 +520,11 @@ export default function DreamTunerPage() {
     if (!navigator.share) {
       toast({ variant: "destructive", title: "Share Not Supported", description: "Web Share API is not available." });
       setShareStandardArtError("Web Share API not supported.");
+      logEvent('errors', { 
+        eventName: 'share_api_not_supported', 
+        eventDetails: { mode: 'standard' },
+        sessionId: getSessionId()
+      }).catch(console.error);
       return;
     }
     if (!standardModeAiArtUrl && !musicParams) {
@@ -347,6 +538,11 @@ export default function DreamTunerPage() {
     if (musicParams?.generatedIdea) {
         shareText += `\nMusical Idea: "${musicParams.generatedIdea}"`;
     }
+    logEvent('user_interactions', { 
+      eventName: 'standard_share_initiated', 
+      eventDetails: { hasArt: !!standardModeAiArtUrl, hasMusic: !!musicParams },
+      sessionId: getSessionId()
+    }).catch(console.error);
 
     try {
         if (standardModeAiArtUrl) {
@@ -358,7 +554,7 @@ export default function DreamTunerPage() {
             if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
                 let baseFileName = 'dreamtuner_standard_music';
                 if (musicParams.generatedIdea) {
-                    baseFileName = musicParams.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0, 25);
+                    baseFileName = musicParams.generatedIdea.replace(/[^\\w\\s]/gi, '').replace(/\\s+/g, '_').slice(0, 25);
                 }
                 const midiFile = dataURLtoFile(midiDataUri, `${baseFileName}.mid`);
                 if (midiFile) filesToShareAttempt.push(midiFile);
@@ -377,11 +573,24 @@ export default function DreamTunerPage() {
             files: validFilesToShare,
         });
         toast({ title: "Shared Creation Successfully!" });
+        logEvent('user_interactions', { 
+          eventName: 'standard_share_success', 
+          sessionId: getSessionId()
+        }).catch(console.error);
     } catch (error: any) {
         if (error.name === 'AbortError') {
             toast({ title: "Share Cancelled", variant: "default" });
+            logEvent('user_interactions', { 
+              eventName: 'standard_share_cancelled', 
+              sessionId: getSessionId()
+            }).catch(console.error);
         } else {
             toast({ variant: "destructive", title: "Share Failed", description: error.message || "Could not share." });
+            logEvent('errors', { 
+              eventName: 'standard_share_error', 
+              eventDetails: { error: error.message || "Failed to share creation." },
+              sessionId: getSessionId()
+            }).catch(console.error);
         }
         setShareStandardArtError(error.message || "Failed to share creation.");
     } finally {
@@ -628,9 +837,3 @@ export default function DreamTunerPage() {
     </div>
   );
 }
-    
-
-    
-
-
-
