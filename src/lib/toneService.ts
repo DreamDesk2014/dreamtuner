@@ -6,9 +6,10 @@ import type { MusicParameters } from '@/types';
 import { generateMidiFile as generateMidiFileOriginal } from '@/lib/midiService';
 import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal, ensureStrictlyIncreasingTimes } from '@/lib/midiService';
 
-const SAFE_OSC_TYPE = 'triangle' as const; 
+const SAFE_OSC_TYPE = 'triangle' as const;
 
 // --- audiobuffer-to-wav START ---
+// Standard audioBufferToWav, encodeWAV, interleave, writeFloat32, floatTo16BitPCM, writeString functions
 function audioBufferToWav(buffer: AudioBuffer, opt: { float32?: boolean } = {}): ArrayBuffer {
   const numChannels = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
@@ -72,7 +73,6 @@ function base64ToUint8Array(base64: string): Uint8Array {
   }
 }
 
-
 interface EventTime { time: number; duration: number; velocity: number; note?: string; name?: string; midi?: number; ticks?: number; }
 interface SynthCollection {
   melody?: Tone.PolySynth;
@@ -82,98 +82,105 @@ interface SynthCollection {
   kick?: Tone.MembraneSynth;
   snare?: Tone.NoiseSynth;
   hiHat?: Tone.MetalSynth;
-  piano?: Tone.PolySynth<Tone.FMSynth>; 
+  piano?: Tone.PolySynth<Tone.FMSynth>;
   [key: string]: any;
 }
 
-interface SynthConfigurations { 
-  melody: any; 
-  bass: any; 
-  chords: any; 
-  arpeggio: any; 
-  kick: any; 
-  snare: any; 
-  hiHat: any; 
-  piano: any; 
+interface SynthConfigurations {
+  melody: any;
+  bass: any;
+  chords: any;
+  arpeggio: any;
+  kick: any;
+  snare: any;
+  hiHat: any;
+  piano: any;
 }
 
-const MIN_EFFECTIVE_DURATION = 5.0; 
+const MIN_EFFECTIVE_DURATION = 5.0;
+
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  console.log(`[WAV_GEN_SIMPLIFIED_TEST] Starting SIMPLIFIED (hardcoded notes) test for idea: ${params.generatedIdea.substring(0,30)}...`);
-  
+  console.log(`[WAV_GEN_DEBUG] Starting REVISED MINIMAL HARDCODED TEST (v2) for WAV generation.`);
+
   // Tone.start() is now handled by the UI component. We assume context is running.
+  // If not, the UI component should prevent this function from being called.
   if (Tone.context.state !== 'running') {
-    console.error("[WAV_GEN_SIMPLIFIED_TEST_ERROR] Tone.js context is NOT 'running'. Aborting WAV generation. Ensure Tone.start() was called successfully from UI.");
+    console.error("[WAV_GEN_DEBUG_ERROR] Tone.js context is NOT 'running' when generateWavFromMusicParameters (minimal v2) is called. Aborting.");
     return null;
   }
-  console.log("[WAV_GEN_SIMPLIFIED_TEST] Tone.context is 'running'. Proceeding.");
+  console.log("[WAV_GEN_DEBUG] Global Tone.context state is already 'running'.");
+
 
   try {
-    Tone.Transport.stop();
+    Tone.Transport.stop(0);
     Tone.Transport.cancel(0);
-    Tone.Destination.volume.value = 0; 
-    Tone.Transport.bpm.value = 120; 
+    console.log("[WAV_GEN_DEBUG] Global Tone.Transport cleared and stopped.");
 
-    const renderDuration = 4.0; // Fixed duration for this simplified test
-    console.log(`[WAV_GEN_SIMPLIFIED_TEST] Render duration: ${renderDuration}s, BPM: ${Tone.Transport.bpm.value}`);
+    Tone.Destination.volume.value = 0; // Set to a reasonable volume for testing, e.g. 0dB
+    console.log("[WAV_GEN_DEBUG] Global Tone.Destination volume set to 0dB.");
 
-    const audioBuffer = await Tone.Offline(async (offlineContext) => { 
-      console.log("[WAV_GEN_SIMPLIFIED_TEST_OFFLINE] Inside simplified Tone.Offline callback. Offline Context SR:", offlineContext.sampleRate);
-      
-      const testSynth = new Tone.PolySynth(Tone.Synth, {
+    Tone.Transport.bpm.value = 100; // A moderate tempo for the test
+    console.log(`[WAV_GEN_DEBUG] Global Tone.Transport BPM set to: ${Tone.Transport.bpm.value}`);
+
+    const renderDuration = 4.0; // Fixed duration for this minimal test
+    console.log(`[WAV_GEN_DEBUG] Minimal test renderDuration: ${renderDuration}s`);
+
+    const audioBuffer = await Tone.Offline(async (offlineContext) => {
+      console.log("[WAV_GEN_DEBUG_OFFLINE] Inside REVISED minimal Tone.Offline callback (v2). Offline Context Sample Rate:", offlineContext.sampleRate);
+
+      const testSynth = new Tone.Synth({ // Using Tone.Synth for simplicity
         oscillator: { type: 'triangle' as const },
-        envelope: { attack: 0.02, decay: 0.1, sustain: 0.3, release: 0.4 },
-        volume: 0 // Loud
+        envelope: { attack: 0.02, decay: 0.1, sustain: 0.8, release: 0.4 },
+        volume: 0 // Max volume for testing
       }).connect(offlineContext.destination);
-      console.log("[WAV_GEN_SIMPLIFIED_TEST_OFFLINE] TestSynth created and connected. Volume:", testSynth.volume.value);
+      console.log("[WAV_GEN_DEBUG_OFFLINE] TestSynth created and connected to offline destination. Volume:", testSynth.volume.value);
 
-      const hardcodedEvents = [
-        { time: 0.5, note: "C4", duration: "4n", velocity: 0.9 },
-        { time: 1.0, note: "E4", duration: "4n", velocity: 0.9 },
-        { time: 1.5, note: "G4", duration: "2n", velocity: 0.9 },
-        { time: 2.5, note: "C5", duration: "4n", velocity: 0.7 }
-      ];
-      
-      const testPart = new Tone.Part(((time, value) => {
-        console.log(`[WAV_GEN_SIMPLIFIED_TEST_OFFLINE_PART] Triggering: Time=${time.toFixed(3)}, Note=${value.note}, Dur=${value.duration}, Vel=${value.velocity.toFixed(2)}`);
-        testSynth.triggerAttackRelease(value.note, value.duration, time, value.velocity);
-      }) as Tone.ToneEventCallback<any>, hardcodedEvents);
-      
-      testPart.start(0);
-      console.log("[WAV_GEN_SIMPLIFIED_TEST_OFFLINE] Hardcoded TestPart created and started.");
+      // Direct scheduling without Tone.Part, using offlineContext.currentTime for relative timing
+      testSynth.triggerAttackRelease("C4", "8n", offlineContext.currentTime + 0.5, 0.9);
+      testSynth.triggerAttackRelease("E4", "8n", offlineContext.currentTime + 1.0, 0.9);
+      testSynth.triggerAttackRelease("G4", "4n", offlineContext.currentTime + 1.5, 0.9); // Longer note
+      // Add one more note to make it distinct if the previous 3-note version was cached or similar
+      testSynth.triggerAttackRelease("C5", "8n", offlineContext.currentTime + 2.5, 0.8);
 
+
+      console.log("[WAV_GEN_DEBUG_OFFLINE] TestSynth notes scheduled directly.");
+      // No explicit transport start inside Tone.Offline callback is needed.
+      // The rendering starts automatically after this async callback resolves.
     }, renderDuration);
 
-    console.log("[WAV_GEN_SIMPLIFIED_TEST] Tone.Offline rendering complete. AudioBuffer duration:", audioBuffer.duration.toFixed(3) + "s");
+    console.log(`[WAV_GEN_DEBUG] Minimal Tone.Offline rendering complete. AudioBuffer info: Channels: ${audioBuffer.numberOfChannels} Length: ${audioBuffer.length} SampleRate: ${audioBuffer.sampleRate} Duration: ${audioBuffer.duration.toFixed(3)}s`);
 
     let isSilent = true;
+    let maxVal = 0;
     for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
-        const channelData = audioBuffer.getChannelData(i);
-        let maxAbs = 0;
-        for (let j = 0; j < channelData.length; j++) {
-            if (Math.abs(channelData[j]) > 1e-6) { 
-                isSilent = false;
-                maxAbs = Math.max(maxAbs, Math.abs(channelData[j]));
-            }
+      const channelData = audioBuffer.getChannelData(i);
+      for (let j = 0; j < channelData.length; j++) {
+        if (Math.abs(channelData[j]) > 1e-5) { // Slightly higher threshold
+          isSilent = false;
         }
-        console.log(`[WAV_GEN_SIMPLIFIED_TEST] Channel ${i} max absolute value: ${maxAbs.toExponential(3)}`);
-        if (!isSilent) break;
+        if (Math.abs(channelData[j]) > maxVal) {
+          maxVal = Math.abs(channelData[j]);
+        }
+      }
+      console.log(`[WAV_GEN_DEBUG] Channel ${i} max absolute value: ${maxVal.toExponential(3)}`);
+      if (!isSilent) break;
     }
+
     if (isSilent) {
-        console.warn("[WAV_GEN_SIMPLIFIED_TEST_WARN] Rendered AudioBuffer (simplified test) appears to be silent.");
+      console.warn("[WAV_GEN_DEBUG_WARN] Minimal Rendered AudioBuffer (v2) appears to be silent or extremely quiet.");
     } else {
-        console.log("[WAV_GEN_SIMPLIFIED_TEST] Rendered AudioBuffer (simplified test) contains non-zero samples.");
+      console.log("[WAV_GEN_DEBUG] Minimal Rendered AudioBuffer (v2) contains non-zero samples.");
     }
 
     const wavDataBuffer = audioBufferToWav(audioBuffer);
-    console.log(`[WAV_GEN_SIMPLIFIED_TEST] WAV data buffer created. Size: ${wavDataBuffer.byteLength} bytes.`);
+    console.log(`[WAV_GEN_DEBUG] Minimal WAV data buffer (v2) created. Size: ${wavDataBuffer.byteLength} bytes.`);
     return new Blob([wavDataBuffer], { type: 'audio/wav' });
 
   } catch (error) {
-    console.error("[WAV_GEN_SIMPLIFIED_TEST_ERROR] Error generating WAV:", error);
+    console.error("[WAV_GEN_DEBUG_ERROR] Error in minimal WAV generation (v2):", error);
     if (error instanceof Error) {
-        console.error(`[WAV_GEN_SIMPLIFIED_TEST_ERROR_DETAILS] Name: ${error.name}, Message: ${error.message}`);
+        console.error(`[WAV_GEN_DEBUG_ERROR_DETAILS] Name: ${error.name}, Message: ${error.message}, Stack: ${error.stack}`);
     }
     return null;
   }
@@ -185,8 +192,8 @@ const getSynthConfigurations = (
   genre: string = '',
   isKidsMode: boolean = false,
   aiGeneratedIdea: string = '',
-  rhythmicDensity: number = 0.5, 
-  harmonicComplexity: number = 0.5 
+  rhythmicDensity: number = 0.5,
+  harmonicComplexity: number = 0.5
 ): SynthConfigurations => {
   const genreLower = genre.toLowerCase();
   const hintsLower = instrumentHints.map(h => h.toLowerCase());
@@ -200,18 +207,18 @@ const getSynthConfigurations = (
     kick: { pitchDecay: 0.05, octaves: 10, oscillator: { type: "sine" as const }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: "exponential" as const }, volume: 0 },
     snare: { noise: { type: 'pink' as const }, volume: -2, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } },
     hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -6 },
-    piano: { 
-      harmonicity: 3.01, 
-      modulationIndex: 14, 
-      detune: 0,
-      oscillator: { type: "sine" as const, partials: [1, 0.2, 0.05] }, 
-      envelope: { attack: 0.01, decay: 0.6, sustain: 0.1, release: 0.8 },
-      modulation: {type: "square" as const}, 
-      modulationEnvelope: { attack: 0.02, decay: 0.3, sustain: 0.01, release: 0.5 }, 
-      volume: -3
+    piano: { // Defaulting to FMSynth for piano to avoid sample loading issues
+        harmonicity: 3.1,
+        modulationIndex: 16,
+        oscillator: { type: "sine" as const }, // FMSynth uses a main oscillator
+        envelope: { attack: 0.01, decay: 0.7, sustain: 0.1, release: 0.9 },
+        modulation: { type: "square" as const }, // Modulation oscillator for FMSynth
+        modulationEnvelope: { attack: 0.02, decay: 0.4, sustain: 0.01, release: 0.6 },
+        volume: -3
     }
   };
-  
+
+  // Sanitize oscillator types
   for (const key in configs) {
     const synthConfig = configs[key as keyof SynthConfigurations] as any;
     if (synthConfig.oscillator && (synthConfig.oscillator.type === 'pwm' || synthConfig.oscillator.type === 'pulse')) {
@@ -221,6 +228,7 @@ const getSynthConfigurations = (
       if ('width' in synthConfig.oscillator) delete synthConfig.oscillator.width;
     }
   }
+
 
   if (isKidsMode) {
     configs.melody = { oscillator: { type: 'triangle' as const }, envelope: { attack: 0.02, decay: 0.1, sustain: 0.6, release: 0.4 }, volume: 0 };
@@ -233,8 +241,8 @@ const getSynthConfigurations = (
     configs.hiHat.frequency = 400;
 
     if (genreLower.includes("electronic")) {
-      configs.melody.oscillator.type = SAFE_OSC_TYPE; 
-      configs.arpeggio.oscillator.type = SAFE_OSC_TYPE; 
+      configs.melody.oscillator.type = SAFE_OSC_TYPE;
+      configs.arpeggio.oscillator.type = SAFE_OSC_TYPE;
     } else if (genreLower.includes("pop")) {
       configs.melody.oscillator.type = SAFE_OSC_TYPE;
     }
@@ -243,15 +251,15 @@ const getSynthConfigurations = (
         configs.chords = JSON.parse(JSON.stringify(configs.piano)); configs.chords.volume = -6;
     }
 
-  } else { 
+  } else {
     if (genreLower.includes('electronic') || genreLower.includes('pop')) {
-      configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = 0; 
+      configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = 0;
       configs.bass.oscillator.type = 'fatsquare' as const; ((configs.bass.oscillator) as any).count = 3; ((configs.bass.oscillator) as any).spread = 15; configs.bass.volume = 0;
-      configs.chords.oscillator.type = SAFE_OSC_TYPE; configs.chords.volume = -9; 
-      configs.arpeggio.oscillator.type = 'fatsawtooth' as const; configs.arpeggio.volume = -7;
+      configs.chords.oscillator.type = SAFE_OSC_TYPE; configs.chords.volume = -9;
+      configs.arpeggio.oscillator.type = 'fatsawtooth' as const; ((configs.arpeggio.oscillator) as any).count = 3; ((configs.arpeggio.oscillator) as any).spread = 20; configs.arpeggio.volume = -7;
       configs.kick.volume = 0; configs.snare.volume = -2; configs.hiHat.volume = -6;
     } else if (genreLower.includes('rock') || genreLower.includes('metal')) {
-      configs.melody.oscillator.type = 'fatsawtooth' as const; configs.melody.envelope.attack = 0.01; configs.melody.volume = -3;
+      configs.melody.oscillator.type = 'fatsawtooth' as const; ((configs.melody.oscillator) as any).count = 2; ((configs.melody.oscillator) as any).spread = 20; configs.melody.envelope.attack = 0.01; configs.melody.volume = -3;
       configs.bass.oscillator.type = 'fatsquare' as const; ((configs.bass.oscillator) as any).count = 3; ((configs.bass.oscillator) as any).spread = 20; configs.bass.volume = -3;
       configs.chords.oscillator.type = 'fatsquare' as const; ((configs.chords.oscillator) as any).count = 3; ((configs.chords.oscillator) as any).spread = 25; configs.chords.volume = -9;
       configs.arpeggio.oscillator.type = 'fatsquare' as const; ((configs.arpeggio.oscillator) as any).count = 2; ((configs.arpeggio.oscillator) as any).spread = 10; configs.arpeggio.volume = -12;
@@ -271,32 +279,32 @@ const getSynthConfigurations = (
     }
 
     hintsLower.forEach(hint => {
-      if (hint.includes('piano')) { 
+      if (hint.includes('piano')) {
           configs.melody = JSON.parse(JSON.stringify(configs.piano)); configs.melody.volume = -3;
           configs.chords = JSON.parse(JSON.stringify(configs.piano)); configs.chords.volume = -9;
       }
       if (hint.includes('strings')) {
-        configs.melody.oscillator.type = 'fatsawtooth' as const; configs.melody.volume = -6;
-        configs.chords.oscillator.type = 'fatsawtooth' as const; configs.chords.volume = -10; ((configs.chords.envelope) as any).attack = 0.4;
+        configs.melody.oscillator.type = 'fatsawtooth' as const; ((configs.melody.oscillator) as any).count = 4; ((configs.melody.oscillator) as any).spread = 30; configs.melody.volume = -6;
+        configs.chords.oscillator.type = 'fatsawtooth' as const; ((configs.chords.oscillator) as any).count = 5; ((configs.chords.oscillator) as any).spread = 40; configs.chords.volume = -10; ((configs.chords.envelope) as any).attack = 0.4;
       }
       if (hint.includes('synth lead') || hint.includes('bright synth')) {
-        configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = -3; 
+        configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = -3;
       }
       if (hint.includes('synth pad') || hint.includes('warm pad')) {
         configs.chords.oscillator.type = 'amtriangle' as const; configs.chords.volume = -9; ((configs.chords.envelope) as any).attack = 0.8;
       }
-      if (hint.includes('pluck') || hint.includes('sequence')) { 
+      if (hint.includes('pluck') || hint.includes('sequence')) {
         configs.arpeggio.oscillator.type = SAFE_OSC_TYPE; configs.arpeggio.volume = -9;
         configs.arpeggio.envelope = { attack: 0.005, decay: 0.05, sustain: 0.1, release: 0.1 };
       }
-       if (hint.includes('arp') || hint.includes('arpeggio')) { 
-        configs.arpeggio.oscillator.type = 'fmsawtooth' as const; configs.arpeggio.volume = -7; 
+       if (hint.includes('arp') || hint.includes('arpeggio')) {
+        configs.arpeggio.oscillator.type = 'fmsawtooth' as const; ((configs.arpeggio.oscillator) as any).count=3; ((configs.arpeggio.oscillator) as any).spread=20; configs.arpeggio.volume = -7;
       }
       if (hint.includes('acoustic bass') || hint.includes('double bass')) {
         configs.bass.oscillator.type = 'sine' as const; configs.bass.volume = -3;
       }
       if (hint.includes('electric bass')) {
-        configs.bass.oscillator.type = 'fatsquare' as const; configs.bass.volume = -3;
+        configs.bass.oscillator.type = 'fatsquare' as const; ((configs.bass.oscillator) as any).count = 2; ((configs.bass.oscillator) as any).spread = 10; configs.bass.volume = -3;
       }
        if (hint.includes('flute')) {
         configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = -6;
@@ -305,28 +313,3 @@ const getSynthConfigurations = (
   }
   return configs;
 };
-
-const KID_INSTRUMENTS = { 
-    XYLOPHONE: 13, TOY_PIANO: 8, 
-    UKULELE: 24, RECORDER: 74,
-    SIMPLE_SYNTH_LEAD: 80, 
-    SIMPLE_SYNTH_PAD: 89,  
-    ACOUSTIC_GUITAR_NYLON: 24, 
-    BRIGHT_ACOUSTIC_PIANO: 0, 
-
-    KICK_DRUM_2: 35,      
-    KICK_DRUM_1: 36,      
-    SNARE_ACOUSTIC: 38,   
-    SNARE_ELECTRIC: 40,   
-    HIHAT_CLOSED: 42,     
-    HIHAT_PEDAL: 44,      
-    HIHAT_OPEN: 46,       
-    CRASH_CYMBAL_1: 49,   
-    RIDE_CYMBAL_1: 51,    
-    TAMBOURINE: 54,       
-    CRASH_CYMBAL_2: 57,   
-    RIDE_CYMBAL_2: 59,    
-    SHAKER: 70,           
-};
-
-    
