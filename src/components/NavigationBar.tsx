@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { InfoIcon, Sun, Moon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { logEvent, getSessionId, saveContactSubmission } from '@/lib/firestoreService'; // Import saveContactSubmission
+import { logEvent, getSessionId, saveContactSubmission } from '@/lib/firestoreService';
 
 export const NavigationBar: React.FC = () => {
   const [contactName, setContactName] = useState('');
@@ -76,7 +76,7 @@ export const NavigationBar: React.FC = () => {
     setIsSubmitting(true);
     
     const submissionDetails = {
-        name: contactName.trim() || undefined, // Send undefined if empty
+        name: contactName.trim() || undefined,
         email: contactEmail.trim() || undefined,
         message: contactMessage.trim() || undefined,
         sessionId: getSessionId(),
@@ -92,6 +92,15 @@ export const NavigationBar: React.FC = () => {
         setContactName('');
         setContactEmail('');
         setContactMessage('');
+        logEvent('user_interactions', {
+            eventName: 'contact_form_submitted',
+            eventDetails: {
+                nameProvided: !!submissionDetails.name,
+                emailProvided: !!submissionDetails.email,
+                messageProvided: !!submissionDetails.message,
+            },
+            sessionId: getSessionId(),
+        }).catch(console.error);
         // Optionally close the dialog after successful submission
         // setIsDialogOpen(false); 
     } catch (error) {
@@ -101,6 +110,11 @@ export const NavigationBar: React.FC = () => {
             description: 'Could not save your message. Please try again later.',
         });
         console.error("Contact form submission error:", error);
+        logEvent('errors', {
+            eventName: 'contact_form_submission_error',
+            eventDetails: { error: (error instanceof Error ? error.message : String(error)) },
+            sessionId: getSessionId(),
+        }).catch(console.error);
     } finally {
         setIsSubmitting(false);
     }
@@ -126,24 +140,20 @@ export const NavigationBar: React.FC = () => {
           </DialogHeader>
           
           <div className="flex-grow overflow-y-auto pr-3 space-y-3 text-muted-foreground py-3 text-sm leading-relaxed">
-            <div id="about-dialog-description">
+            <div id="about-dialog-description" className="space-y-3">
+              <h3 className="text-lg font-semibold text-primary">Our Mission</h3>
               <p>
-                DreamTuner is an innovative application that tunes anything into music!
+                DreamTuner was created to explore the magic of synesthesia—the connection between what we see, feel, and hear. It’s an innovative application that translates everyday ideas into the universal language of music.
               </p>
+              
+              <h3 className="text-lg font-semibold text-primary">A Playground for All Ages</h3>
               <p>
-                Using advanced AI, it explores the synesthetic connections between different forms of media and music, allowing you to discover the sonic essence of your ideas.
+                From descriptive text and images to live photos and audio, you can give our AI a creative spark and watch it generate a unique musical concept. In our special Kids Mode, drawings and voice hints become the inspiration for playful music and whimsical AI-generated art, making it a fun introduction to creativity for young minds.
               </p>
+
+              <h3 className="text-lg font-semibold text-primary">A Note on Our Beta</h3>
               <p>
-                In Kids Mode, it offers a playful experience where drawings and voice hints become the inspiration for both music and AI-generated art.
-              </p>
-              <p>
-                DreamTuner is generally offered as a <strong>free app</strong>, designed for <strong>fun and to provide basic educational insights</strong> into music creation for both kids and adults.
-              </p>
-              <p>
-                Please note that the <strong>quality of the MIDI playback is an area under active development</strong>, so it might be basic at times as we refine the music generation process.
-              </p>
-              <p className="font-semibold text-amber-500 dark:text-amber-400 pt-2">
-                DreamTuner is currently in <strong>Beta</strong>. We appreciate your feedback as we continue to improve! Some features may not work as expected due to the ongoing development process or environment restrictions.
+                DreamTuner is a free app and currently in Beta. This means we are actively developing and improving the experience. As we refine the music generation process, you may find that the quality of MIDI playback is basic at times or that some features don't work perfectly yet. We appreciate your understanding and feedback as we grow!
               </p>
             </div>
 
@@ -152,7 +162,7 @@ export const NavigationBar: React.FC = () => {
             <div>
               <h3 className="text-lg font-semibold text-primary mb-2">Contact Us</h3>
               <p className="text-xs text-muted-foreground/80 mb-3">
-                Have questions, feedback, or want to collaborate? Fill out the form below (all fields are optional).
+                Have questions, feedback, or want to collaborate? We'd love to hear from you. Fill out the form below (all fields are optional).
               </p>
               <form onSubmit={handleSubmitContactForm} className="space-y-4">
                 <div>
