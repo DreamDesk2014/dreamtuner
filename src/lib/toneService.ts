@@ -4,7 +4,7 @@ import * as Tone from 'tone';
 import { Midi as MidiFileParser } from '@tonejs/midi';
 import type { MusicParameters } from '@/types';
 import { generateMidiFile } from '@/lib/midiService'; // Assuming this generates a data URI
-import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal, ensureStrictlyIncreasingTimes } from '@/lib/midiService';
+import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal, ensureStrictlyIncreasingTimes } from '@/lib/midiService'; 
 
 // --- audiobuffer-to-wav START ---
 // This is a direct adaptation of the audiobuffer-to-wav library
@@ -97,7 +97,7 @@ interface SynthConfigurations {
   melody: any;
   bass: any;
   chords: any;
-  arpeggio: any; // Added for arpeggio synth
+  arpeggio: any; 
   kick: any;
   snare: any;
   hiHat: any;
@@ -116,7 +116,7 @@ const getSynthConfigurations = (
     melody: { oscillator: { type: 'fatsawtooth', count: 3, spread: 20 }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.4 }, volume: -6 },
     bass: { oscillator: { type: 'fatsine', count: 2, spread: 10 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.5 }, volume: -3 },
     chords: { oscillator: { type: 'amtriangle', harmonicity: 0.5 }, volume: -15, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1.0 } },
-    arpeggio: { oscillator: { type: 'fmpulse', harmonicity: 1.5, modulationIndex: 8 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.2 }, volume: -10 },
+    arpeggio: { oscillator: { type: 'fmsawtooth', harmonicity: 1.5, modulationIndex: 8 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.2 }, volume: -10 }, // Changed fmpulse to fmsawtooth
     kick: { pitchDecay: 0.05, octaves: 10, oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: 'exponential' }, volume: -3 },
     snare: { noise: { type: 'pink' }, volume: -10, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } },
     hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -22 },
@@ -132,7 +132,7 @@ const getSynthConfigurations = (
     configs.hiHat.frequency = 300; configs.hiHat.envelope.decay = 0.03;
   } else {
     if (genreLower.includes('electronic') || genreLower.includes('pop')) {
-      configs.melody.oscillator.type = 'pulse';
+      configs.melody.oscillator.type = 'pwm'; 
       configs.bass.oscillator.type = 'fatsquare'; configs.bass.volume = 0;
       configs.chords.oscillator.type = 'pwm'; configs.chords.oscillator.modulationFrequency = 0.5; configs.chords.volume = -12;
       configs.arpeggio.oscillator.type = 'sawtooth'; configs.arpeggio.volume = -9;
@@ -153,7 +153,7 @@ const getSynthConfigurations = (
       configs.melody = { oscillator: { type: 'fmsine', harmonicity: 1.5, modulationIndex: 5 }, envelope: { attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.2 }, volume: -6 };
       configs.bass = { oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.4, sustain: 0.1, release: 0.3 }, volume: -3 };
       configs.chords = { oscillator: { type: 'fmtriangle', harmonicity: 2, modulationIndex: 3 }, volume: -18, envelope: { attack: 0.02, decay: 0.6, sustain: 0.3, release: 0.5 } };
-      configs.arpeggio = { oscillator: { type: 'sine' }, volume: -11 };
+      configs.arpeggio = { oscillator: { type: 'sine' }, volume: -11 }; // Default for Jazz Arp
     }
 
     hintsLower.forEach(hint => {
@@ -177,7 +177,7 @@ const getSynthConfigurations = (
       else if (hint.includes('acoustic bass') && !genreLower.includes('jazz')) configs.bass = { oscillator: {type: 'sine'}, envelope: {attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.3}, volume: -3};
       if (hint.includes('synth pad')) configs.chords = {oscillator: {type: 'fatsawtooth', count: 4, spread: 60}, volume: -15, envelope: {attack: 0.4, decay: 0.1, sustain: 0.9, release: 1.2}};
       if (hint.includes('arp') || hint.includes('arpeggio') || hint.includes('pluck') || hint.includes('sequence')) {
-        configs.arpeggio.oscillator.type = 'pulse'; 
+        configs.arpeggio.oscillator.type = 'pwm'; // Changed from 'pulse'
         configs.arpeggio.volume = -9;
       }
     });
@@ -225,7 +225,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       console.warn(`Original tempoBpm '${params.tempoBpm}' was invalid or out of range. Using ${tempoToSet} BPM for Tone.js rendering.`);
     }
 
-    // Set the global Tone.Transport BPM *before* calling Tone.Offline
     if (Tone && Tone.Transport && Tone.Transport.bpm) {
       Tone.Transport.bpm.value = tempoToSet;
     } else {
@@ -244,7 +243,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         melody?: Tone.PolySynth | Tone.Sampler,
         bass?: Tone.PolySynth,
         chords?: Tone.PolySynth,
-        arpeggio?: Tone.PolySynth, // Added arpeggio synth
+        arpeggio?: Tone.PolySynth,
         kick?: Tone.MembraneSynth,
         snare?: Tone.NoiseSynth,
         hiHat?: Tone.MetalSynth,
@@ -258,7 +257,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             baseUrl: "https://tonejs.github.io/audio/salamander/",
             release: 1,
         });
-        if (synths.melody) await (synths.melody as Tone.Sampler).loaded; 
       } else {
         synths.melody = new Tone.PolySynth(Tone.Synth, synthConfigs.melody);
       }
@@ -270,88 +268,90 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       synths.snare = new Tone.NoiseSynth(synthConfigs.snare);
       synths.hiHat = new Tone.MetalSynth(synthConfigs.hiHat);
       
-      // Connect all synths to the offline destination
       Object.values(synths).forEach(synth => {
         if (synth && typeof synth.toDestination === 'function') {
-          synth.toDestination();
+          synth.toDestination(); // Connects to the offline context's destination
         }
       });
+      if (synths.melody && usePianoSampler) await (synths.melody as Tone.Sampler).loaded; 
+
 
       const allParts: Tone.Part[] = [];
       const instrumentMapping = mapInstrumentHintToGMOriginal(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids', params.generatedIdea);
 
 
       parsedMidi.tracks.forEach((track, trackIndex) => {
-        if (track.channel === 9) { // Drum track (MIDI channel 10)
-          const drumPart = new Tone.Part(((time, value) => {
-            let drumSynthToUse: Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
-            let pitchForDrum: string | number | undefined = undefined;
-            let durationForDrum = Math.max(value.duration > 0 ? value.duration : 0.05, 0.05);
+        let activeSynthForPart: Tone.PolySynth | Tone.Sampler | undefined;
+        let isDrumTrack = false;
 
-            if (value.midi === 35 || value.midi === 36) { drumSynthToUse = synths.kick; pitchForDrum = "C1"; }
-            else if (value.midi === 38 || value.midi === 40) { drumSynthToUse = synths.snare; }
-            else if (value.midi === 42 || value.midi === 44 || value.midi === 46) {
-              drumSynthToUse = synths.hiHat;
-              pitchForDrum = value.midi === 46 ? 400 : 250;
-            } else if (value.midi === 49 || value.midi === 57) { // Crash/Ride
-                drumSynthToUse = synths.hiHat; pitchForDrum = 600; durationForDrum = 0.5 + Math.random() * 0.5;
-                if(drumSynthToUse instanceof Tone.MetalSynth) drumSynthToUse.set({envelope: {decay: durationForDrum, release: durationForDrum}});
-            }
-            // Add other drum mappings as needed
-
-            if (drumSynthToUse) {
-              if (drumSynthToUse instanceof Tone.MembraneSynth && pitchForDrum) {
-                drumSynthToUse.triggerAttackRelease(pitchForDrum as string, durationForDrum, time, value.velocity);
-              } else if (drumSynthToUse instanceof Tone.NoiseSynth) {
-                drumSynthToUse.triggerAttackRelease(durationForDrum, time, value.velocity);
-              } else if (drumSynthToUse instanceof Tone.MetalSynth) {
-                 if (pitchForDrum && typeof pitchForDrum === 'number' && drumSynthToUse.frequency) drumSynthToUse.frequency.setValueAtTime(pitchForDrum, time);
-                 drumSynthToUse.triggerAttackRelease(durationForDrum, time, value.velocity);
-              }
-            }
-          })).toDestination();
-
-          const drumEvents: EventTime[] = track.notes.map(n => ({
-            time: n.time, midi: n.midi, duration: n.duration, velocity: n.velocity,
-          }));
-          const correctedDrumEvents = ensureStrictlyIncreasingTimes(drumEvents, `Drum-Track-${trackIndex}`);
-          correctedDrumEvents.forEach(event => drumPart.add(event.time, event));
-          allParts.push(drumPart);
-
-        } else { // Pitched tracks
-          let activeSynthForPart: Tone.PolySynth | Tone.Sampler | undefined;
+        if (track.channel === 9) { 
+          isDrumTrack = true;
+        } else {
           if (track.instrument.number === instrumentMapping.melody || trackIndex === 0) activeSynthForPart = synths.melody;
           else if (track.instrument.number === instrumentMapping.bass) activeSynthForPart = synths.bass;
           else if (track.instrument.number === instrumentMapping.chordsPad) activeSynthForPart = synths.chords;
           else if (track.instrument.number === instrumentMapping.arpeggioSynth) activeSynthForPart = synths.arpeggio;
           else {
-            console.warn(`No specific synth for instrument number ${track.instrument.number} on track ${trackIndex}. Using melody synth.`);
             activeSynthForPart = synths.melody;
           }
+        }
 
-          if (activeSynthForPart) {
-            const currentPart = new Tone.Part(((time, value) => {
-              if (activeSynthForPart && typeof activeSynthForPart.triggerAttackRelease === 'function') {
-                (activeSynthForPart as Tone.PolySynth | Tone.Sampler).triggerAttackRelease(value.note, value.duration, time, value.velocity);
-              }
+        if (!isDrumTrack && activeSynthForPart) {
+            const part = new Tone.Part(((time, value) => {
+                if (activeSynthForPart && typeof activeSynthForPart.triggerAttackRelease === 'function') {
+                    const effectiveDuration = Math.max(value.duration, 0.01); // Ensure duration is positive
+                    (activeSynthForPart as Tone.PolySynth | Tone.Sampler).triggerAttackRelease(value.note, effectiveDuration, time, value.velocity);
+                }
             })).toDestination();
 
             const pitchedTrackEvents: EventTime[] = track.notes.map(n => ({
-              time: n.time, note: n.name, duration: n.duration, velocity: n.velocity,
+                time: n.time, note: n.name, duration: n.duration, velocity: n.velocity,
             }));
             const correctedPitchedEvents = ensureStrictlyIncreasingTimes(pitchedTrackEvents, `Pitched-Track-${track.name || trackIndex}`);
             correctedPitchedEvents.forEach(event => {
-              if (event.note && typeof event.note === 'string') {
-                currentPart.add(event.time, event);
-              }
+                if (event.note && typeof event.note === 'string') {
+                    part.add(event.time, event);
+                }
             });
-            allParts.push(currentPart);
-          }
+            allParts.push(part);
+        } else if (isDrumTrack) {
+            const drumPart = new Tone.Part(((time, value) => {
+                let drumSynthToUse: Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
+                let pitchForDrum: string | number | undefined = undefined;
+                let durationForDrum = Math.max(value.duration > 0 ? value.duration : 0.05, 0.05);
+
+                if (value.midi === 35 || value.midi === 36) { drumSynthToUse = synths.kick; pitchForDrum = "C1"; }
+                else if (value.midi === 38 || value.midi === 40) { drumSynthToUse = synths.snare; }
+                else if (value.midi === 42 || value.midi === 44 || value.midi === 46) {
+                    drumSynthToUse = synths.hiHat;
+                    pitchForDrum = value.midi === 46 ? 400 : 250;
+                } else if (value.midi === 49 || value.midi === 57) { 
+                    drumSynthToUse = synths.hiHat; pitchForDrum = 600; durationForDrum = 0.5 + Math.random() * 0.5;
+                    if(drumSynthToUse instanceof Tone.MetalSynth) drumSynthToUse.set({envelope: {decay: durationForDrum, release: durationForDrum}});
+                }
+                
+                if (drumSynthToUse) {
+                    if (drumSynthToUse instanceof Tone.MembraneSynth && pitchForDrum) {
+                        drumSynthToUse.triggerAttackRelease(pitchForDrum as string, durationForDrum, time, value.velocity);
+                    } else if (drumSynthToUse instanceof Tone.NoiseSynth) {
+                        drumSynthToUse.triggerAttackRelease(durationForDrum, time, value.velocity);
+                    } else if (drumSynthToUse instanceof Tone.MetalSynth) {
+                        if (pitchForDrum && typeof pitchForDrum === 'number' && drumSynthToUse.frequency) drumSynthToUse.frequency.setValueAtTime(pitchForDrum, time);
+                        drumSynthToUse.triggerAttackRelease(durationForDrum, time, value.velocity);
+                    }
+                }
+            })).toDestination();
+
+            const drumEvents: EventTime[] = track.notes.map(n => ({
+                time: n.time, midi: n.midi, duration: n.duration, velocity: n.velocity,
+            }));
+            const correctedDrumEvents = ensureStrictlyIncreasingTimes(drumEvents, `Drum-Track-${trackIndex}`);
+            correctedDrumEvents.forEach(event => drumPart.add(event.time, event));
+            allParts.push(drumPart);
         }
       });
 
       allParts.forEach(part => part.start(0));
-      // No explicit offlineTransportInternal.start() needed when using parts that are started.
     }, renderDuration);
 
     const wavDataBuffer = audioBufferToWav(audioBuffer);
