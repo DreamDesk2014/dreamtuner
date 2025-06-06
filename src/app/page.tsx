@@ -516,9 +516,8 @@ export default function DreamTunerPage() {
                     <h4 className="text-lg font-medium text-accent mb-3">Example Album: "Neon Dreams Vol. 1"</h4>
                     <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4">
                         <Image
-                            src="https://placehold.co/150x150.png"
-                            alt="Placeholder Album Art"
-                            data-ai-hint="album cover abstract music"
+                            src="/logo.png"
+                            alt="DreamTuner Logo as Album Art"
                             width={150}
                             height={150}
                             className="rounded-md border border-slate-600 shadow-md object-cover mx-auto sm:mx-0"
@@ -632,4 +631,5 @@ export default function DreamTunerPage() {
     
 
     
+
 
