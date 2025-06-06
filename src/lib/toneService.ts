@@ -200,30 +200,30 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     const durationSeconds = parsedMidi.duration;
 
     if (durationSeconds <= 0) {
-        console.error("MIDI duration is zero or negative, cannot render.");
+        console.warn("MIDI duration is zero or negative, cannot render meaningfully. Returning null.");
         return null;
     }
 
     const renderDuration = durationSeconds + 2.0; // Add 2 seconds for release tails
 
-    const tempoToSet = (typeof params.tempoBpm === 'number' && params.tempoBpm > 0 && params.tempoBpm < 300)
+    const tempoToSet = (typeof params.tempoBpm === 'number' && params.tempoBpm > 30 && params.tempoBpm < 300)
                        ? params.tempoBpm
                        : 120;
-
     if (params.tempoBpm !== tempoToSet) {
       console.warn(`Original tempoBpm '${params.tempoBpm}' was invalid or out of range. Using ${tempoToSet} BPM for Tone.js rendering.`);
     }
 
-    // Set global Tone.Transport BPM before calling Tone.Offline
     if (Tone && Tone.Transport && Tone.Transport.bpm) {
         Tone.Transport.bpm.value = tempoToSet;
     } else {
         console.warn("Global Tone.Transport.bpm is not available to set. Offline rendering might use default tempo.");
     }
 
-    const audioBuffer = await Tone.Offline(async (transport) => {
-      // The 'transport' argument in Tone.Offline is the offline context's transport.
-      // Tempo should ideally be inherited from the global Tone.Transport set before calling Tone.Offline.
+
+    const audioBuffer = await Tone.Offline(async (offlineTransport) => {
+      // 'offlineTransport' is the offline context's transport.
+      // All Tone.js objects (synths, parts, etc.) must be created and scheduled within this callback,
+      // or created outside and explicitly connected to the offline context's destination if needed.
 
       const synthConfigs = getSynthConfigurations(
         params.instrumentHints,
@@ -247,8 +247,9 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             urls: generatePianoSampleUrls(),
             baseUrl: "https://tonejs.github.io/audio/salamander/",
             release: 1,
-        }).toDestination();
+        }).toDestination(); // Connects to the offline context's destination
         synths.melody.volume.value = -6;
+        await synths.melody.loaded; // Ensure samples are loaded before proceeding
       } else {
         synths.melody = new Tone.PolySynth(Tone.Synth, synthConfigs.melody).toDestination();
       }
@@ -285,35 +286,33 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
               drumSynth = synths.hiHat;
               pitchToPlay = event.midi === 46 ? 400 : 250;
             } else if (event.midi === 49 || event.midi === 57) { // Crash/Ride cymbals
-                drumSynth = synths.hiHat; // Using hiHat synth for cymbals for simplicity in Tone.js
-                pitchToPlay = 600; // Higher frequency for cymbal-like sound
-                effectiveDuration = 0.5 + Math.random() * 0.5; // Longer duration for cymbals
+                drumSynth = synths.hiHat;
+                pitchToPlay = 600;
+                effectiveDuration = 0.5 + Math.random() * 0.5;
                 if(drumSynth instanceof Tone.MetalSynth) drumSynth.set({envelope: {decay: effectiveDuration, release: effectiveDuration}});
             }
 
             if (drumSynth) {
-              allParts.push(new Tone.Part(((time, value) => {
+              // Schedule directly onto the offlineTransport
+              offlineTransport.schedule((time) => {
                 if (drumSynth instanceof Tone.MembraneSynth) {
-                  drumSynth.triggerAttackRelease(value.pitch as string, value.duration, time, value.velocity);
+                  drumSynth.triggerAttackRelease(pitchToPlay as string, effectiveDuration, time, event.velocity);
                 } else if (drumSynth instanceof Tone.NoiseSynth) {
-                  drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
+                  drumSynth.triggerAttackRelease(effectiveDuration, time, event.velocity);
                 } else if (drumSynth instanceof Tone.MetalSynth) {
-                   if (value.pitch && typeof value.pitch === 'number') drumSynth.frequency.setValueAtTime(value.pitch, time);
-                   drumSynth.triggerAttackRelease(value.duration, time, value.velocity);
+                   if (pitchToPlay && typeof pitchToPlay === 'number') drumSynth.frequency.setValueAtTime(pitchToPlay, time);
+                   drumSynth.triggerAttackRelease(effectiveDuration, time, event.velocity);
                 }
-              }) as any, [{time: event.time, pitch: pitchToPlay, duration: effectiveDuration, velocity: event.velocity}]));
+              }, event.time);
             }
           });
 
         } else { // Pitched tracks
           let activeSynth: Tone.PolySynth | Tone.Sampler | undefined;
-
-          // Basic logic for assigning synths based on instrument hints or track role
-          // This might need refinement based on how midiService assigns instruments to tracks
           if (trackIndex === 0 || track.instrument.number === instrumentMapping.melody) activeSynth = synths.melody;
           else if (track.instrument.number === instrumentMapping.bass) activeSynth = synths.bass;
           else if (track.instrument.number === instrumentMapping.chordsPad) activeSynth = synths.chords;
-          else activeSynth = synths.melody; // Default to melody synth if no specific match
+          else activeSynth = synths.melody;
 
           if (activeSynth) {
             const trackEvents: EventTime[] = track.notes.map(n => ({
@@ -322,26 +321,22 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
               duration: n.duration,
               velocity: n.velocity
             }));
-
             const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Pitched-Track-${track.name || trackIndex}`);
-
-            if (correctedTrackEvents.length > 0) {
-                allParts.push(new Tone.Part(((time, value) => {
-                    if (value.name && typeof value.name === 'string' && activeSynth) {
-                        const effectiveDuration = Math.max(value.duration, 0.05); // Ensure duration is positive
-                        activeSynth.triggerAttackRelease(value.name, effectiveDuration, time, value.velocity);
-                    }
-                }) as any, correctedTrackEvents));
-            }
+            
+            correctedTrackEvents.forEach(event => {
+                if (event.name && typeof event.name === 'string' && activeSynth) {
+                    const effectiveDuration = Math.max(event.duration, 0.05);
+                    // Schedule directly onto the offlineTransport
+                    offlineTransport.schedule((time) => {
+                        activeSynth.triggerAttackRelease(event.name, effectiveDuration, time, event.velocity);
+                    }, event.time);
+                }
+            });
           }
         }
       });
-
-      allParts.forEach(part => part.start(0));
-
-      // Removed the explicit transport.start(0) call from here.
-      // The Tone.Offline process itself handles starting its internal transport.
-
+      // Parts are scheduled using offlineTransport.schedule, so no explicit part.start needed here.
+      // The offline context handles starting its own transport.
     }, renderDuration);
 
     const wavDataBuffer = audioBufferToWav(audioBuffer);
@@ -352,4 +347,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-

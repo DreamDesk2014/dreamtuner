@@ -23,7 +23,7 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Download, Share2, Disc3, SlidersHorizontal, Library, Users } from 'lucide-react';
 import { dataURLtoFile } from '@/lib/utils';
-import { generateMidiFile } from '@/lib/midiService';
+// import { generateMidiFile } from '@/lib/midiService'; // No longer needed here for direct MIDI download from art card
 import { logEvent, getSessionId } from '@/lib/firestoreService';
 
 const LOCAL_STORAGE_KEY = 'dreamTunerLastSession';
@@ -523,34 +523,11 @@ export default function DreamTunerPage() {
     }
   };
   
-  const handleDownloadMidi = () => {
-    if (!musicParams) return;
-    const midiDataUri = generateMidiFile(musicParams);
-    if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
-        let baseFileName = 'dreamtuner_music';
-        if (musicParams.generatedIdea) {
-            baseFileName = musicParams.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0, 25);
-        }
-        const link = document.createElement('a');
-        link.href = midiDataUri;
-        link.download = `${baseFileName}.mid`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        logEvent('user_interactions', { 
-            eventName: 'midi_downloaded', 
-            eventDetails: { mode: currentMode, idea: musicParams.generatedIdea.substring(0,50) },
-            sessionId: getSessionId() 
-        }).catch(console.error);
-    } else {
-        toast({ variant: "destructive", title: "MIDI Error", description: "Could not generate MIDI file for download." });
-        logEvent('errors', { 
-            eventName: 'midi_download_error', 
-            eventDetails: { mode: currentMode, error: "MIDI data URI invalid or not generated" },
-            sessionId: getSessionId() 
-        }).catch(console.error);
-    }
-  };
+  // This function is now primarily for the button in MusicOutputDisplay
+  // const handleDownloadMidi = () => { 
+  //   if (!musicParams) return;
+  //   // Logic is in MusicOutputDisplay
+  // };
 
 
   const handleShareStandardCreation = async () => {
@@ -587,29 +564,26 @@ export default function DreamTunerPage() {
             const artFile = dataURLtoFile(standardModeAiArtUrl, "dreamtuner_standard_art.png");
             if (artFile) filesToShareAttempt.push(artFile);
         }
-        if (musicParams) {
-            const midiDataUri = generateMidiFile(musicParams);
-            if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
-                let baseFileName = 'dreamtuner_standard_music';
-                if (musicParams.generatedIdea) {
-                    baseFileName = musicParams.generatedIdea.replace(/[^\\w\\s]/gi, '').replace(/\\s+/g, '_').slice(0, 25);
-                }
-                const midiFile = dataURLtoFile(midiDataUri, `${baseFileName}.mid`);
-                if (midiFile) filesToShareAttempt.push(midiFile);
-            } else {
-                 console.warn("Could not generate MIDI for standard mode sharing or MIDI data was invalid.");
-            }
-        }
-        const validFilesToShare = filesToShareAttempt.filter(f => f !== null) as File[];
-        if (validFilesToShare.length === 0) {
-           throw new Error("No shareable content could be prepared.");
-        }
+        // MIDI file for sharing is handled by MusicOutputDisplay component's share logic now if it needs to be included.
+        // For this specific share button in page.tsx (associated with the art), we might only share the art and text.
+        // Or, if musicParams are available, include them. For simplicity, let's assume musicParams means MIDI can be generated.
+        // However, the MIDI generation for sharing *here* would be redundant if MusicOutputDisplay also shares it.
+        // Let's assume this share button primarily focuses on art + idea text, and MIDI is handled by the main share in MusicOutputDisplay.
 
-        await navigator.share({
+        const validFilesToShare = filesToShareAttempt.filter(f => f !== null) as File[];
+        
+        const sharePayload: ShareData = {
             title: "My DreamTuner Creation!",
             text: shareText,
-            files: validFilesToShare,
-        });
+        };
+        if (validFilesToShare.length > 0) {
+            sharePayload.files = validFilesToShare;
+        } else if (!shareText.includes("Musical Idea")) { // Only text if no files and no idea
+            throw new Error("No shareable content could be prepared (Art or Idea).");
+        }
+
+
+        await navigator.share(sharePayload);
         toast({ title: "Shared Creation Successfully!" });
         logEvent('user_interactions', { 
           eventName: 'standard_share_success', 
@@ -866,12 +840,7 @@ export default function DreamTunerPage() {
                 </Button>
               </div>
               {shareStandardArtError && <p className="text-red-400 text-xs text-center mt-2">{`Share Error: ${shareStandardArtError}`}</p>}
-              {musicParams && (
-                 <Button onClick={handleDownloadMidi} variant="outline" className="border-accent text-accent hover:bg-accent/10">
-                    <Download className="w-4 h-4 mr-2" />
-                    Download MIDI
-                </Button>
-              )}
+              {/* MIDI Download button removed from here */}
             </CardContent>
           </Card>
         )}
