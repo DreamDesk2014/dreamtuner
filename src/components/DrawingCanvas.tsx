@@ -38,10 +38,12 @@ const COLOR_TO_NOTE_MAP: Record<string, { frequency: number; name: string }> = {
   '#800080': { frequency: 493.88, name: 'B4' }, 
   '#000000': { frequency: 261.63, name: 'C4' }, 
 };
-const NOTE_DURATION_MS = 250; // Increased from 150
-const NOTE_DURATION_MS_WHILE_DRAWING = 180; // Increased from 100
+const NOTE_DURATION_MS = 250; 
+const NOTE_DURATION_MS_WHILE_DRAWING = 180; 
 const PIXELS_PER_NOTE = 30;
-const TONE_ATTACK_TIME = 0.01; // Short attack time for softer onset
+const TONE_ATTACK_TIME = 0.01; // Short attack time
+const TONE_RELEASE_TIME_PALETTE = 0.2; // How long it takes for palette click sound to fade out after initial duration
+const TONE_RELEASE_TIME_DRAWING = 0.15; // How long it takes for drawing sound to fade out
 
 export const DrawingCanvas = forwardRef<
   {
@@ -215,7 +217,7 @@ export const DrawingCanvas = forwardRef<
   }, [redrawCanvas]); 
 
 
-  const playToneForColor = (color: string, durationMs: number = NOTE_DURATION_MS) => {
+  const playToneForColor = (color: string, isPaletteClick: boolean = true) => {
     if (!isKidsMode || !audioContextRef.current) return;
 
     if (audioContextRef.current.state === 'suspended') {
@@ -229,19 +231,25 @@ export const DrawingCanvas = forwardRef<
     const oscillator = audioContextRef.current.createOscillator();
     const gainNode = audioContextRef.current.createGain();
     const now = audioContextRef.current.currentTime;
-
-    oscillator.type = 'sine';
+    
+    oscillator.type = 'triangle'; // Changed from 'sine' to 'triangle' for a softer, richer tone
     oscillator.frequency.setValueAtTime(noteDetails.frequency, now);
     
+    const attackTime = TONE_ATTACK_TIME;
+    const peakTime = now + attackTime;
+    const duration = isPaletteClick ? NOTE_DURATION_MS / 1000 : NOTE_DURATION_MS_WHILE_DRAWING / 1000;
+    const releaseTimeConstant = isPaletteClick ? TONE_RELEASE_TIME_PALETTE : TONE_RELEASE_TIME_DRAWING;
+
     gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.2, now + TONE_ATTACK_TIME); // Quick attack
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, now + durationMs / 1000);
+    gainNode.gain.linearRampToValueAtTime(0.2, peakTime); // Peak volume
+    // Exponential decay for a more natural, piano-like release
+    gainNode.gain.setTargetAtTime(0, peakTime, releaseTimeConstant); 
 
     oscillator.connect(gainNode);
     gainNode.connect(audioContextRef.current.destination);
 
     oscillator.start(now);
-    oscillator.stop(now + durationMs / 1000);
+    oscillator.stop(now + duration + releaseTimeConstant * 3); // Ensure oscillator stops after sound fades
   };
 
   const startDrawing = (eventX: number, eventY: number) => {
@@ -268,7 +276,7 @@ export const DrawingCanvas = forwardRef<
 
     if (isKidsMode && !isErasing) {
       if (currentColor !== lastPlayedColorForSound || recordedNotesSequence.length === 0) {
-        playToneForColor(currentColor, NOTE_DURATION_MS); 
+        playToneForColor(currentColor, true); 
         const noteDetails = COLOR_TO_NOTE_MAP[currentColor];
         if (noteDetails) {
             setRecordedNotesSequence(prev => [...prev, noteDetails.name]);
@@ -311,7 +319,7 @@ export const DrawingCanvas = forwardRef<
         distanceSinceLastNoteRef.current += dist;
 
         if (distanceSinceLastNoteRef.current >= PIXELS_PER_NOTE) {
-            playToneForColor(activeStrokeColorRef.current, NOTE_DURATION_MS_WHILE_DRAWING);
+            playToneForColor(activeStrokeColorRef.current, false);
             distanceSinceLastNoteRef.current = 0; 
         }
     }
@@ -479,7 +487,7 @@ export const DrawingCanvas = forwardRef<
                 setIsErasing(false);
                 setCurrentColor(color.value);
                 if (isKidsMode) {
-                  playToneForColor(color.value);
+                  playToneForColor(color.value, true);
                   const noteDetails = COLOR_TO_NOTE_MAP[color.value];
                   if (noteDetails && (color.value !== lastPlayedColorForSound || recordedNotesSequence.length === 0) ) {
                      setRecordedNotesSequence(prev => [...prev, noteDetails.name]);

@@ -58,7 +58,7 @@ const GenerateMusicalParametersOutputSchema = z.object({
   targetArousal: z
     .number()
     .describe("A value between -1 and 1 representing the arousal of the music. If the user provided a 'userEnergy' value, this should directly reflect it."),
-  generatedIdea: z.string().describe('A short description of the musical piece.'),
+  generatedIdea: z.string().describe('A short description of the musical piece, potentially considering a typical song structure.'),
 });
 export type GenerateMusicalParametersOutput = z.infer<
   typeof GenerateMusicalParametersOutputSchema
@@ -106,6 +106,7 @@ const prompt = ai.definePrompt({
   {{/if}}
 
   Translate these visual elements (if drawing exists and is valid) and/or the voice hint (if exists) and/or sound sequence (if exists) into simple, playful, and melody-focused musical parameters.
+  Consider a very simple song structure (like Verse-Chorus-Verse-Chorus) when describing the 'generatedIdea' to give it a sense of a complete little song.
   - keySignature: Use major keys primarily (e.g., "C major", "G major").
   - mode: Should be "major".
   - tempoBpm: Suggest moderate tempos (e.g., 90-130 BPM).
@@ -126,6 +127,8 @@ const prompt = ai.definePrompt({
 
 {{else}}
   {{! Standard Mode Prompt }}
+  When formulating the 'generatedIdea', try to envision a complete musical piece. Think about how different sections might feel (e.g., a verse could be more subdued, a chorus more energetic, a bridge offering contrast, leading to a final chorus or outro). This structural thinking can help shape the overall concept of the musical piece you describe.
+
   {{#if isInputImageWithData}}
     Analyze the following image and generate a detailed set of musical parameters that capture its essence (colors, mood, objects, composition).
     Image: {{media url=fileDetails.url}}
