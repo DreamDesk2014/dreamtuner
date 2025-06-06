@@ -1,14 +1,13 @@
 
-// TODO: Replace with your actual Firebase project configuration
-// You can get this from the Firebase console: Project settings > General > Your apps > Firebase SDK snippet > Config
+// Firebase project configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID" // Optional, for Google Analytics
+  apiKey: "AIzaSyDazjuojYQ7spIg0jw3P91_bEdLXEjyjwo",
+  authDomain: "resonanceai-gopeq.firebaseapp.com",
+  projectId: "resonanceai-gopeq",
+  storageBucket: "resonanceai-gopeq.appspot.com", // Corrected to .appspot.com as per standard Firebase naming
+  messagingSenderId: "519097336176",
+  appId: "1:519097336176:web:02f583e0cd7b654b1bcfb5"
+  // measurementId is optional, so it can be omitted if not provided or needed
 };
 
 // Import the functions you need from the SDKs you need
@@ -24,11 +23,15 @@ let db: Firestore;
 if (getApps().length === 0) {
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
-  // analytics = getAnalytics(app); // Optional
+  // if (firebaseConfig.measurementId) { // Initialize analytics only if measurementId is present
+  //   analytics = getAnalytics(app);
+  // }
 } else {
   app = getApps()[0];
   db = getFirestore(app);
-  // analytics = getAnalytics(app); // Optional
+  // if (firebaseConfig.measurementId) { // Initialize analytics only if measurementId is present
+  //   analytics = getAnalytics(app);
+  // }
 }
 
 export { app, db /*, analytics */ };
