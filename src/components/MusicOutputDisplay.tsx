@@ -1,7 +1,7 @@
 
 "use client";
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-// Tone.js imports are now handled in toneService.ts
+import * as Tone from 'tone'; // Import Tone directly here
 import type { MusicParameters, AppInput } from '@/types';
 import { getValenceArousalDescription } from '@/lib/constants';
 import { generateMidiFile } from '@/lib/midiService';
@@ -10,9 +10,9 @@ import { toast } from '@/hooks/use-toast';
 import {
   MusicalNoteIcon, ClockIcon, MoodHappyIcon, MoodSadIcon, LightningBoltIcon, CogIcon, ScaleIcon, CollectionIcon,
   DocumentTextIcon, DownloadIcon, PhotographIcon, VideoCameraIcon, ClipboardCopyIcon, RefreshIcon,
-  LibraryIcon, ExclamationCircleIcon, MusicIcon // PlayIcon, PauseIcon, StopIcon commented out, AlertTriangle replaced
-} from './icons/HeroIcons'; // Added MusicIcon for WAV download
-import { Share2, Disc3Icon } from 'lucide-react'; // Added Disc3Icon
+  LibraryIcon, ExclamationCircleIcon, MusicIcon
+} from './icons/HeroIcons';
+import { Share2, Disc3Icon } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,7 +20,7 @@ import Image from 'next/image';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { generateWavFromMusicParameters } from '@/lib/toneService'; // Import the new service
+import { generateWavFromMusicParameters } from '@/lib/toneService';
 import { logEvent, getSessionId } from '@/lib/firestoreService';
 
 
@@ -85,6 +85,15 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       }).catch(console.error);
 
     try {
+      // Ensure Tone.js context is started by user gesture
+      if (Tone.context.state !== 'running') {
+        console.log("[MusicOutputDisplay] Attempting Tone.start() before WAV generation...");
+        await Tone.start();
+        console.log("[MusicOutputDisplay] Tone.js context started successfully.");
+      } else {
+        console.log("[MusicOutputDisplay] Tone.js context already running.");
+      }
+
       const wavBlob = await generateWavFromMusicParameters(params);
       if (wavBlob) {
         const link = document.createElement('a');
@@ -501,3 +510,5 @@ const ParameterCardComponent: React.FC<{title: string; value: any; icon: React.R
 
 // mapInstrumentHintToGM is now imported from toneService, or defined there
 // ensureStrictlyIncreasingTimes is now imported from toneService, or defined there
+
+    
