@@ -4,7 +4,7 @@ import * as Tone from 'tone';
 import { Midi as MidiFileParser } from '@tonejs/midi';
 import type { MusicParameters } from '@/types';
 import { generateMidiFile } from '@/lib/midiService'; // Assuming this generates a data URI
-import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal, ensureStrictlyIncreasingTimes } from '@/lib/midiService'; // Importing from midiService for now
+import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal, ensureStrictlyIncreasingTimes } from '@/lib/midiService'; 
 
 // --- audiobuffer-to-wav START ---
 // This is a direct adaptation of the audiobuffer-to-wav library
@@ -90,7 +90,8 @@ function writeString(view: DataView, offset: number, string: string) {
 // --- audiobuffer-to-wav END ---
 
 
-interface EventTime { time: number; [key: string]: any; }
+interface EventTime { time: number; duration: number; velocity: number; [key: string]: any; }
+
 
 interface SynthConfigurations {
   melody: any; 
@@ -203,11 +204,28 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         return null;
     }
     
-    // Force a slightly longer duration for Tone.Offline to capture tails
     const renderDuration = durationSeconds + 2.0; // Add 2 seconds for release tails
 
-    const audioBuffer = await Tone.Offline(async (Transport) => {
-      Transport.bpm.value = params.tempoBpm;
+    // Ensure params.tempoBpm is a valid number before using it
+    const tempoToSet = (typeof params.tempoBpm === 'number' && params.tempoBpm > 0) 
+                       ? params.tempoBpm 
+                       : 120; // Default to 120 BPM if invalid
+
+    if (params.tempoBpm !== tempoToSet) {
+      console.warn(`Original tempoBpm '${params.tempoBpm}' was invalid or out of range. Using ${tempoToSet} BPM for Tone.js rendering.`);
+    }
+
+    const audioBuffer = await Tone.Offline(async (transport) => { // 'transport' is the offline context's transport
+      // Defensive check for transport and transport.bpm
+      if (transport && transport.bpm) {
+        transport.bpm.value = tempoToSet;
+      } else {
+        console.error("Tone.Offline: transport.bpm is undefined. This is unexpected. Rendering will use default tempo or global Tone.Transport tempo if it was set.");
+        // As a fallback, try to set global if offline one is missing, though it might not influence offline render.
+        if (Tone && Tone.Transport && Tone.Transport.bpm) {
+            Tone.Transport.bpm.value = tempoToSet;
+        }
+      }
 
       const synthConfigs = getSynthConfigurations(
         params.instrumentHints,
@@ -215,7 +233,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         params.originalInput.mode === 'kids'
       );
 
-      // Synths
       const synths: {
         melody?: Tone.PolySynth | Tone.Sampler,
         bass?: Tone.PolySynth,
@@ -233,7 +250,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             baseUrl: "https://tonejs.github.io/audio/salamander/",
             release: 1,
         }).toDestination();
-        synths.melody.volume.value = -6; // Adjusted volume
+        synths.melody.volume.value = -6;
       } else {
         synths.melody = new Tone.PolySynth(Tone.Synth, synthConfigs.melody).toDestination();
       }
@@ -244,7 +261,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       synths.snare = new Tone.NoiseSynth(synthConfigs.snare).toDestination();
       synths.hiHat = new Tone.MetalSynth(synthConfigs.hiHat).toDestination();
       
-      const parts: (Tone.Part | Tone.Sequence)[] = [];
+      const allParts: (Tone.Part | Tone.Sequence)[] = [];
 
       parsedMidi.tracks.forEach((track, trackIndex) => {
         const instrumentMapping = mapInstrumentHintToGMOriginal(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids');
@@ -257,7 +274,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             midi: n.midi
           }));
           
-          const correctedDrumEvents = ensureStrictlyIncreasingTimes(drumEvents, `Drums`);
+          const correctedDrumEvents = ensureStrictlyIncreasingTimes(drumEvents, `Drums-Track-${trackIndex}`);
 
           correctedDrumEvents.forEach(event => {
             let drumSynth: Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
@@ -268,17 +285,16 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             else if (event.midi === 38 || event.midi === 40) { drumSynth = synths.snare; }
             else if (event.midi === 42 || event.midi === 44 || event.midi === 46) {
               drumSynth = synths.hiHat;
-              pitchToPlay = event.midi === 46 ? 400 : 250; // Open/Closed hi-hat sound variation
-            } else if (event.midi === 49 || event.midi === 57) { // Crash Cymbal 1 & 2
-                drumSynth = synths.hiHat; // Use MetalSynth for cymbals, adjust params if needed
-                pitchToPlay = 600; // Higher freq for crash
-                effectiveDuration = 0.5 + Math.random() * 0.5; // Longer duration for cymbals
+              pitchToPlay = event.midi === 46 ? 400 : 250; 
+            } else if (event.midi === 49 || event.midi === 57) { 
+                drumSynth = synths.hiHat; 
+                pitchToPlay = 600; 
+                effectiveDuration = 0.5 + Math.random() * 0.5; 
                 if(drumSynth instanceof Tone.MetalSynth) drumSynth.set({envelope: {decay: effectiveDuration, release: effectiveDuration}});
             }
 
-
             if (drumSynth) {
-              parts.push(new Tone.Part(((time, value) => {
+              allParts.push(new Tone.Part(((time, value) => {
                 if (drumSynth instanceof Tone.MembraneSynth) {
                   drumSynth.triggerAttackRelease(value.pitch as string, value.duration, time, value.velocity);
                 } else if (drumSynth instanceof Tone.NoiseSynth) {
@@ -297,7 +313,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
           if (trackIndex === 0 || track.instrument.number === instrumentMapping.melody) activeSynth = synths.melody;
           else if (track.instrument.number === instrumentMapping.bass) activeSynth = synths.bass;
           else if (track.instrument.number === instrumentMapping.chordsPad) activeSynth = synths.chords;
-          else activeSynth = synths.melody; // Default to melody synth
+          else activeSynth = synths.melody; 
 
           if (activeSynth) {
             const trackEvents: EventTime[] = track.notes.map(n => ({
@@ -307,10 +323,10 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
               velocity: n.velocity
             }));
             
-            const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Track-${track.name || trackIndex}`);
+            const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Pitched-Track-${track.name || trackIndex}`);
             
             if (correctedTrackEvents.length > 0) {
-                parts.push(new Tone.Part(((time, value) => {
+                allParts.push(new Tone.Part(((time, value) => {
                     if (value.name && typeof value.name === 'string' && activeSynth) {
                         const effectiveDuration = Math.max(value.duration, 0.05);
                         activeSynth.triggerAttackRelease(value.name, effectiveDuration, time, value.velocity);
@@ -321,10 +337,20 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         }
       });
       
-      parts.forEach(part => part.start(0));
-      Transport.start(0);
+      allParts.forEach(part => part.start(0));
+      
+      // Start the offline transport instance using the 'transport' argument from the callback
+      if (transport && typeof transport.start === 'function') {
+        transport.start(0);
+      } else {
+        console.error("Tone.Offline: transport.start is not a function. Cannot start offline rendering properly.");
+        // Fallback to global transport if local is problematic, though it's not ideal for offline.
+        if (Tone && Tone.Transport && typeof Tone.Transport.start === 'function') {
+             Tone.Transport.start(0);
+        }
+      }
 
-    }, renderDuration); // Use renderDuration here
+    }, renderDuration);
 
     const wavDataBuffer = audioBufferToWav(audioBuffer);
     return new Blob([wavDataBuffer], { type: 'audio/wav' });
@@ -334,8 +360,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-
-// Placeholder for mapInstrumentHintToGM if it's not directly importable or needs adaptation
-// For now, assuming it's correctly imported from midiService and works as is.
-// export { mapInstrumentHintToGMOriginal as mapInstrumentHintToGM };
-// export { ensureStrictlyIncreasingTimes };
