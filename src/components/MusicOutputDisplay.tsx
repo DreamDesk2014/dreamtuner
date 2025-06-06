@@ -85,16 +85,27 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       }).catch(console.error);
 
     try {
-      // Ensure Tone.js context is started by user gesture
-      if (Tone.context.state !== 'running') {
-        console.log("[MusicOutputDisplay] Attempting Tone.start() before WAV generation...");
-        await Tone.start();
-        console.log("[MusicOutputDisplay] Tone.js context started successfully.");
-      } else {
-        console.log("[MusicOutputDisplay] Tone.js context already running.");
-      }
+      console.log("[MusicOutputDisplay] Attempting Tone.start() due to user gesture for WAV generation...");
+      await Tone.start();
+      console.log(`[MusicOutputDisplay] Tone.start() promise resolved. Tone.context.state is now: ${Tone.context.state}`);
 
+      if (Tone.context.state !== 'running') {
+        const message = "Tone.js AudioContext is not running after Tone.start(). Cannot generate WAV.";
+        console.error(`[MusicOutputDisplay_ERROR] ${message}`);
+        setWavError(message);
+        toast({ variant: "destructive", title: "Audio Context Error", description: message });
+        logEvent('errors', {
+            eventName: 'audio_context_not_running_after_start',
+            eventDetails: { mode: params.originalInput.mode, contextState: Tone.context.state },
+            sessionId: getSessionId()
+        }).catch(console.error);
+        setIsGeneratingWav(false);
+        return;
+      }
+      
+      console.log("[MusicOutputDisplay] Proceeding to generateWavFromMusicParameters...");
       const wavBlob = await generateWavFromMusicParameters(params);
+      
       if (wavBlob) {
         const link = document.createElement('a');
         link.href = URL.createObjectURL(wavBlob);
@@ -112,15 +123,15 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
             sessionId: getSessionId()
         }).catch(console.error);
       } else {
-        throw new Error("Failed to generate WAV data (received null).");
+        throw new Error("Failed to generate WAV data (received null from service).");
       }
     } catch (error) {
-      console.error("Error generating WAV:", error);
+      console.error("[MusicOutputDisplay_ERROR] Error during WAV generation process:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error generating WAV file.";
       setWavError(errorMessage);
       toast({ variant: "destructive", title: "WAV Generation Failed", description: errorMessage });
       logEvent('errors', {
-        eventName: 'wav_generation_error',
+        eventName: 'wav_generation_error_display', // More specific event name
         eventDetails: { mode: params.originalInput.mode, error: errorMessage, durationMs: Date.now() - wavStartTime },
         sessionId: getSessionId()
       }).catch(console.error);
