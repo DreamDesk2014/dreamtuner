@@ -1092,3 +1092,4 @@ export const generateMidiFile = (params: MusicParameters): string => {
     }
 };
 
+
