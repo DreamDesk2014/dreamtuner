@@ -90,12 +90,12 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       console.log(`[MusicOutputDisplay] Tone.start() promise resolved. Tone.context.state is now: ${Tone.context.state}`);
 
       if (Tone.context.state !== 'running') {
-        const message = "Tone.js AudioContext is not running after Tone.start(). Cannot generate WAV.";
+        const message = `Tone.js AudioContext is not running (state: ${Tone.context.state}) even after Tone.start(). Cannot generate WAV. This is often due to browser restrictions if Tone.start() was not called directly by a user gesture, or if the page lost focus.`;
         console.error(`[MusicOutputDisplay_ERROR] ${message}`);
         setWavError(message);
-        toast({ variant: "destructive", title: "Audio Context Error", description: message });
+        toast({ variant: "destructive", title: "Audio Context Error", description: message, duration: 10000 });
         logEvent('errors', {
-            eventName: 'audio_context_not_running_after_start',
+            eventName: 'audio_context_not_running_after_start_in_ui',
             eventDetails: { mode: params.originalInput.mode, contextState: Tone.context.state },
             sessionId: getSessionId()
         }).catch(console.error);
@@ -103,8 +103,8 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
         return;
       }
       
-      console.log("[MusicOutputDisplay] Proceeding to generateWavFromMusicParameters...");
-      const wavBlob = await generateWavFromMusicParameters(params);
+      console.log("[MusicOutputDisplay] AudioContext is running. Proceeding to generateWavFromMusicParameters...");
+      const wavBlob = await generateWavFromMusicParameters(params); // This will now use the simplified version
       
       if (wavBlob) {
         const link = document.createElement('a');
@@ -129,9 +129,9 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       console.error("[MusicOutputDisplay_ERROR] Error during WAV generation process:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error generating WAV file.";
       setWavError(errorMessage);
-      toast({ variant: "destructive", title: "WAV Generation Failed", description: errorMessage });
+      toast({ variant: "destructive", title: "WAV Generation Failed", description: errorMessage, duration: 7000 });
       logEvent('errors', {
-        eventName: 'wav_generation_error_display', // More specific event name
+        eventName: 'wav_generation_error_display',
         eventDetails: { mode: params.originalInput.mode, error: errorMessage, durationMs: Date.now() - wavStartTime },
         sessionId: getSessionId()
       }).catch(console.error);
