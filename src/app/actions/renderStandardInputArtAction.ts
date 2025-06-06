@@ -40,6 +40,10 @@ export async function renderStandardInputArtAction(
     if (errorMessage.toLowerCase().includes("safety settings")){
         return { error: "AI could not render the art due to safety filters. Please try a different input."};
     }
+    if (errorMessage.includes("500 Internal Server Error") || errorMessage.toLowerCase().includes("internal error has occurred")) {
+      return { error: "The AI art generator encountered a temporary server issue. Please try again in a few moments." };
+    }
     return { error: `Failed to render art: ${errorMessage}` };
   }
 }
+

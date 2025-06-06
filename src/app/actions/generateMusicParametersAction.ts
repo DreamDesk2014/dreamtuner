@@ -79,6 +79,9 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
     if (errorMessage.toLowerCase().includes("size") || errorMessage.toLowerCase().includes("request payload")){
         return { error: "Gemini API request failed: Input data (e.g. image or audio) might be too large."};
     }
+    if (errorMessage.includes("500 Internal Server Error") || errorMessage.toLowerCase().includes("internal error has occurred")) {
+      return { error: "The AI service encountered a temporary issue while generating parameters. Please try again in a few moments." };
+    }
     if (errorMessage.includes("Handlebars")) {
       return { error: `AI prompt template error: ${errorMessage}` };
     }
