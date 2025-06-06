@@ -103,7 +103,6 @@ interface SynthConfigurations {
   hiHat: any;
 }
 
-// Adapted from MusicOutputDisplay
 const getSynthConfigurations = (
   instrumentHints: string[] = [],
   genre: string = '',
@@ -153,7 +152,7 @@ const getSynthConfigurations = (
       configs.melody = { oscillator: { type: 'fmsine', harmonicity: 1.5, modulationIndex: 5 }, envelope: { attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.2 }, volume: -6 };
       configs.bass = { oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.4, sustain: 0.1, release: 0.3 }, volume: -3 };
       configs.chords = { oscillator: { type: 'fmtriangle', harmonicity: 2, modulationIndex: 3 }, volume: -18, envelope: { attack: 0.02, decay: 0.6, sustain: 0.3, release: 0.5 } };
-      configs.arpeggio = { oscillator: { type: 'sine' }, volume: -11 }; // Default for Jazz Arp
+      configs.arpeggio = { oscillator: { type: 'sine' }, volume: -11 }; 
     }
 
     hintsLower.forEach(hint => {
@@ -225,7 +224,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     if (Tone && Tone.Transport && Tone.Transport.bpm) {
       Tone.Transport.bpm.value = tempoToSet;
     } else {
-      console.warn("Global Tone.Transport.bpm is not available to set. Offline rendering might use default tempo.");
+      console.warn("Global Tone.Transport.bpm is not available to set for WAV rendering. Using default tempo.");
     }
 
 
@@ -268,14 +267,13 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       
       Object.values(synths).forEach(synth => {
         if (synth && typeof synth.toDestination === 'function') {
-          synth.toDestination(); 
+          synth.toDestination(); // Connect audio nodes to destination
         }
       });
       if (synths.melody && usePianoSampler) {
         await (synths.melody as Tone.Sampler).loaded;
       }
 
-      const allParts: Tone.Part[] = [];
       const instrumentMapping = mapInstrumentHintToGMOriginal(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids', params.generatedIdea);
 
       parsedMidi.tracks.forEach((track, trackIndex) => {
@@ -301,7 +299,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                     (activeSynthForPart as Tone.PolySynth | Tone.Sampler).triggerAttackRelease(value.note, effectiveDuration, time, value.velocity);
                 }
             }));
-            // part.toDestination(); // Removed: Synths are already connected
+            // DO NOT call part.toDestination() here
 
             const pitchedTrackEvents: EventTime[] = track.notes.map(n => ({
                 time: n.time, note: n.name, duration: n.duration, velocity: n.velocity,
@@ -313,7 +311,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                 }
             });
             part.start(0);
-            allParts.push(part);
         } else if (isDrumTrack) {
             const drumPart = new Tone.Part(((time, value) => {
                 let drumSynth: Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
@@ -341,8 +338,8 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                     }
                 }
             }));
-            // drumPart.toDestination(); // Removed: Synths are already connected
-
+            // DO NOT call drumPart.toDestination() here
+            
             const drumEvents: EventTime[] = track.notes.map(n => ({
                 time: n.time, midi: n.midi, duration: n.duration, velocity: n.velocity,
             }));
@@ -352,7 +349,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                 drumPart.add(event.time, event);
             });
             drumPart.start(0);
-            allParts.push(drumPart);
         }
       });
     }, renderDuration);
@@ -365,6 +361,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-
-
-    
