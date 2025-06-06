@@ -1,18 +1,15 @@
 
 'use client';
 import * as Tone from 'tone';
-// MidiFileParser is no longer needed for this direct synthesis test
-// import { Midi as MidiFileParser, type MidiJSON } from '@tonejs/midi';
 import type { MusicParameters } from '@/types';
-// generateMidiFileOriginal is no longer called in this direct synthesis test
-// import { generateMidiFile as generateMidiFileOriginal } from '@/lib/midiService';
-import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal } from '@/lib/midiService'; // Keep for instrument mapping logic if we re-introduce parts
+// No longer importing from midiService for WAV generation path
+// import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal } from '@/lib/midiService';
 import { audioBufferToWav } from "./audioBufferToWav";
 
 const SAFE_OSC_TYPE = 'triangle' as const;
-const MIN_EFFECTIVE_DURATION_SECONDS = 4.0; // Minimum duration for rendering
+const MIN_EFFECTIVE_DURATION_SECONDS = 6.0; // Increased slightly for bass + melody
 
-// Helper to convert Base64 to Uint8Array - currently not used in direct synthesis test
+// Helper to convert Base64 to Uint8Array - kept for other potential uses, but not for direct WAV gen
 function base64ToUint8Array(base64: string): Uint8Array {
   try {
     const binaryString = atob(base64);
@@ -30,11 +27,12 @@ function base64ToUint8Array(base64: string): Uint8Array {
 
 interface EventTime { time: number; duration: number; velocity: number; name?: string; midi?: number; ticks?: number; }
 
+// This function is good practice for any list of timed events.
 export function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[], trackNameForDebug: string = "Track"): T[] {
     if (!events || events.length === 0) return [];
     const sortedEvents = [...events].sort((a, b) => a.time - b.time);
     const correctedEvents: T[] = [{ ...sortedEvents[0] }];
-    const timeEpsilon = 0.000001;
+    const timeEpsilon = 0.000001; // Smallest discernible time difference for Tone.js scheduling
     for (let i = 1; i < sortedEvents.length; i++) {
         const currentEvent = { ...sortedEvents[i] };
         const prevEventTime = correctedEvents[correctedEvents.length - 1].time;
@@ -46,6 +44,7 @@ export function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[], 
     }
     return correctedEvents;
 }
+
 
 const getSynthConfigurations = (
   instrumentHints: string[] = [],
@@ -60,22 +59,22 @@ const getSynthConfigurations = (
 
   let configs: any = {
     melody: { oscillator: { type: SAFE_OSC_TYPE }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.7, release: 0.6 }, volume: 0 },
-    bass: { oscillator: { type: 'fmsine' as const, harmonicity: 1.2, modulationIndex: 5 }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.8, release: 0.3 }, volume: 0 },
-    chords: { oscillator: { type: 'amtriangle' as const, harmonicity: 0.5, modulationType: "sine" as const }, volume: -6, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1.0 } },
-    arpeggio: { oscillator: { type: SAFE_OSC_TYPE, harmonicity: 1.5, modulationIndex: 8 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.2 }, volume: -7 },
+    bass: { oscillator: { type: 'fmsine' as const, harmonicity: 1.2, modulationIndex: 5 }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.8, release: 0.3 }, volume: -3 }, // Bass a bit quieter
+    chords: { oscillator: { type: 'amtriangle' as const, harmonicity: 0.5, modulationType: "sine" as const }, volume: -9, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1.0 } },
+    arpeggio: { oscillator: { type: SAFE_OSC_TYPE, harmonicity: 1.5, modulationIndex: 8 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.2 }, volume: -10 },
     kick: { pitchDecay: 0.05, octaves: 10, oscillator: { type: "sine" as const }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: "exponential" as const }, volume: 0 },
-    snare: { noise: { type: 'pink' as const }, volume: -2, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } },
-    hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -6 },
-    piano: {
+    snare: { noise: { type: 'pink' as const }, volume: -5, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } },
+    hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -12 },
+    piano: { // Default Piano (FMSynth)
         harmonicity: 3.1, modulationIndex: 16,
-        oscillator: { type: "sine" as const },
+        oscillator: { type: "fmsine" as const, partials: [1, 0.5, 0.2, 0.1, 0.05] }, // FMSynth example, can be simpler like 'sine'
         envelope: { attack: 0.01, decay: 0.7, sustain: 0.1, release: 0.9 },
         modulation: { type: "square" as const },
         modulationEnvelope: { attack: 0.02, decay: 0.4, sustain: 0.01, release: 0.6 },
-        volume: -3
+        volume: -6 // Default volume for piano synth
     }
   };
-
+  // Safety check for oscillator types
   for (const key in configs) {
     const synthConfig = configs[key as keyof typeof configs];
     if (synthConfig.oscillator && (synthConfig.oscillator.type === 'pwm' || synthConfig.oscillator.type === 'pulse')) {
@@ -89,11 +88,11 @@ const getSynthConfigurations = (
   if (isKidsMode) {
     configs.melody = { oscillator: { type: 'triangle' as const }, envelope: { attack: 0.02, decay: 0.1, sustain: 0.6, release: 0.4 }, volume: 0 };
     configs.bass = { oscillator: { type: 'sine' as const }, envelope: { attack: 0.01, decay: 0.05, sustain: 0.8, release: 0.3 }, volume: -3 };
-    configs.chords = { oscillator: { type: 'square' as const }, envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.5 }, volume: -6 };
-    configs.arpeggio = { oscillator: { type: 'sawtooth' as const }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 0.2 }, volume: -9 };
+    configs.chords = { oscillator: { type: 'square' as const }, envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.5 }, volume: -9 };
+    configs.arpeggio = { oscillator: { type: 'sawtooth' as const }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 0.2 }, volume: -12 };
     if (hintsLower.some(h => h.includes('piano') || h.includes('toy piano'))) {
-        configs.melody = { ...configs.piano, volume: 0 };
-        configs.chords = { ...configs.piano, volume: -6 };
+        configs.melody = { ...configs.piano, volume: -3 }; // Kids piano melody less loud
+        configs.chords = { ...configs.piano, volume: -10 };
     }
   } else {
      if (hintsLower.some(h => h.includes('piano'))) {
@@ -101,9 +100,9 @@ const getSynthConfigurations = (
         configs.chords = { ...configs.piano, volume: -9 };
     } else if (genreLower.includes('electronic') || genreLower.includes('pop')) {
       configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = 0;
-      configs.bass.oscillator.type = 'fatsquare' as const; ((configs.bass.oscillator) as any).count = 3; ((configs.bass.oscillator) as any).spread = 15; configs.bass.volume = 0;
+      configs.bass.oscillator.type = 'fatsquare' as const; ((configs.bass.oscillator) as any).count = 3; ((configs.bass.oscillator) as any).spread = 15; configs.bass.volume = -3;
       configs.chords.oscillator.type = SAFE_OSC_TYPE; configs.chords.volume = -9;
-      configs.arpeggio.oscillator.type = 'fatsawtooth' as const; ((configs.arpeggio.oscillator) as any).count = 3; ((configs.arpeggio.oscillator) as any).spread = 20; configs.arpeggio.volume = -7;
+      configs.arpeggio.oscillator.type = 'fatsawtooth' as const; ((configs.arpeggio.oscillator) as any).count = 3; ((configs.arpeggio.oscillator) as any).spread = 20; configs.arpeggio.volume = -10;
     } else if (genreLower.includes('rock') || genreLower.includes('metal')) {
       configs.melody.oscillator.type = 'fatsawtooth' as const; ((configs.melody.oscillator) as any).count = 2; ((configs.melody.oscillator) as any).spread = 20; configs.melody.envelope.attack = 0.01; configs.melody.volume = -3;
       configs.bass.oscillator.type = 'fatsquare' as const; ((configs.bass.oscillator) as any).count = 3; ((configs.bass.oscillator) as any).spread = 20; configs.bass.volume = -3;
@@ -129,125 +128,201 @@ const DEFAULT_MIDI_NOTE = 60; // C4
 function robustNoteToMidi(noteNameWithOctave: string): number {
     if (typeof noteNameWithOctave !== 'string') return DEFAULT_MIDI_NOTE;
     const match = noteNameWithOctave.match(/([A-G])([#bSsxBF]*)(-?[0-9]+)/i);
-    if (!match) return DEFAULT_MIDI_NOTE;
+    if (!match) {
+        // Attempt to parse if octave is missing, assume 4
+        const simpleMatch = noteNameWithOctave.match(/([A-G])([#bSsxBF]*)/i);
+        if (simpleMatch) {
+            return robustNoteToMidi(noteNameWithOctave + '4');
+        }
+        console.warn(`[robustNoteToMidi_WARN] Invalid note format: '${noteNameWithOctave}', defaulting to C4.`);
+        return DEFAULT_MIDI_NOTE;
+    }
     let pitchClassName = match[1].toUpperCase();
     const accidentals = match[2]?.toUpperCase() || '';
     const octave = parseInt(match[3], 10);
-    if (isNaN(octave)) return DEFAULT_MIDI_NOTE;
+    if (isNaN(octave)) {
+        console.warn(`[robustNoteToMidi_WARN] Invalid octave in note: '${noteNameWithOctave}', defaulting to C4.`);
+        return DEFAULT_MIDI_NOTE;
+    }
     let fullPitchName = pitchClassName;
     if (accidentals.includes('#') || accidentals.includes('S')) fullPitchName += '#';
     else if (accidentals.includes('B') || (accidentals.includes('F') && pitchClassName !== 'F' && pitchClassName !== 'B')) fullPitchName += 'B';
+    
     let effectiveOctave = octave;
     if (fullPitchName === 'E#') { fullPitchName = 'F'; }
     else if (fullPitchName === 'B#') { fullPitchName = 'C'; effectiveOctave = octave + 1; }
     else if (fullPitchName === 'CB') { fullPitchName = 'B'; effectiveOctave = octave - 1; }
     else if (fullPitchName === 'FB') { fullPitchName = 'E'; }
+    
     let midiNumberBase = PITCH_CLASSES[fullPitchName];
     if (midiNumberBase === undefined) {
-        midiNumberBase = PITCH_CLASSES[pitchClassName];
+        midiNumberBase = PITCH_CLASSES[pitchClassName]; // Try without accidental if full name failed
         if (midiNumberBase !== undefined) {
             for (const char of accidentals) {
                 if (char === '#' || char === 'S') midiNumberBase = (midiNumberBase + 1);
-                else if (char === 'B' || char === 'F') midiNumberBase = (midiNumberBase - 1);
+                else if (char === 'B' || char === 'F') midiNumberBase = (midiNumberBase - 1); // Corrected to subtract for flats
             }
-            midiNumberBase = (midiNumberBase % 12 + 12) % 12;
-        } else return DEFAULT_MIDI_NOTE;
+            midiNumberBase = (midiNumberBase % 12 + 12) % 12; // Ensure positive modulo
+        } else {
+            console.warn(`[robustNoteToMidi_WARN] Unknown base pitch class: '${pitchClassName}' from '${noteNameWithOctave}', defaulting to C4.`);
+            return DEFAULT_MIDI_NOTE;
+        }
     }
     const finalMidiNumber = midiNumberBase + (effectiveOctave + 1) * 12;
     return (finalMidiNumber >= 0 && finalMidiNumber <= 127) ? finalMidiNumber : DEFAULT_MIDI_NOTE;
 }
 
+function midiToNoteName(midiNumber: number): string {
+    if (typeof midiNumber !== 'number' || isNaN(midiNumber) || midiNumber < 0 || midiNumber > 127) {
+        console.warn(`[midiToNoteName_WARN] Invalid MIDI number ${midiNumber}, defaulting to C4.`);
+        midiNumber = DEFAULT_MIDI_NOTE;
+    }
+    const octave = Math.floor(midiNumber / 12) - 1;
+    const noteIndex = midiNumber % 12;
+    if (noteIndex < 0 || noteIndex >= NOTES_ARRAY.length) {
+      console.warn(`[midiToNoteName_WARN] Invalid note index ${noteIndex} from MIDI ${midiNumber}, defaulting to C4.`);
+      return 'C4';
+    }
+    return NOTES_ARRAY[noteIndex] + octave;
+}
+
+
 function getScaleNoteNames(keySignature: string, mode: string, startOctave: number = 4): string[] {
     const baseKeyForScale = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
-    const rootMidiBase = robustNoteToMidi(baseKeyForScale + '0') % 12;
-    const intervals = mode.toLowerCase().includes('minor') ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11]; // Major scale for kids or default
+    const rootMidiBase = robustNoteToMidi(baseKeyForScale + '0') % 12; // Get the pitch class (0-11)
+    
+    let intervals: number[];
+    if (mode.toLowerCase().includes('minor')) {
+        intervals = [0, 2, 3, 5, 7, 8, 10]; // Natural Minor
+    } else {
+        intervals = [0, 2, 4, 5, 7, 9, 11]; // Major
+    }
     
     return intervals.map(interval => {
         const currentMidiValue = rootMidiBase + interval;
-        const octaveOffset = Math.floor(currentMidiValue / 12);
+        const octaveOffset = Math.floor(currentMidiValue / 12); // How many octaves up from rootMidiBase this interval lands
         const noteMidiNumber = (currentMidiValue % 12) + (startOctave + octaveOffset + 1) * 12;
-        const noteIndex = noteMidiNumber % 12;
-        const octaveName = Math.floor(noteMidiNumber / 12) - 1;
-        return NOTES_ARRAY[noteIndex] + octaveName;
+        return midiToNoteName(noteMidiNumber);
     });
 }
 // --- End Helper functions ---
 
-
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  console.log(`[WAV_GEN_DIRECT_MELODY_TEST] Starting direct synthesis for: ${params.generatedIdea.substring(0, 30)}...`);
+  console.log(`[WAV_GEN_DIRECT_MELODY_BASS] Starting direct synthesis for: ${params.generatedIdea.substring(0, 30)}...`);
 
   if (Tone.context.state !== 'running') {
-    console.error("[WAV_GEN_DIRECT_MELODY_TEST_ERROR] Global Tone.context is NOT 'running'. Aborting WAV generation.");
+    console.error("[WAV_GEN_DIRECT_MELODY_BASS_ERROR] Global Tone.context is NOT 'running'. Aborting WAV generation.");
     return null;
   }
-  console.log("[WAV_GEN_DIRECT_MELODY_TEST] Global Tone.context state is 'running'.");
+  console.log("[WAV_GEN_DIRECT_MELODY_BASS] Global Tone.context state is 'running'.");
 
   Tone.Transport.stop(true);
   Tone.Transport.cancel(0);
-  Tone.Destination.volume.value = 0; // Master volume for rendering
+  Tone.Destination.volume.value = -6; // Master volume for rendering (slightly reduced for more headroom)
   Tone.Transport.bpm.value = params.tempoBpm || 120;
-  console.log(`[WAV_GEN_DIRECT_MELODY_TEST] Transport BPM set to: ${Tone.Transport.bpm.value}`);
+  console.log(`[WAV_GEN_DIRECT_MELODY_BASS] Transport BPM set to: ${Tone.Transport.bpm.value}`);
 
   const synthConfigs = getSynthConfigurations(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids', params.generatedIdea, params.rhythmicDensity, params.harmonicComplexity);
 
-  // --- Melody Generation Logic (Simplified for this test) ---
+  // --- Melody Generation Logic (from previous working step) ---
   const melodyNotesToSchedule: { time: number, note: string, duration: string, velocity: number }[] = [];
-  const scaleNoteNames = getScaleNoteNames(params.keySignature, params.mode, params.originalInput.mode === 'kids' ? 5 : 4);
+  const melodyOctave = params.originalInput.mode === 'kids' ? 5 : 4;
+  const scaleNoteNames = getScaleNoteNames(params.keySignature, params.mode, melodyOctave);
   const secondsPerBeat = 60 / (params.tempoBpm || 120);
-  let currentTime = 0.2; // Start after a small delay
+  let melodyCurrentTime = 0.2; // Start after a small delay
 
-  const numMelodyNotes = 8; // Let's generate 8 notes for this test
-  const noteDurationSeconds = params.rhythmicDensity > 0.6 ? secondsPerBeat / 2 : secondsPerBeat; // "8n" or "4n" equivalent
-  const noteDurationNotation = params.rhythmicDensity > 0.6 ? "8n" : "4n";
+  const numMelodyNotes = 8;
+  const melodyNoteDurationSeconds = params.rhythmicDensity > 0.6 ? secondsPerBeat / 2 : secondsPerBeat;
+  const melodyNoteDurationNotation = params.rhythmicDensity > 0.6 ? "8n" : "4n";
+  let maxMelodyTime = melodyCurrentTime;
 
   for (let i = 0; i < numMelodyNotes; i++) {
     if (scaleNoteNames.length > 0) {
       const noteName = scaleNoteNames[i % scaleNoteNames.length];
       melodyNotesToSchedule.push({
-        time: currentTime,
+        time: melodyCurrentTime,
         note: noteName,
-        duration: noteDurationNotation,
-        velocity: 0.7 // Fixed velocity for simplicity
+        duration: melodyNoteDurationNotation,
+        velocity: 0.7
       });
-      console.log(`[WAV_GEN_DIRECT_MELODY_TEST_ALGO] Generated melody note: ${noteName} at ${currentTime.toFixed(2)}s, dur: ${noteDurationNotation}`);
-      // Adjust time advancement based on note duration for proper spacing
-      currentTime += Tone.Time(noteDurationNotation).toSeconds() * (params.rhythmicDensity > 0.6 ? 1.5 : 1.2); // Add some spacing
+      maxMelodyTime = Math.max(maxMelodyTime, melodyCurrentTime + Tone.Time(melodyNoteDurationNotation).toSeconds());
+      melodyCurrentTime += Tone.Time(melodyNoteDurationNotation).toSeconds() * (params.rhythmicDensity > 0.6 ? 1.5 : 1.2);
     }
   }
-
-  const calculatedRenderDuration = melodyNotesToSchedule.length > 0 
-    ? melodyNotesToSchedule[melodyNotesToSchedule.length - 1].time + Tone.Time(melodyNotesToSchedule[melodyNotesToSchedule.length - 1].duration).toSeconds() + 2.0 // Add buffer
-    : MIN_EFFECTIVE_DURATION_SECONDS;
-  const renderDuration = Math.max(calculatedRenderDuration, MIN_EFFECTIVE_DURATION_SECONDS);
-  console.log(`[WAV_GEN_DIRECT_MELODY_TEST] Calculated renderDuration: ${renderDuration.toFixed(2)}s for direct synthesis.`);
-
   // --- End Melody Generation Logic ---
+
+  // --- Bass Line Generation Logic ---
+  const bassNotesToSchedule: { time: number, note: string, duration: string, velocity: number }[] = [];
+  const bassOctave = params.originalInput.mode === 'kids' ? 3 : 2;
+  const rootNoteName = (params.keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || params.keySignature.toUpperCase()) + bassOctave;
+  const bassNoteMidi = robustNoteToMidi(rootNoteName);
+  const bassNoteName = midiToNoteName(bassNoteMidi);
+
+  const numBassMeasures = 2; // Let's do 2 "measures" of bass
+  const beatsPerMeasure = 4;
+  const measureDurationSeconds = beatsPerMeasure * secondsPerBeat;
+  let bassCurrentTime = 0.2; // Align with melody start
+  let maxBassTime = bassCurrentTime;
+
+  for (let i = 0; i < numBassMeasures * beatsPerMeasure; i++) {
+      // Play root note on each beat for simplicity in this step
+      if (i % beatsPerMeasure === 0) { // Play on the downbeat of each measure
+        const bassNoteDurationNotation = "2n"; // Half note
+        bassNotesToSchedule.push({
+            time: bassCurrentTime,
+            note: bassNoteName,
+            duration: bassNoteDurationNotation,
+            velocity: 0.6
+        });
+        maxBassTime = Math.max(maxBassTime, bassCurrentTime + Tone.Time(bassNoteDurationNotation).toSeconds());
+      }
+      bassCurrentTime += secondsPerBeat; // Advance by one beat
+  }
+  // --- End Bass Line Generation Logic ---
+
+  const overallMaxTime = Math.max(maxMelodyTime, maxBassTime);
+  const renderDuration = Math.max(overallMaxTime + 2.0, MIN_EFFECTIVE_DURATION_SECONDS); // Add buffer
+  console.log(`[WAV_GEN_DIRECT_MELODY_BASS] Calculated renderDuration: ${renderDuration.toFixed(2)}s.`);
 
   try {
     const audioBuffer = await Tone.Offline(async (offlineContext) => {
-      console.log(`[WAV_GEN_DIRECT_MELODY_TEST_OFFLINE] Inside Tone.Offline. Offline Context SR: ${offlineContext.sampleRate}`);
-      offlineContext.transport.bpm.value = Tone.Transport.bpm.value; // Ensure offline transport uses the same BPM
+      console.log(`[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE] Inside Tone.Offline. Offline Context SR: ${offlineContext.sampleRate}`);
+      offlineContext.transport.bpm.value = Tone.Transport.bpm.value;
 
-      // Using FMSynth for piano-like sound as it's reliable
+      // Melody Synth (using FMSynth for piano-like sound)
       const melodySynth = new Tone.PolySynth(Tone.FMSynth, synthConfigs.piano).connect(offlineContext.destination);
-      melodySynth.volume.value = synthConfigs.piano.volume !== undefined ? synthConfigs.piano.volume : -3;
-      console.log(`[WAV_GEN_DIRECT_MELODY_TEST_OFFLINE] MelodySynth (FMSynth) created. Volume: ${melodySynth.volume.value}`);
+      melodySynth.volume.value = synthConfigs.piano.volume !== undefined ? synthConfigs.piano.volume : -6;
+      console.log(`[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE] MelodySynth (FMSynth) created. Volume: ${melodySynth.volume.value}`);
 
       if (melodyNotesToSchedule.length === 0) {
-        console.warn("[WAV_GEN_DIRECT_MELODY_TEST_OFFLINE] No melody notes were algorithmically generated to schedule.");
+        console.warn("[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE] No melody notes to schedule.");
       } else {
-         console.log(`[WAV_GEN_DIRECT_MELODY_TEST_OFFLINE] Scheduling ${melodyNotesToSchedule.length} algorithmically generated melody notes.`);
+         console.log(`[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE] Scheduling ${melodyNotesToSchedule.length} melody notes.`);
       }
-      
       melodyNotesToSchedule.forEach((noteEvent) => {
-        console.log(`[WAV_GEN_DIRECT_MELODY_TEST_OFFLINE_SCHED] Scheduling: Time=${noteEvent.time.toFixed(3)}, Note=${noteEvent.note}, Dur=${noteEvent.duration}, Vel=${noteEvent.velocity.toFixed(2)}`);
+        console.log(`[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE_SCHED_MELODY] Time=${noteEvent.time.toFixed(3)}, Note=${noteEvent.note}, Dur=${noteEvent.duration}, Vel=${noteEvent.velocity.toFixed(2)}`);
         melodySynth.triggerAttackRelease(noteEvent.note, noteEvent.duration, noteEvent.time, noteEvent.velocity);
       });
 
+      // Bass Synth
+      const bassSynth = new Tone.Synth(synthConfigs.bass).connect(offlineContext.destination); // Using Tone.Synth for mono bass
+      // bassSynth.volume.value = synthConfigs.bass.volume !== undefined ? synthConfigs.bass.volume : -3; // Already set in getSynthConfigurations
+      console.log(`[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE] BassSynth created. Volume: ${bassSynth.volume.value}`);
+      
+      if (bassNotesToSchedule.length === 0) {
+        console.warn("[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE] No bass notes to schedule.");
+      } else {
+         console.log(`[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE] Scheduling ${bassNotesToSchedule.length} bass notes.`);
+      }
+      bassNotesToSchedule.forEach((noteEvent) => {
+        console.log(`[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE_SCHED_BASS] Time=${noteEvent.time.toFixed(3)}, Note=${noteEvent.note}, Dur=${noteEvent.duration}, Vel=${noteEvent.velocity.toFixed(2)}`);
+        bassSynth.triggerAttackRelease(noteEvent.note, noteEvent.duration, noteEvent.time, noteEvent.velocity);
+      });
+
+
     }, renderDuration);
 
-    console.log(`[WAV_GEN_DIRECT_MELODY_TEST] Tone.Offline rendering complete. AudioBuffer duration: ${audioBuffer.duration.toFixed(3)}s`);
+    console.log(`[WAV_GEN_DIRECT_MELODY_BASS] Tone.Offline rendering complete. AudioBuffer duration: ${audioBuffer.duration.toFixed(3)}s`);
     
     let isSilent = true;
     let maxVal = 0;
@@ -257,61 +332,25 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         if (Math.abs(channelData[j]) > 1e-5) { isSilent = false; }
         if (Math.abs(channelData[j]) > maxVal) { maxVal = Math.abs(channelData[j]); }
       }
-      console.log(`[WAV_GEN_DIRECT_MELODY_TEST_OFFLINE] Channel ${i} max absolute value: ${maxVal.toExponential(3)}`);
+      console.log(`[WAV_GEN_DIRECT_MELODY_BASS_OFFLINE] Channel ${i} max absolute value: ${maxVal.toExponential(3)}`);
       if (!isSilent) break;
     }
 
     if (isSilent) {
-      console.warn("[WAV_GEN_DIRECT_MELODY_TEST_WARN] Rendered AudioBuffer (direct melody) appears to be silent or very quiet.");
+      console.warn("[WAV_GEN_DIRECT_MELODY_BASS_WARN] Rendered AudioBuffer (melody + bass) appears to be silent or very quiet.");
     } else {
-      console.log("[WAV_GEN_DIRECT_MELODY_TEST] Rendered AudioBuffer (direct melody) contains non-zero samples.");
+      console.log("[WAV_GEN_DIRECT_MELODY_BASS] Rendered AudioBuffer (melody + bass) contains non-zero samples.");
     }
 
     const wavDataBuffer = audioBufferToWav(audioBuffer);
-    console.log(`[WAV_GEN_DIRECT_MELODY_TEST] WAV data buffer (direct melody) created. Size: ${wavDataBuffer.byteLength} bytes.`);
+    console.log(`[WAV_GEN_DIRECT_MELODY_BASS] WAV data buffer (melody + bass) created. Size: ${wavDataBuffer.byteLength} bytes.`);
     return new Blob([wavDataBuffer], { type: 'audio/wav' });
 
   } catch (error) {
-    console.error("[WAV_GEN_DIRECT_MELODY_TEST_ERROR] Error during WAV generation process:", error);
+    console.error("[WAV_GEN_DIRECT_MELODY_BASS_ERROR] Error during WAV generation process:", error);
     if (error instanceof Error) {
-        console.error(`[WAV_GEN_DIRECT_MELODY_TEST_ERROR_DETAILS] Name: ${error.name}, Message: ${error.message}, Stack: ${error.stack}`);
+        console.error(`[WAV_GEN_DIRECT_MELODY_BASS_ERROR_DETAILS] Name: ${error.name}, Message: ${error.message}, Stack: ${error.stack}`);
     }
     return null;
   }
 };
-
-// Ensure getInstrumentRole and other original helpers are defined if needed later.
-type InstrumentRole = 'melody' | 'bass' | 'chords' | 'arpeggio' | 'piano' | 'drums' | 'unknown';
-const GM = { DRUM_CHANNEL: 9 };
-
-const getInstrumentRole = (
-    gmInstrument: number,
-    channel: number,
-    mapping: ReturnType<typeof mapInstrumentHintToGMOriginal>,
-    trackName: string = ''
-): InstrumentRole => {
-    if (channel === GM.DRUM_CHANNEL) return 'drums';
-    const nameLower = trackName.toLowerCase();
-    if (nameLower.includes('melody') || nameLower.includes('lead')) return 'melody';
-    if (nameLower.includes('bass')) return 'bass';
-    if (nameLower.includes('chord') || nameLower.includes('pad') || nameLower.includes('harmony')) return 'chords';
-    if (nameLower.includes('arp') || nameLower.includes('sequence')) return 'arpeggio';
-    if (nameLower.includes('piano')) return 'piano';
-    if (gmInstrument === mapping.melody) return 'melody';
-    if (gmInstrument === mapping.bass) return 'bass';
-    if (gmInstrument === mapping.chordsPad) return 'chords';
-    if (gmInstrument === mapping.arpeggioSynth) return 'arpeggio';
-    if (gmInstrument >= 0 && gmInstrument <= 7) return 'piano';
-    if (gmInstrument >= 8 && gmInstrument <= 15 && gmInstrument !== GM.DRUM_CHANNEL) return 'arpeggio';
-    if (gmInstrument >= 16 && gmInstrument <= 23) return (nameLower.includes('pad') ? 'chords' : 'arpeggio');
-    if (gmInstrument >= 24 && gmInstrument <= 31) return (nameLower.includes('lead') || nameLower.includes('solo') ? 'melody' : 'chords');
-    if (gmInstrument >= 32 && gmInstrument <= 39) return 'bass';
-    if (gmInstrument >= 40 && gmInstrument <= 55) return (nameLower.includes('pad') || nameLower.includes('ensemble') ? 'chords' : 'melody');
-    if (gmInstrument >= 56 && gmInstrument <= 79) return 'melody';
-    if (gmInstrument >= 80 && gmInstrument <= 87) return 'melody';
-    if (gmInstrument >= 88 && gmInstrument <= 95) return 'chords';
-    if (gmInstrument >= 96 && gmInstrument <= 103) return 'arpeggio';
-    return 'melody';
-};
-
-    
