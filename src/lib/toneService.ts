@@ -1,14 +1,13 @@
 
 'use client';
-import * as Tone from 'tone';
+import *
+as Tone from 'tone';
 import { Midi as MidiFileParser } from '@tonejs/midi';
 import type { MusicParameters } from '@/types';
-import { generateMidiFile as generateMidiFileOriginal } from '@/lib/midiService'; // Renamed to avoid conflict
+import { generateMidiFile as generateMidiFileOriginal } from '@/lib/midiService';
 import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal, ensureStrictlyIncreasingTimes } from '@/lib/midiService';
-// import { SOUNDFONT_URL } from '@/lib/constants'; // No longer needed due to FMSynth piano
 
 // --- audiobuffer-to-wav START ---
-// (Utility functions: audioBufferToWav, encodeWAV, interleave, writeFloat32, floatTo16BitPCM, writeString - remain unchanged)
 function audioBufferToWav(buffer: AudioBuffer, opt: { float32?: boolean } = {}): ArrayBuffer {
   const numChannels = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
@@ -67,14 +66,14 @@ interface SynthCollection {
   kick?: Tone.MembraneSynth;
   snare?: Tone.NoiseSynth;
   hiHat?: Tone.MetalSynth;
-  piano?: Tone.PolySynth; // Now using PolySynth(FMSynth)
+  piano?: Tone.PolySynth; // Using PolySynth(FMSynth)
   [key: string]: any;
 }
 interface SynthConfigurations { melody: any; bass: any; chords: any; arpeggio: any; kick: any; snare: any; hiHat: any; piano: any; }
 
-const MIN_EFFECTIVE_DURATION = 5.0; // Minimum render duration if MIDI is very short
+const MIN_EFFECTIVE_DURATION = 5.0;
+const SAFE_OSC_TYPE = 'triangle' as const; // Safe default for debugging
 
-// Full implementation for WAV generation using parsed MIDI
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
   console.log(`[WAV_GEN] Starting WAV generation for idea: ${params.generatedIdea.substring(0,30)}...`);
 
@@ -96,8 +95,21 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     Tone.Destination.volume.value = 0;
 
     const midiDataUri = generateMidiFileOriginal(params);
-    console.log("[WAV_GEN] MIDI data URI generated.");
-    const parsedMidi = new MidiFileParser(midiDataUri);
+    console.log("[WAV_GEN] MIDI data URI generated. First 100 chars:", midiDataUri ? midiDataUri.substring(0, 100) : "null/undefined");
+
+    if (!midiDataUri || typeof midiDataUri !== 'string' || !midiDataUri.startsWith('data:audio/midi;base64,')) {
+      console.error("[WAV_GEN_ERROR] Invalid or missing MIDI data URI. Cannot parse MIDI. URI:", midiDataUri);
+      throw new Error("Failed to generate valid MIDI data for WAV conversion.");
+    }
+    
+    let parsedMidi;
+    try {
+      parsedMidi = new MidiFileParser(midiDataUri);
+    } catch (parseError) {
+      console.error("[WAV_GEN_ERROR] Error parsing MIDI data URI with MidiFileParser:", parseError);
+      console.error("[WAV_GEN_ERROR] Failing MIDI URI was:", midiDataUri);
+      throw new Error(`MidiFileParser failed: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+    }
     console.log(`[WAV_GEN] MIDI parsed. Duration: ${parsedMidi.duration.toFixed(2)}s. Tracks: ${parsedMidi.tracks.length}`);
 
     const effectiveMidiDuration = Math.max(parsedMidi.duration, 0.1);
@@ -108,10 +120,9 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     Tone.Transport.bpm.value = tempoToSet;
     console.log(`[WAV_GEN] Global Tone.Transport BPM set to: ${Tone.Transport.bpm.value}`);
 
-    const audioBuffer = await Tone.Offline(async (offlineContext) => { // Renamed param to 'offlineContext'
+    const audioBuffer = await Tone.Offline(async (offlineContext) => { 
       console.log("[WAV_GEN_OFFLINE] Inside Tone.Offline callback. Context sample rate:", offlineContext.sampleRate);
-      // BPM for offline context is inherited from global Tone.Transport
-
+      
       const synthConfigs = getSynthConfigurations(
         params.instrumentHints,
         params.selectedGenre,
@@ -120,7 +131,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         params.rhythmicDensity,
         params.harmonicComplexity
       );
-      console.log("[WAV_GEN_OFFLINE] Synth configurations obtained:", JSON.stringify(synthConfigs, null, 2));
+      console.log("[WAV_GEN_OFFLINE] Synth configurations obtained.");
 
       const synths: SynthCollection = {};
       
@@ -160,9 +171,9 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         let activeSynthForPart: any;
         let partRole: string = 'unknown';
 
-        if (track.channel === 9) { // Drum track (MIDI channel 10 is 9 zero-indexed)
+        if (track.channel === 9) { 
           partRole = 'drums';
-          activeSynthForPart = null; // Drums are handled per-note with specific synths
+          activeSynthForPart = null; 
           console.log(`[WAV_GEN_OFFLINE_TRACK ${trackIndex}] Identified as drum track.`);
         } else {
           const instrumentNumber = track.instrument.number;
@@ -172,8 +183,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
           else if (instrumentNumber === instrumentMapping.arpeggioSynth || (track.name.toLowerCase().includes('arp') && !activeSynthForPart)) { partRole = 'arpeggio'; activeSynthForPart = synths.arpeggio; }
           else if (instrumentNumber === 0 || instrumentNumber === 1 || instrumentNumber === KID_INSTRUMENTS.BRIGHT_ACOUSTIC_PIANO || track.instrument.family === "piano") {
             partRole = 'piano'; activeSynthForPart = synths.piano;
-          }
-           else {
+          } else {
             partRole = `melody_fallback_instr_${instrumentNumber}`; activeSynthForPart = synths.melody; 
             console.log(`[WAV_GEN_OFFLINE_TRACK ${trackIndex}] Instrument number ${instrumentNumber} did not match primary roles, falling back to melody synth.`);
           }
@@ -191,19 +201,19 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             }
 
             const drumPart = new Tone.Part((time, value) => {
-                console.log(`[WAV_GEN_OFFLINE_DRUM_PART] Event: Time=${time.toFixed(3)}, MIDI=${value.midi}, Dur=${value.duration.toFixed(3)}, Vel=${value.velocity.toFixed(2)}`);
+                console.log(`[WAV_GEN_OFFLINE_DRUM_PART] Triggering: Time=${time.toFixed(3)}, MIDI=${value.midi}, Dur=${value.duration.toFixed(3)}, Vel=${value.velocity.toFixed(2)}`);
                 let drumSynth: any;
                 let pitchToPlay: string | number | undefined;
                 let effectiveDuration = Math.max(0.01, value.duration * 0.9);
 
-                if (value.midi === 35 || value.midi === 36 || value.midi === KID_INSTRUMENTS.KIDS_KICK) { drumSynth = synths.kick; pitchToPlay = "C1"; }
-                else if (value.midi === 38 || value.midi === 40 || value.midi === KID_INSTRUMENTS.KIDS_SNARE) { drumSynth = synths.snare; }
-                else if (value.midi === 42 || value.midi === 44 || value.midi === KID_INSTRUMENTS.CLOSED_HIHAT_KID) { drumSynth = synths.hiHat; pitchToPlay = 300; }
-                else if (value.midi === 46) { drumSynth = synths.hiHat; pitchToPlay = 500; } // Open Hi-Hat
-                else if (value.midi === 49 || value.midi === 57 || value.midi === KID_INSTRUMENTS.LIGHT_CYMBAL) { drumSynth = synths.hiHat; pitchToPlay = 800; } // Crash Cymbals
-                else if (value.midi === 51 || value.midi === 59) { drumSynth = synths.hiHat; pitchToPlay = 600; } // Ride Cymbals
-                else if (value.midi === KID_INSTRUMENTS.SHAKER_NOTE) { drumSynth = synths.snare; effectiveDuration = 0.05; }
-                else if (value.midi === KID_INSTRUMENTS.TAMBOURINE_NOTE) { drumSynth = synths.hiHat; pitchToPlay = 1200; effectiveDuration = 0.08; }
+                if (value.midi === KID_INSTRUMENTS.KICK_DRUM_1 || value.midi === KID_INSTRUMENTS.KICK_DRUM_2) { drumSynth = synths.kick; pitchToPlay = "C1"; }
+                else if (value.midi === KID_INSTRUMENTS.SNARE_ACOUSTIC || value.midi === KID_INSTRUMENTS.SNARE_ELECTRIC) { drumSynth = synths.snare; }
+                else if (value.midi === KID_INSTRUMENTS.HIHAT_CLOSED || value.midi === KID_INSTRUMENTS.HIHAT_PEDAL) { drumSynth = synths.hiHat; pitchToPlay = 300; }
+                else if (value.midi === KID_INSTRUMENTS.HIHAT_OPEN) { drumSynth = synths.hiHat; pitchToPlay = 500; }
+                else if (value.midi === KID_INSTRUMENTS.CRASH_CYMBAL_1 || value.midi === KID_INSTRUMENTS.CRASH_CYMBAL_2) { drumSynth = synths.hiHat; pitchToPlay = 800; effectiveDuration = Math.max(0.2, value.duration * 0.9); }
+                else if (value.midi === KID_INSTRUMENTS.RIDE_CYMBAL_1 || value.midi === KID_INSTRUMENTS.RIDE_CYMBAL_2) { drumSynth = synths.hiHat; pitchToPlay = 600; }
+                else if (value.midi === KID_INSTRUMENTS.SHAKER) { drumSynth = synths.snare; effectiveDuration = 0.05; }
+                else if (value.midi === KID_INSTRUMENTS.TAMBOURINE) { drumSynth = synths.hiHat; pitchToPlay = 1200; effectiveDuration = 0.08; }
                 else {
                     console.log(`[WAV_GEN_OFFLINE_DRUM_PART] Unmapped drum MIDI note: ${value.midi}. Skipping.`);
                     return;
@@ -211,14 +221,19 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
                 if (drumSynth) {
                     if (drumSynth instanceof Tone.MembraneSynth) {
-                        drumSynth.triggerAttackRelease(pitchToPlay as string, effectiveDuration, time, value.velocity);
+                        if (typeof pitchToPlay === 'string') {
+                            drumSynth.triggerAttackRelease(pitchToPlay, effectiveDuration, time, value.velocity);
+                        } else {
+                             console.warn(`[WAV_GEN_OFFLINE_DRUM_PART] MembraneSynth (kick) expects a string pitch, got ${typeof pitchToPlay}. Using default.`);
+                             drumSynth.triggerAttackRelease("C1", effectiveDuration, time, value.velocity);
+                        }
                     } else if (drumSynth instanceof Tone.NoiseSynth) {
                         drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
                     } else if (drumSynth instanceof Tone.MetalSynth) {
                          if (drumSynth.frequency && typeof pitchToPlay === 'number') {
                             drumSynth.frequency.setValueAtTime(pitchToPlay, time);
-                        } else if (drumSynth.frequency && typeof pitchToPlay === 'undefined') {
-                             // Keep default frequency if pitchToPlay is not a number for MetalSynth
+                        } else if (drumSynth.frequency && typeof pitchToPlay !== 'number') {
+                             console.warn(`[WAV_GEN_OFFLINE_DRUM_PART] MetalSynth frequency expects a number, got ${typeof pitchToPlay}. Using default.`);
                         }
                         drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
                     }
@@ -239,8 +254,12 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
             const part = new Tone.Part((time, value) => {
                 console.log(`[WAV_GEN_OFFLINE_PART (${partRole})] Triggering: Time=${time.toFixed(3)}, Note=${value.note}, Dur=${value.duration.toFixed(3)}, Vel=${value.velocity.toFixed(2)}`);
-                const effectiveDuration = Math.max(0.01, value.duration * 0.95);
-                activeSynthForPart.triggerAttackRelease(value.note, effectiveDuration, time, value.velocity);
+                if (value.note) { // Ensure note is defined
+                  const effectiveDuration = Math.max(0.01, value.duration * 0.95);
+                  activeSynthForPart.triggerAttackRelease(value.note, effectiveDuration, time, value.velocity);
+                } else {
+                  console.warn(`[WAV_GEN_OFFLINE_PART (${partRole})] Undefined note for event at time ${time}. Skipping.`);
+                }
             }, pitchedTrackEvents);
             allParts.push(part);
         }
@@ -290,7 +309,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 };
 
 
-// Synth Configurations - Moved Piano to FMSynth
 const getSynthConfigurations = (
   instrumentHints: string[] = [],
   genre: string = '',
@@ -304,38 +322,51 @@ const getSynthConfigurations = (
   const ideaLower = aiGeneratedIdea.toLowerCase();
 
   let configs: SynthConfigurations = {
-    melody: { oscillator: { type: 'fatsawtooth', count: 3, spread: 20 }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.7, release: 0.6 }, volume: -3 },
+    melody: { oscillator: { type: 'fatsawtooth', count: 3, spread: 20 }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.7, release: 0.6 }, volume: 0 },
     bass: { oscillator: { type: 'fmsine', harmonicity: 1.2, modulationIndex: 5 }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.8, release: 0.3 }, volume: 0 },
-    chords: { oscillator: { type: 'amtriangle', harmonicity: 0.5, modulationType: "sine" }, volume: -6, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1.0 } }, // Louder chords
-    arpeggio: { oscillator: { type: 'fmsawtooth', harmonicity: 1.5, modulationIndex: 8 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.2 }, volume: -7 }, // Louder arpeggio
-    kick: { pitchDecay: 0.05, octaves: 10, oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: "exponential" }, volume: 0 },
-    snare: { noise: { type: 'pink' }, volume: -2, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } }, // Louder snare
-    hiHat: { frequency: 300, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5, volume: -6 }, // Louder hihat, slightly higher freq
+    chords: { oscillator: { type: 'amtriangle', harmonicity: 0.5, modulationType: "sine" as const }, volume: -6, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1.0 } },
+    arpeggio: { oscillator: { type: 'fmsawtooth', harmonicity: 1.5, modulationIndex: 8 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.2 }, volume: -7 },
+    kick: { pitchDecay: 0.05, octaves: 10, oscillator: { type: "sine" as const }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: "exponential" as const }, volume: 0 },
+    snare: { noise: { type: 'pink' as const }, volume: -2, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } },
+    hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -6 },
     piano: { // FMSynth configuration for piano
-      harmonicity: 3.0, 
-      modulationIndex: 14, 
-      detune: 0, 
-      oscillator: { type: "fmsine" as const, modulationType: "sine" as const, phase:0 }, 
-      envelope: { attack: 0.01, decay: 0.6, sustain: 0.1, release: 0.8 }, 
+      harmonicity: 3.01, // Standard for FMSynth
+      modulationIndex: 10, // Standard for FMSynth
+      detune: 0,
+      oscillator: { type: "sine" as const, modulationType: "square" as const, phase:0, harmonicity: 0.99 }, // Using FMSynth's oscillator structure
+      envelope: { attack: 0.01, decay: 0.6, sustain: 0.1, release: 0.8 },
+      modulation: {type: "triangle" as const}, // For FMSynth
       modulationEnvelope: { attack: 0.02, decay: 0.3, sustain: 0.05, release: 0.8 },
-      volume: -3 // Make piano more audible
+      volume: -3
     }
   };
+  
+  // Temporary fix for oscillator types - replace 'pwm' and 'pulse' with SAFE_OSC_TYPE
+  Object.values(configs).forEach(config => {
+    if (config.oscillator && (config.oscillator.type === 'pwm' || config.oscillator.type === 'pulse')) {
+      console.warn(`[WAV_GEN_SYNTH_CONFIG_DEBUG] Replacing oscillator type '${config.oscillator.type}' with '${SAFE_OSC_TYPE}' for stability.`);
+      config.oscillator.type = SAFE_OSC_TYPE;
+      // Remove properties not valid for basic oscillators if they exist
+      if (config.oscillator.modulationFrequency) delete config.oscillator.modulationFrequency;
+    }
+  });
+
 
   if (isKidsMode) {
-    configs.melody = { oscillator: { type: 'triangle' }, envelope: { attack: 0.02, decay: 0.1, sustain: 0.6, release: 0.4 }, volume: 0 };
+    configs.melody = { oscillator: { type: SAFE_OSC_TYPE }, envelope: { attack: 0.02, decay: 0.1, sustain: 0.6, release: 0.4 }, volume: 0 };
     configs.bass = { oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.05, sustain: 0.8, release: 0.3 }, volume: -3 };
     configs.chords = { oscillator: { type: 'square' }, envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.5 }, volume: -6 };
     configs.arpeggio = { oscillator: { type: 'sawtooth' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 0.2 }, volume: -9 };
     configs.kick.volume = 0;
     configs.snare.volume = -3;
     configs.hiHat.volume = -9;
+    configs.hiHat.frequency = 400; // Brighter for kids
 
     if (genreLower.includes("electronic")) {
-      configs.melody.oscillator.type = 'pwm'; configs.melody.oscillator.modulationFrequency = 0.5;
-      configs.arpeggio.oscillator.type = 'pwm';
+      configs.melody.oscillator.type = SAFE_OSC_TYPE; // Was pwm
+      configs.arpeggio.oscillator.type = SAFE_OSC_TYPE; // Was pwm
     } else if (genreLower.includes("pop")) {
-      configs.melody.oscillator.type = 'triangle';
+      configs.melody.oscillator.type = SAFE_OSC_TYPE;
     }
     if (hintsLower.some(h => h.includes('piano') || h.includes('toy piano'))) {
         configs.melody = JSON.parse(JSON.stringify(configs.piano)); configs.melody.volume = 0;
@@ -344,9 +375,9 @@ const getSynthConfigurations = (
 
   } else { 
     if (genreLower.includes('electronic') || genreLower.includes('pop')) {
-      configs.melody.oscillator.type = 'pwm'; configs.melody.oscillator.modulationFrequency = 0.3; configs.melody.volume = 0;
+      configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = 0; // Was pwm
       configs.bass.oscillator.type = 'fatsquare'; (configs.bass.oscillator as any).count = 3; (configs.bass.oscillator as any).spread = 15; configs.bass.volume = 0;
-      configs.chords.oscillator.type = 'pwm'; (configs.chords.oscillator as any).modulationFrequency = 0.5; configs.chords.volume = -9;
+      configs.chords.oscillator.type = SAFE_OSC_TYPE; configs.chords.volume = -9; // was pwm
       configs.arpeggio.oscillator.type = 'sawtooth'; configs.arpeggio.volume = -7;
       configs.kick.volume = 0; configs.snare.volume = -2; configs.hiHat.volume = -6;
     } else if (genreLower.includes('rock') || genreLower.includes('metal')) {
@@ -379,13 +410,13 @@ const getSynthConfigurations = (
         configs.chords.oscillator.type = 'fatsawtooth'; configs.chords.volume = -10; configs.chords.envelope.attack = 0.4;
       }
       if (hint.includes('synth lead') || hint.includes('bright synth')) {
-        configs.melody.oscillator.type = 'pwm'; configs.melody.volume = -3;
+        configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = -3; // was pwm
       }
       if (hint.includes('synth pad') || hint.includes('warm pad')) {
         configs.chords.oscillator.type = 'amtriangle'; configs.chords.volume = -9; configs.chords.envelope.attack = 0.8;
       }
       if (hint.includes('pluck') || hint.includes('sequence')) { 
-        configs.arpeggio.oscillator.type = 'triangle'; configs.arpeggio.volume = -9;
+        configs.arpeggio.oscillator.type = SAFE_OSC_TYPE; configs.arpeggio.volume = -9;
         configs.arpeggio.envelope = { attack: 0.005, decay: 0.05, sustain: 0.1, release: 0.1 };
       }
        if (hint.includes('arp') || hint.includes('arpeggio')) { 
@@ -398,14 +429,13 @@ const getSynthConfigurations = (
         configs.bass.oscillator.type = 'fatsquare'; configs.bass.volume = -3;
       }
        if (hint.includes('flute')) {
-        configs.melody.oscillator.type = 'triangle'; configs.melody.volume = -6;
+        configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = -6;
       }
     });
   }
   return configs;
 };
 
-// GM Standard MIDI note numbers for some common percussion instruments
 const KID_INSTRUMENTS = { 
     XYLOPHONE: 13, TOY_PIANO: 8, 
     UKULELE: 24, RECORDER: 74,
@@ -428,9 +458,4 @@ const KID_INSTRUMENTS = {
     CRASH_CYMBAL_2: 57,    // Crash Cymbal 2
     RIDE_CYMBAL_2: 59,     // Ride Cymbal 2
     SHAKER: 70,            // Maracas (often used for Shaker sound)
-    // For specific kid-friendly mapping if MIDI file uses these
-    KIDS_KICK: 36,
-    KIDS_SNARE: 38,
-    CLOSED_HIHAT_KID: 42,
-    LIGHT_CYMBAL: 49,
 };
