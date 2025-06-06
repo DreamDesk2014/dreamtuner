@@ -111,73 +111,74 @@ const getSynthConfigurations = (
   const hintsLower = instrumentHints.map(h => h.toLowerCase());
   const genreLower = genre.toLowerCase();
 
+  // Increased default volumes
   let configs: SynthConfigurations = {
     melody: { oscillator: { type: 'fatsawtooth', count: 3, spread: 20 }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.4 }, volume: -6 },
     bass: { oscillator: { type: 'fatsine', count: 2, spread: 10 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.5 }, volume: -3 },
-    chords: { oscillator: { type: 'amtriangle', harmonicity: 0.5 }, volume: -15, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1.0 } },
-    arpeggio: { oscillator: { type: 'fmsawtooth', harmonicity: 1.5, modulationIndex: 8 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.2 }, volume: -10 },
+    chords: { oscillator: { type: 'amtriangle', harmonicity: 0.5 }, volume: -10, envelope: { attack: 0.05, decay: 0.3, sustain: 0.7, release: 1.0 } }, // Was -15
+    arpeggio: { oscillator: { type: 'fmsawtooth', harmonicity: 1.5, modulationIndex: 8 }, envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.2 }, volume: -9 }, // Was -10
     kick: { pitchDecay: 0.05, octaves: 10, oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: 'exponential' }, volume: -3 },
-    snare: { noise: { type: 'pink' }, volume: -10, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } },
-    hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -22 },
+    snare: { noise: { type: 'pink' }, volume: -8, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } }, // Was -10
+    hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -15 }, // Was -22
   };
 
   if (isKidsMode) {
     configs.melody = { oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.3 }, volume: -6 };
     configs.bass = { oscillator: { type: 'sine' }, envelope: { attack: 0.02, decay: 0.3, sustain: 0.5, release: 0.4 }, volume: -3 };
-    configs.chords = { oscillator: { type: 'triangle' }, volume: -18, envelope: { attack: 0.1, decay: 0.4, sustain: 0.5, release: 0.8 } };
-    configs.arpeggio = { oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.2 }, volume: -12 };
+    configs.chords = { oscillator: { type: 'triangle' }, volume: -12, envelope: { attack: 0.1, decay: 0.4, sustain: 0.5, release: 0.8 } }; // Was -18
+    configs.arpeggio = { oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 0.2 }, volume: -10 }; // Was -12
     configs.kick.pitchDecay = 0.1;
-    configs.snare.noise.type = 'white'; configs.snare.envelope.decay = 0.1;
-    configs.hiHat.frequency = 300; configs.hiHat.envelope.decay = 0.03;
+    configs.snare.noise.type = 'white'; configs.snare.envelope.decay = 0.1; configs.snare.volume = -7; // Ensuring kids snare is audible
+    configs.hiHat.frequency = 300; configs.hiHat.envelope.decay = 0.03; configs.hiHat.volume = -14; // Ensuring kids hihat is audible
   } else {
     if (genreLower.includes('electronic') || genreLower.includes('pop')) {
       configs.melody.oscillator.type = 'pwm'; 
       configs.bass.oscillator.type = 'fatsquare'; configs.bass.volume = 0;
-      configs.chords.oscillator.type = 'pwm'; configs.chords.oscillator.modulationFrequency = 0.5; configs.chords.volume = -12;
-      configs.arpeggio.oscillator.type = 'sawtooth'; configs.arpeggio.volume = -9;
+      configs.chords.oscillator.type = 'pwm'; configs.chords.oscillator.modulationFrequency = 0.5; configs.chords.volume = -10; // Was -12
+      configs.arpeggio.oscillator.type = 'sawtooth'; configs.arpeggio.volume = -8; // Was -9
     } else if (genreLower.includes('ambient')) {
-      configs.melody.envelope = { attack: 0.5, decay: 0.2, sustain: 0.8, release: 2.0 }; configs.melody.volume = -9;
-      configs.bass.envelope = { attack: 0.6, decay: 0.3, sustain: 0.9, release: 2.5 }; configs.bass.volume = -6;
-      configs.chords.oscillator.type = 'fatsine'; configs.chords.volume = -15;
+      configs.melody.envelope = { attack: 0.5, decay: 0.2, sustain: 0.8, release: 2.0 }; configs.melody.volume = -8; // Was -9
+      configs.bass.envelope = { attack: 0.6, decay: 0.3, sustain: 0.9, release: 2.5 }; configs.bass.volume = -5; // Was -6
+      configs.chords.oscillator.type = 'fatsine'; configs.chords.volume = -12; // Was -15
       configs.chords.envelope = { attack: 1.0, decay: 0.5, sustain: 0.9, release: 3.0 };
-      configs.arpeggio.envelope = { attack: 0.8, decay: 0.3, sustain: 0.9, release: 2.2 }; configs.arpeggio.volume = -12;
+      configs.arpeggio.envelope = { attack: 0.8, decay: 0.3, sustain: 0.9, release: 2.2 }; configs.arpeggio.volume = -10; // Was -12
     } else if (genreLower.includes('rock') || genreLower.includes('metal')) {
       configs.melody.oscillator.type = 'fatsawtooth'; configs.melody.volume = -3;
       configs.bass.oscillator.type = 'fatsquare'; configs.bass.volume = 0;
-      configs.chords.oscillator.type = 'fatsawtooth'; configs.chords.volume = -12;
-      configs.arpeggio.oscillator.type = 'sawtooth'; configs.arpeggio.volume = -9;
+      configs.chords.oscillator.type = 'fatsawtooth'; configs.chords.volume = -10; // Was -12
+      configs.arpeggio.oscillator.type = 'sawtooth'; configs.arpeggio.volume = -8; // Was -9
       configs.kick.octaves = 8; configs.kick.envelope.decay = 0.3;
-      configs.snare.envelope.decay = 0.1; configs.snare.volume = -8;
+      configs.snare.envelope.decay = 0.1; configs.snare.volume = -7; // Was -8
     } else if (genreLower.includes('jazz')) {
       configs.melody = { oscillator: { type: 'fmsine', harmonicity: 1.5, modulationIndex: 5 }, envelope: { attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.2 }, volume: -6 };
       configs.bass = { oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.4, sustain: 0.1, release: 0.3 }, volume: -3 };
-      configs.chords = { oscillator: { type: 'fmtriangle', harmonicity: 2, modulationIndex: 3 }, volume: -18, envelope: { attack: 0.02, decay: 0.6, sustain: 0.3, release: 0.5 } };
-      configs.arpeggio = { oscillator: { type: 'sine' }, volume: -11 }; 
+      configs.chords = { oscillator: { type: 'fmtriangle', harmonicity: 2, modulationIndex: 3 }, volume: -15, envelope: { attack: 0.02, decay: 0.6, sustain: 0.3, release: 0.5 } }; // Was -18
+      configs.arpeggio = { oscillator: { type: 'sine' }, volume: -10 }; // Was -11
     }
 
     hintsLower.forEach(hint => {
       if (hint.includes('piano') && !isKidsMode) {
         // Sampler will be used for piano, specific config in generateWav
       } else if (hint.includes('strings') || (hint.includes('pad') && !hint.includes('synth pad'))) {
-        configs.melody = { oscillator: { type: 'fatsawtooth', count: 5, spread: 30 }, envelope: { attack: 0.3, decay: 0.1, sustain: 0.9, release: 1.2 }, volume: -9 };
-        configs.chords = { oscillator: { type: 'fatsawtooth', count: 7, spread: 50 }, volume: -12, envelope: { attack: 0.5, decay: 0.2, sustain: 0.9, release: 1.5 } };
+        configs.melody = { oscillator: { type: 'fatsawtooth', count: 5, spread: 30 }, envelope: { attack: 0.3, decay: 0.1, sustain: 0.9, release: 1.2 }, volume: -8 }; // Was -9
+        configs.chords = { oscillator: { type: 'fatsawtooth', count: 7, spread: 50 }, volume: -10, envelope: { attack: 0.5, decay: 0.2, sustain: 0.9, release: 1.5 } }; // Was -12
       } else if (hint.includes('synth lead') && !isKidsMode) {
         configs.melody = { oscillator: { type: 'pwm', modulationFrequency: 0.3 }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.7, release: 0.6 }, volume: -3 };
       } else if (hint.includes('acoustic guitar') && !isKidsMode) {
          configs.melody = { oscillator: { type: 'fmtriangle', harmonicity: 1.2, modulationIndex: 12 }, envelope: { attack: 0.01, decay: 0.25, sustain: 0.01, release: 0.15}, volume: -7 };
-         configs.chords = { oscillator: { type: 'fmtriangle', harmonicity: 1.5, modulationIndex: 10 }, volume: -13, envelope: { attack: 0.02, decay: 0.4, sustain: 0.05, release: 0.25} };
+         configs.chords = { oscillator: { type: 'fmtriangle', harmonicity: 1.5, modulationIndex: 10 }, volume: -12, envelope: { attack: 0.02, decay: 0.4, sustain: 0.05, release: 0.25} }; // Was -13
       } else if (hint.includes('flute')) {
         configs.melody = { oscillator: { type: 'triangle8' }, envelope: { attack: 0.06, decay: 0.15, sustain: 0.6, release: 0.35 }, volume: -8 };
       } else if (hint.includes('bell') || hint.includes('xylophone')) {
         configs.melody = { oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.5, sustain: 0.01, release: 0.3, attackCurve: 'exponential' }, volume: -6 };
-        configs.arpeggio = { oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.2, sustain: 0.01, release: 0.1 }, volume: -9 };
+        configs.arpeggio = { oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.2, sustain: 0.01, release: 0.1 }, volume: -8 }; // Was -9
       }
       if (hint.includes('synth bass')) configs.bass = { oscillator: {type: 'fatsquare', count: 3, spread: 15}, envelope: {attack: 0.01, decay: 0.1, sustain: 0.8, release: 0.3}, volume: 0};
       else if (hint.includes('acoustic bass') && !genreLower.includes('jazz')) configs.bass = { oscillator: {type: 'sine'}, envelope: {attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.3}, volume: -3};
-      if (hint.includes('synth pad')) configs.chords = {oscillator: {type: 'fatsawtooth', count: 4, spread: 60}, volume: -15, envelope: {attack: 0.4, decay: 0.1, sustain: 0.9, release: 1.2}};
+      if (hint.includes('synth pad')) configs.chords = {oscillator: {type: 'fatsawtooth', count: 4, spread: 60}, volume: -12, envelope: {attack: 0.4, decay: 0.1, sustain: 0.9, release: 1.2}}; // Was -15
       if (hint.includes('arp') || hint.includes('arpeggio') || hint.includes('pluck') || hint.includes('sequence')) {
         configs.arpeggio.oscillator.type = 'pwm'; 
-        configs.arpeggio.volume = -9;
+        configs.arpeggio.volume = -8; // Was -9
       }
     });
   }
@@ -215,7 +216,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         return null;
     }
 
-    const renderDuration = durationSeconds + 2.0; 
+    const renderDuration = durationSeconds + 2.0; // Add some tail time
 
     const tempoToSet = (typeof params.tempoBpm === 'number' && params.tempoBpm > 30 && params.tempoBpm < 300)
                        ? params.tempoBpm
@@ -267,10 +268,10 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       
       Object.values(synths).forEach(synth => {
         if (synth && typeof synth.toDestination === 'function') {
-          synth.toDestination(); // Connect audio nodes to destination
+          synth.toDestination(); 
         }
       });
-      if (synths.melody && usePianoSampler) {
+      if (synths.melody && usePianoSampler && typeof (synths.melody as Tone.Sampler).loaded === 'boolean') {
         await (synths.melody as Tone.Sampler).loaded;
       }
 
@@ -299,7 +300,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                     (activeSynthForPart as Tone.PolySynth | Tone.Sampler).triggerAttackRelease(value.note, effectiveDuration, time, value.velocity);
                 }
             }));
-            // DO NOT call part.toDestination() here
+            // part.toDestination(); // This was an error, synths are already connected
 
             const pitchedTrackEvents: EventTime[] = track.notes.map(n => ({
                 time: n.time, note: n.name, duration: n.duration, velocity: n.velocity,
@@ -338,7 +339,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                     }
                 }
             }));
-            // DO NOT call drumPart.toDestination() here
+            // drumPart.toDestination(); // This was an error, synths are already connected
             
             const drumEvents: EventTime[] = track.notes.map(n => ({
                 time: n.time, midi: n.midi, duration: n.duration, velocity: n.velocity,
@@ -361,3 +362,4 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
