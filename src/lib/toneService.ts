@@ -218,11 +218,12 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     if (Tone && Tone.Transport && Tone.Transport.bpm) {
         Tone.Transport.bpm.value = tempoToSet;
     } else {
-        console.warn("Tone.Transport.bpm is not available to set globally. Offline rendering might use default tempo.");
+        console.warn("Global Tone.Transport.bpm is not available to set. Offline rendering might use default tempo.");
     }
 
     const audioBuffer = await Tone.Offline(async (transport) => {
-      // No longer setting transport.bpm.value here
+      // The 'transport' argument in Tone.Offline is the offline context's transport.
+      // Tempo should ideally be inherited from the global Tone.Transport set before calling Tone.Offline.
 
       const synthConfigs = getSynthConfigurations(
         params.instrumentHints,
@@ -283,10 +284,10 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             else if (event.midi === 42 || event.midi === 44 || event.midi === 46) {
               drumSynth = synths.hiHat;
               pitchToPlay = event.midi === 46 ? 400 : 250;
-            } else if (event.midi === 49 || event.midi === 57) {
-                drumSynth = synths.hiHat;
-                pitchToPlay = 600;
-                effectiveDuration = 0.5 + Math.random() * 0.5;
+            } else if (event.midi === 49 || event.midi === 57) { // Crash/Ride cymbals
+                drumSynth = synths.hiHat; // Using hiHat synth for cymbals for simplicity in Tone.js
+                pitchToPlay = 600; // Higher frequency for cymbal-like sound
+                effectiveDuration = 0.5 + Math.random() * 0.5; // Longer duration for cymbals
                 if(drumSynth instanceof Tone.MetalSynth) drumSynth.set({envelope: {decay: effectiveDuration, release: effectiveDuration}});
             }
 
@@ -307,10 +308,12 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         } else { // Pitched tracks
           let activeSynth: Tone.PolySynth | Tone.Sampler | undefined;
 
+          // Basic logic for assigning synths based on instrument hints or track role
+          // This might need refinement based on how midiService assigns instruments to tracks
           if (trackIndex === 0 || track.instrument.number === instrumentMapping.melody) activeSynth = synths.melody;
           else if (track.instrument.number === instrumentMapping.bass) activeSynth = synths.bass;
           else if (track.instrument.number === instrumentMapping.chordsPad) activeSynth = synths.chords;
-          else activeSynth = synths.melody;
+          else activeSynth = synths.melody; // Default to melody synth if no specific match
 
           if (activeSynth) {
             const trackEvents: EventTime[] = track.notes.map(n => ({
@@ -325,7 +328,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             if (correctedTrackEvents.length > 0) {
                 allParts.push(new Tone.Part(((time, value) => {
                     if (value.name && typeof value.name === 'string' && activeSynth) {
-                        const effectiveDuration = Math.max(value.duration, 0.05);
+                        const effectiveDuration = Math.max(value.duration, 0.05); // Ensure duration is positive
                         activeSynth.triggerAttackRelease(value.name, effectiveDuration, time, value.velocity);
                     }
                 }) as any, correctedTrackEvents));
@@ -336,14 +339,8 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
       allParts.forEach(part => part.start(0));
 
-      if (transport && typeof transport.start === 'function') {
-        transport.start(0);
-      } else {
-        console.error("Tone.Offline: transport.start is not a function. Cannot start offline rendering properly.");
-        if (Tone && Tone.Transport && typeof Tone.Transport.start === 'function') {
-             Tone.Transport.start(0);
-        }
-      }
+      // Removed the explicit transport.start(0) call from here.
+      // The Tone.Offline process itself handles starting its internal transport.
 
     }, renderDuration);
 
