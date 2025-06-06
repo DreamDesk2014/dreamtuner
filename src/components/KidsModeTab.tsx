@@ -17,11 +17,13 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { generateMidiFile } from '@/lib/midiService';
 import { dataURLtoFile } from '@/lib/utils';
+import { logEvent, getSessionId } from '@/lib/firestoreService'; // Import Firestore logging
 
 interface KidsModeTabProps {
   onTuneCreation: (
     musicInput: AppInput, 
-    artInput: RenderKidsDrawingInput | null
+    artInput: RenderKidsDrawingInput | null,
+    drawingToolSummary?: { colorsUsedCount: number; wasClearCanvasUsed: boolean; } // Add summary here
   ) => Promise<{ musicError?: string; artError?: string; musicParamsResult?: MusicParameters, artUrlResult?: string }>;
   isLoadingMusic: boolean;
   isRenderingArt: boolean;
@@ -30,7 +32,7 @@ interface KidsModeTabProps {
   selectedGenre: string;
   onGenreChange: (genre: string) => void;
   isClientMounted: boolean;
-  currentMusicParamsFromPage: MusicParameters | null; // New prop
+  currentMusicParamsFromPage: MusicParameters | null;
 }
 
 export const KidsModeTab: React.FC<KidsModeTabProps> = ({
@@ -42,7 +44,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
   selectedGenre,
   onGenreChange,
   isClientMounted,
-  currentMusicParamsFromPage, // Use the prop
+  currentMusicParamsFromPage,
 }) => {
   const drawingCanvasRef = useRef<{ getDataURL: () => string; clearCanvas: () => void; getRecordedNotesSequence: () => string[] }>(null);
   const genreSelectId = useId();
@@ -60,14 +62,21 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
   } = useSpeechRecognition();
 
   const [hasDrawingContent, setHasDrawingContent] = useState<boolean>(false);
-  // Removed local currentMusicParams, will use currentMusicParamsFromPage from props
   const [isSharingKidsCreation, setIsSharingKidsCreation] = useState<boolean>(false);
   const [shareKidsError, setShareKidsError] = useState<string | null>(null);
 
+  // State for drawing tool usage summary
+  const [colorsUsedThisSession, setColorsUsedThisSession] = useState<Set<string>>(new Set());
+  const [wasClearCanvasUsedThisSession, setWasClearCanvasUsedThisSession] = useState<boolean>(false);
+
+  const resetDrawingToolSummary = () => {
+    setColorsUsedThisSession(new Set());
+    setWasClearCanvasUsedThisSession(false);
+  };
 
   useEffect(() => {
     if (drawingCanvasRef.current) {
-      drawingCanvasRef.current.clearCanvas();
+      drawingCanvasRef.current.clearCanvas(); // This will also trigger onClearCanvasUserAction
     }
     resetKidsTranscript();
     if (isListeningKids) {
@@ -75,12 +84,23 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
     }
     setHasDrawingContent(false);
     setLocalError(null);
-    // currentMusicParams is now managed by page.tsx
     setShareKidsError(null);
+    resetDrawingToolSummary(); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
+  const handleColorChangeForLogging = (color: string) => {
+    setColorsUsedThisSession(prev => new Set(prev).add(color));
+  };
+
+  const handleClearCanvasForLogging = () => {
+    setWasClearCanvasUsedThisSession(true);
+    // Colors used should ideally reset if the canvas is cleared and drawing starts anew
+    // For simplicity, we log if clear was used *at any point* before this submission.
+    // A more complex logic could reset colorsUsedThisSession here too.
+  };
+
   const handleLocalDrawingSubmit = async () => {
-    // currentMusicParams is now managed by page.tsx
     setShareKidsError(null);
 
     if (!drawingCanvasRef.current) {
@@ -157,17 +177,30 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
         return;
     }
     
-    // onTuneCreation will now also set currentMusicParams in page.tsx
-    await onTuneCreation(appInputForMusic, renderArtInput);
-    // No need to set currentMusicParams here, it's handled by page.tsx via the callback
+    const drawingToolSummary = {
+      colorsUsedCount: colorsUsedThisSession.size,
+      wasClearCanvasUsed: wasClearCanvasUsedThisSession,
+    };
+    
+    await onTuneCreation(appInputForMusic, renderArtInput, drawingToolSummary);
+    resetDrawingToolSummary(); // Reset summary for next creation
   };
 
   const handleKidsVoiceInputToggle = () => {
     if (isListeningKids) {
       stopListeningKids();
+      logEvent('user_interactions', {
+        eventName: 'kids_voice_hint_stopped',
+        eventDetails: { transcriptLength: kidsVoiceTranscript.trim().length },
+        sessionId: getSessionId(),
+      }).catch(console.error);
     } else {
       resetKidsTranscript();
       startListeningKids();
+      logEvent('user_interactions', {
+        eventName: 'kids_voice_hint_started',
+        sessionId: getSessionId(),
+      }).catch(console.error);
     }
   };
   
@@ -179,6 +212,10 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      logEvent('user_interactions', {
+        eventName: 'kids_art_downloaded',
+        sessionId: getSessionId(),
+      }).catch(console.error);
     }
   };
 
@@ -191,10 +228,15 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
         description: "Web Share API is not available on your browser.",
       });
       setShareKidsError("Web Share API not supported.");
+      logEvent('errors', { 
+        eventName: 'share_api_not_supported', 
+        eventDetails: { mode: 'kids' },
+        sessionId: getSessionId() 
+      }).catch(console.error);
       return;
     }
 
-    if (!aiKidsArtUrlProp && !currentMusicParamsFromPage) { // Use prop here
+    if (!aiKidsArtUrlProp && !currentMusicParamsFromPage) {
       toast({
         variant: "destructive",
         title: "Nothing to Share",
@@ -207,6 +249,12 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
     const filesToShareAttempt: (File | null)[] = [];
     let shareText = "Check out what I made with DreamTuner Kids!";
     
+    logEvent('user_interactions', { 
+      eventName: 'kids_share_initiated', 
+      eventDetails: { hasArt: !!aiKidsArtUrlProp, hasMusic: !!currentMusicParamsFromPage },
+      sessionId: getSessionId() 
+    }).catch(console.error);
+
     try {
       if (aiKidsArtUrlProp) {
         const artFile = dataURLtoFile(aiKidsArtUrlProp, "dreamtuner_ai_art.png");
@@ -214,8 +262,8 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
         if (!artFile) console.warn("Could not convert AI art to a shareable file.");
       }
 
-      if (currentMusicParamsFromPage) { // Use prop here
-        const midiDataUri = generateMidiFile(currentMusicParamsFromPage); // Use prop here
+      if (currentMusicParamsFromPage) { 
+        const midiDataUri = generateMidiFile(currentMusicParamsFromPage); 
         if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
           let baseFileName = 'dreamtuner_kids_music';
           if(currentMusicParamsFromPage.generatedIdea) baseFileName = currentMusicParamsFromPage.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,25);
@@ -223,22 +271,14 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
           filesToShareAttempt.push(midiFile);
           if(!midiFile) console.warn("Could not convert MIDI data to a shareable file for Kids Mode.");
         }
-        if (currentMusicParamsFromPage.generatedIdea) { // Use prop here
-            shareText += `\nMusical Idea: "${currentMusicParamsFromPage.generatedIdea}"`; // Use prop here
+        if (currentMusicParamsFromPage.generatedIdea) {
+            shareText += `\nMusical Idea: "${currentMusicParamsFromPage.generatedIdea}"`;
         }
       }
 
       const validFilesToShare = filesToShareAttempt.filter(file => file !== null) as File[];
 
       if (validFilesToShare.length === 0) {
-        // console.warn("No valid files were prepared for sharing.");
-        // toast({
-        //   variant: "default",
-        //   title: "Nothing to Share Yet",
-        //   description: "Could not prepare files for sharing.",
-        // });
-        // setIsSharingKidsCreation(false);
-        // return;
         throw new Error("No shareable content could be prepared.");
       }
 
@@ -248,25 +288,42 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
         files: validFilesToShare,
       };
       
-      console.log("Attempting to share (Kids Mode):", shareData);
       await navigator.share(shareData);
       toast({ title: "Shared Creation Successfully!" });
+      logEvent('user_interactions', { 
+        eventName: 'kids_share_success', 
+        sessionId: getSessionId() 
+      }).catch(console.error);
 
     } catch (error: any) {
       if (error.name === 'AbortError') {
         toast({ title: "Share Cancelled", variant: "default" });
+        logEvent('user_interactions', { 
+            eventName: 'kids_share_cancelled', 
+            sessionId: getSessionId() 
+        }).catch(console.error);
       } else if (error.name === 'NotAllowedError') {
         toast({
           variant: "destructive",
           title: "Share Permission Denied",
-          description: "Your browser or OS denied the share permission. This might be due to site settings or because the action wasn't recognized as directly user-initiated.",
+          description: "Your browser or OS denied the share permission.",
         });
+         logEvent('errors', { 
+            eventName: 'kids_share_error', 
+            eventDetails: { error: 'Permission Denied: ' + error.message },
+            sessionId: getSessionId() 
+        }).catch(console.error);
       } else {
         toast({
           variant: "destructive",
           title: "Share Failed",
           description: error.message || "Could not share the creation.",
         });
+        logEvent('errors', { 
+            eventName: 'kids_share_error', 
+            eventDetails: { error: error.message || "Failed to share creation." },
+            sessionId: getSessionId() 
+        }).catch(console.error);
       }
       setShareKidsError(error.message || "Failed to share creation.");
       console.error("Kids Share error:", error);
@@ -281,7 +338,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
                                    isRenderingArtProp ||
                                    (!hasDrawingContent && kidsVoiceTranscript.trim() === '');
   
-  const isShareKidsDisabled = isSharingKidsCreation || (!aiKidsArtUrlProp && !currentMusicParamsFromPage); // Use prop here
+  const isShareKidsDisabled = isSharingKidsCreation || (!aiKidsArtUrlProp && !currentMusicParamsFromPage); 
 
 
   return (
@@ -296,7 +353,9 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
             canvasContainerClassName="h-[300px] sm:h-[400px] md:h-[450px] lg:h-[500px]"
             isKidsMode={true} 
             onDrawingActivity={setHasDrawingContent}
-            initialBackgroundColor="#FFFFFF" // Changed from backgroundColor
+            initialBackgroundColor="#FFFFFF"
+            onColorChange={handleColorChangeForLogging}
+            onClearCanvas={handleClearCanvasForLogging}
         />
         
         <div className="mt-4 space-y-2">

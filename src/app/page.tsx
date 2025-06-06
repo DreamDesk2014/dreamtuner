@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Download, Share2, Disc3, SlidersHorizontal, Library, Users } from 'lucide-react';
 import { dataURLtoFile } from '@/lib/utils';
 import { generateMidiFile } from '@/lib/midiService';
-import { logEvent, getSessionId } from '@/lib/firestoreService'; // Import Firestore logging
+import { logEvent, getSessionId } from '@/lib/firestoreService';
 
 const LOCAL_STORAGE_KEY = 'dreamTunerLastSession';
 
@@ -61,7 +61,6 @@ export default function DreamTunerPage() {
 
   useEffect(() => {
     setIsClientMounted(true);
-    // Log app load event
     logEvent('user_interactions', { 
       eventName: 'app_loaded', 
       eventDetails: { userAgent: navigator.userAgent, initialMode: currentMode },
@@ -83,7 +82,6 @@ export default function DreamTunerPage() {
         if (sessionData.currentMode === 'kids' && sessionData.musicParams) {
             setCurrentKidsMusicParams(sessionData.musicParams);
         }
-         // Log session restored event
         logEvent('user_interactions', { 
           eventName: 'session_restored', 
           eventDetails: { 
@@ -104,8 +102,7 @@ export default function DreamTunerPage() {
         sessionId: getSessionId() 
       }).catch(console.error);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // CurrentMode is not needed in deps for initial load log
+  }, []); 
 
   useEffect(() => {
     if (isClientMounted && (musicParams || aiKidsArtUrl || standardModeAiArtUrl)) {
@@ -143,6 +140,7 @@ export default function DreamTunerPage() {
   };
 
   const handleModeChange = (newMode: 'standard' | 'kids' | 'comingSoon') => {
+    const oldMode = currentMode;
     setCurrentMode(newMode);
     setMusicParams(null);
     setError(null);
@@ -154,11 +152,14 @@ export default function DreamTunerPage() {
     setCurrentKidsMusicParams(null);
     if (isClientMounted && newMode === 'comingSoon') { 
         localStorage.removeItem(LOCAL_STORAGE_KEY);
+        logEvent('user_interactions', { 
+            eventName: 'coming_soon_tab_viewed', 
+            sessionId: getSessionId() 
+        }).catch(console.error);
     }
-    // Log mode change event
     logEvent('user_interactions', { 
       eventName: 'mode_changed', 
-      eventDetails: { newMode: newMode, previousMode: currentMode }, // currentMode here is the old mode before setCurrentMode completes
+      eventDetails: { newMode: newMode, previousMode: oldMode },
       sessionId: getSessionId()
     }).catch(console.error);
   };
@@ -174,7 +175,13 @@ export default function DreamTunerPage() {
     const startTime = Date.now();
     logEvent('user_interactions', { 
       eventName: 'standard_generation_started', 
-      eventDetails: { inputType: input.type, genre: input.genre, mode: input.mode },
+      eventDetails: { 
+        inputType: input.type, 
+        genre: input.genre, 
+        mode: input.mode,
+        userEnergyUsed: input.userEnergy !== undefined && input.userEnergy !== 0, // Assuming 0 is default float for AI Decides
+        userPositivityUsed: input.userPositivity !== undefined && input.userPositivity !== 0,
+      },
       sessionId: getSessionId()
     }).catch(console.error);
 
@@ -261,12 +268,12 @@ export default function DreamTunerPage() {
     } finally {
       setIsLoadingMusic(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGenre /* Dependencies for useCallback should reflect values it uses from outer scope, getSessionId does not change */]);
+  }, [selectedGenre, getSessionId]);
 
   const handleKidsModeTuneCreation = useCallback(async (
     musicInput: AppInput,
-    artInput: RenderKidsDrawingInput | null
+    artInput: RenderKidsDrawingInput | null,
+    drawingToolSummary?: { colorsUsedCount: number; wasClearCanvasUsed: boolean; }
   ): Promise<{ musicError?: string; artError?: string; musicParamsResult?: MusicParameters, artUrlResult?: string }> => {
 
     setIsLoadingMusic(true);
@@ -287,7 +294,9 @@ export default function DreamTunerPage() {
       eventDetails: { 
         hasDrawing: !!artInput?.drawingDataUri, 
         hasVoiceHint: !!artInput?.originalVoiceHint,
-        genre: musicInput.genre 
+        genre: musicInput.genre,
+        drawingSoundSequenceLength: musicInput.drawingSoundSequence?.split(',').length || 0,
+        ...(drawingToolSummary || {}) // Add drawing tool summary
       },
       sessionId: getSessionId()
     }).catch(console.error);
@@ -402,8 +411,7 @@ export default function DreamTunerPage() {
     }).catch(console.error);
 
     return { musicError: musicGenError, artError: artRenderError, musicParamsResult: musicParametersResult, artUrlResult: artRenderUrl };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGenre /* Dependencies for useCallback */]);
+  }, [selectedGenre, getSessionId]);
 
 
   const handleRegenerateIdea = useCallback(async () => {
@@ -514,6 +522,36 @@ export default function DreamTunerPage() {
       }).catch(console.error);
     }
   };
+  
+  const handleDownloadMidi = () => {
+    if (!musicParams) return;
+    const midiDataUri = generateMidiFile(musicParams);
+    if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
+        let baseFileName = 'dreamtuner_music';
+        if (musicParams.generatedIdea) {
+            baseFileName = musicParams.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0, 25);
+        }
+        const link = document.createElement('a');
+        link.href = midiDataUri;
+        link.download = `${baseFileName}.mid`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        logEvent('user_interactions', { 
+            eventName: 'midi_downloaded', 
+            eventDetails: { mode: currentMode, idea: musicParams.generatedIdea.substring(0,50) },
+            sessionId: getSessionId() 
+        }).catch(console.error);
+    } else {
+        toast({ variant: "destructive", title: "MIDI Error", description: "Could not generate MIDI file for download." });
+        logEvent('errors', { 
+            eventName: 'midi_download_error', 
+            eventDetails: { mode: currentMode, error: "MIDI data URI invalid or not generated" },
+            sessionId: getSessionId() 
+        }).catch(console.error);
+    }
+  };
+
 
   const handleShareStandardCreation = async () => {
     setShareStandardArtError(null);
@@ -828,6 +866,12 @@ export default function DreamTunerPage() {
                 </Button>
               </div>
               {shareStandardArtError && <p className="text-red-400 text-xs text-center mt-2">{`Share Error: ${shareStandardArtError}`}</p>}
+              {musicParams && (
+                 <Button onClick={handleDownloadMidi} variant="outline" className="border-accent text-accent hover:bg-accent/10">
+                    <Download className="w-4 h-4 mr-2" />
+                    Download MIDI
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}
@@ -837,3 +881,4 @@ export default function DreamTunerPage() {
     </div>
   );
 }
+

@@ -17,30 +17,29 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { InfoIcon, Sun, Moon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { logEvent, getSessionId } from '@/lib/firestoreService'; // Import Firestore logging
 
 export const NavigationBar: React.FC = () => {
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactMessage, setContactMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light'); // Default to light
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
     const storedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
+    let initialTheme = 'light';
     if (storedTheme) {
-      setTheme(storedTheme);
-      if (storedTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      initialTheme = storedTheme;
     } else if (systemPrefersDark) {
-      setTheme('dark');
+      initialTheme = 'dark';
+    }
+    setTheme(initialTheme);
+    if (initialTheme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
-      setTheme('light');
       document.documentElement.classList.remove('dark');
     }
   }, []);
@@ -54,17 +53,31 @@ export const NavigationBar: React.FC = () => {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    logEvent('user_interactions', {
+      eventName: 'theme_changed',
+      eventDetails: { newTheme },
+      sessionId: getSessionId(),
+    }).catch(console.error);
+  };
+
+  const handleAboutOpen = () => {
+    logEvent('user_interactions', {
+      eventName: 'about_dialog_opened',
+      sessionId: getSessionId(),
+    }).catch(console.error);
   };
 
   const handleSubmitContactForm = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    console.log('Contact Form Submission:');
-    console.log('Name:', contactName);
-    console.log('Email:', contactEmail);
-    console.log('Message:', contactMessage);
-
+    logEvent('user_interactions', {
+        eventName: 'contact_form_submitted',
+        eventDetails: { nameLength: contactName.length, emailProvided: !!contactEmail, messageLength: contactMessage.length },
+        sessionId: getSessionId()
+    }).catch(console.error);
+    
+    // Simulate sending the message
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     toast({
@@ -83,7 +96,7 @@ export const NavigationBar: React.FC = () => {
       <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label="Toggle theme">
         {theme === 'light' ? <Moon className="h-5 w-5 text-slate-600 hover:text-slate-800 transition-colors" /> : <Sun className="h-5 w-5 text-yellow-400 hover:text-yellow-300 transition-colors" />}
       </Button>
-      <Dialog>
+      <Dialog onOpenChange={(open) => { if (open) handleAboutOpen(); }}>
         <DialogTrigger asChild>
           <Button variant="ghost" size="icon" aria-label="About DreamTuner">
             <InfoIcon className="h-5 w-5 text-destructive hover:text-destructive/80 transition-colors" />
@@ -100,7 +113,7 @@ export const NavigationBar: React.FC = () => {
           <div className="flex-grow overflow-y-auto pr-3 space-y-3 text-muted-foreground py-3 text-sm leading-relaxed">
             <div id="about-dialog-description">
               <p>
-                DreamTuner is an innovative application that translates your textual descriptions, images, or video/audio concepts into unique musical parameters.
+                DreamTuner is an innovative application that tunes anything into music!
               </p>
               <p>
                 Using advanced AI, it explores the synesthetic connections between different forms of media and music, allowing you to discover the sonic essence of your ideas.
@@ -183,3 +196,4 @@ export const NavigationBar: React.FC = () => {
     </nav>
   );
 };
+

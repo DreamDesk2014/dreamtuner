@@ -10,6 +10,8 @@ interface DrawingCanvasProps {
   isKidsMode?: boolean;
   onDrawingActivity?: (hasContent: boolean) => void;
   canvasContainerClassName?: string;
+  onColorChange?: (color: string) => void; // Callback for color change
+  onClearCanvas?: () => void; // Callback for clear action
 }
 
 interface CanvasPoint {
@@ -41,9 +43,9 @@ const COLOR_TO_NOTE_MAP: Record<string, { frequency: number; name: string }> = {
 const NOTE_DURATION_MS = 250; 
 const NOTE_DURATION_MS_WHILE_DRAWING = 180; 
 const PIXELS_PER_NOTE = 30;
-const TONE_ATTACK_TIME = 0.01; // Short attack time
-const TONE_RELEASE_TIME_PALETTE = 0.2; // How long it takes for palette click sound to fade out after initial duration
-const TONE_RELEASE_TIME_DRAWING = 0.15; // How long it takes for drawing sound to fade out
+const TONE_ATTACK_TIME = 0.01; 
+const TONE_RELEASE_TIME_PALETTE = 0.2; 
+const TONE_RELEASE_TIME_DRAWING = 0.15; 
 
 export const DrawingCanvas = forwardRef<
   {
@@ -56,7 +58,9 @@ export const DrawingCanvas = forwardRef<
     initialBackgroundColor = '#FFFFFF', 
     isKidsMode = false, 
     onDrawingActivity,
-    canvasContainerClassName 
+    canvasContainerClassName,
+    onColorChange,
+    onClearCanvas,
 }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -232,7 +236,7 @@ export const DrawingCanvas = forwardRef<
     const gainNode = audioContextRef.current.createGain();
     const now = audioContextRef.current.currentTime;
     
-    oscillator.type = 'triangle'; // Changed from 'sine' to 'triangle' for a softer, richer tone
+    oscillator.type = 'triangle'; 
     oscillator.frequency.setValueAtTime(noteDetails.frequency, now);
     
     const attackTime = TONE_ATTACK_TIME;
@@ -241,15 +245,14 @@ export const DrawingCanvas = forwardRef<
     const releaseTimeConstant = isPaletteClick ? TONE_RELEASE_TIME_PALETTE : TONE_RELEASE_TIME_DRAWING;
 
     gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.2, peakTime); // Peak volume
-    // Exponential decay for a more natural, piano-like release
+    gainNode.gain.linearRampToValueAtTime(0.2, peakTime); 
     gainNode.gain.setTargetAtTime(0, peakTime, releaseTimeConstant); 
 
     oscillator.connect(gainNode);
     gainNode.connect(audioContextRef.current.destination);
 
     oscillator.start(now);
-    oscillator.stop(now + duration + releaseTimeConstant * 3); // Ensure oscillator stops after sound fades
+    oscillator.stop(now + duration + releaseTimeConstant * 3); 
   };
 
   const startDrawing = (eventX: number, eventY: number) => {
@@ -390,7 +393,7 @@ export const DrawingCanvas = forwardRef<
     stopDrawing();
   };
 
-  const clearCanvas = useCallback(() => {
+  const clearCanvasInternal = useCallback(() => {
     pathsRef.current = [];
     currentPathRef.current = null;
     redrawCanvas(); 
@@ -404,7 +407,8 @@ export const DrawingCanvas = forwardRef<
     distanceSinceLastNoteRef.current = 0;
     if (isDrawing) setIsDrawing(false); 
     if (onDrawingActivity) onDrawingActivity(false);
-  }, [redrawCanvas, isKidsMode, onDrawingActivity, isDrawing]);
+    if (onClearCanvas) onClearCanvas(); // Call the new callback
+  }, [redrawCanvas, isKidsMode, onDrawingActivity, isDrawing, onClearCanvas]);
 
   const toggleEraser = () => {
     setIsErasing(!isErasing);
@@ -415,6 +419,21 @@ export const DrawingCanvas = forwardRef<
     setCurrentBrushSizeName(sizeName);
     setCurrentLineWidth(BRUSH_SIZES[sizeName]);
     setIsErasing(false); 
+  };
+
+  const handleColorButtonClick = (colorValue: string) => {
+    if (isDrawing) stopDrawing();
+    setIsErasing(false);
+    setCurrentColor(colorValue);
+    if (onColorChange) onColorChange(colorValue); // Call the new callback
+    if (isKidsMode) {
+      playToneForColor(colorValue, true);
+      const noteDetails = COLOR_TO_NOTE_MAP[colorValue];
+      if (noteDetails && (colorValue !== lastPlayedColorForSound || recordedNotesSequence.length === 0)) {
+        setRecordedNotesSequence(prev => [...prev, noteDetails.name]);
+        setLastPlayedColorForSound(colorValue);
+      }
+    }
   };
 
   useImperativeHandle(ref, () => ({
@@ -442,7 +461,7 @@ export const DrawingCanvas = forwardRef<
       }
       return tempCanvas.toDataURL('image/png');
     },
-    clearCanvas,
+    clearCanvas: clearCanvasInternal,
     getRecordedNotesSequence: () => recordedNotesSequence,
   }));
 
@@ -482,19 +501,7 @@ export const DrawingCanvas = forwardRef<
               key={color.name}
               variant="outline"
               size="icon"
-              onClick={() => {
-                if (isDrawing) stopDrawing(); 
-                setIsErasing(false);
-                setCurrentColor(color.value);
-                if (isKidsMode) {
-                  playToneForColor(color.value, true);
-                  const noteDetails = COLOR_TO_NOTE_MAP[color.value];
-                  if (noteDetails && (color.value !== lastPlayedColorForSound || recordedNotesSequence.length === 0) ) {
-                     setRecordedNotesSequence(prev => [...prev, noteDetails.name]);
-                     setLastPlayedColorForSound(color.value);
-                  }
-                }
-              }}
+              onClick={() => handleColorButtonClick(color.value)}
               className={cn(
                 "w-8 h-10 rounded-md border-2 flex flex-col justify-center items-center p-1",
                 currentColor === color.value && !isErasing ? 'ring-2 ring-offset-2 ring-accent' : 'border-gray-300',
@@ -538,7 +545,7 @@ export const DrawingCanvas = forwardRef<
           </Button>
           <Button
             variant="outline"
-            onClick={clearCanvas}
+            onClick={clearCanvasInternal}
             className="h-10 px-3"
             aria-label="Clear Canvas"
           >
