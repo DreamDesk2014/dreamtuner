@@ -177,7 +177,7 @@ const getSynthConfigurations = (
       else if (hint.includes('acoustic bass') && !genreLower.includes('jazz')) configs.bass = { oscillator: {type: 'sine'}, envelope: {attack: 0.01, decay: 0.5, sustain: 0.1, release: 0.3}, volume: -3};
       if (hint.includes('synth pad')) configs.chords = {oscillator: {type: 'fatsawtooth', count: 4, spread: 60}, volume: -15, envelope: {attack: 0.4, decay: 0.1, sustain: 0.9, release: 1.2}};
       if (hint.includes('arp') || hint.includes('arpeggio') || hint.includes('pluck') || hint.includes('sequence')) {
-        configs.arpeggio.oscillator.type = 'pwm';
+        configs.arpeggio.oscillator.type = 'pwm'; 
         configs.arpeggio.volume = -9;
       }
     });
@@ -229,10 +229,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     }
 
 
-    const audioBuffer = await Tone.Offline(async (offlineTransportInternal) => {
-      if (Tone && Tone.Transport && Tone.Transport.bpm) { // Ensure global context is also set for good measure
-          Tone.Transport.bpm.value = tempoToSet;
-      }
+    const audioBuffer = await Tone.Offline(async (offlineTransportInternalDONTUSE) => {
 
       const synthConfigs = getSynthConfigurations(
         params.instrumentHints,
@@ -275,9 +272,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         }
       });
       if (synths.melody && usePianoSampler) {
-        // console.log("Piano sampler loading started for offline rendering...");
         await (synths.melody as Tone.Sampler).loaded;
-        // console.log("Piano sampler loaded for offline rendering.");
       }
 
       const allParts: Tone.Part[] = [];
@@ -294,7 +289,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
           else if (track.instrument.number === instrumentMapping.bass) activeSynthForPart = synths.bass;
           else if (track.instrument.number === instrumentMapping.chordsPad) activeSynthForPart = synths.chords;
           else if (track.instrument.number === instrumentMapping.arpeggioSynth) activeSynthForPart = synths.arpeggio;
-          else { // Fallback to melody synth if no specific mapping
+          else { 
             activeSynthForPart = synths.melody;
           }
         }
@@ -306,7 +301,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                     (activeSynthForPart as Tone.PolySynth | Tone.Sampler).triggerAttackRelease(value.note, effectiveDuration, time, value.velocity);
                 }
             }));
-            part.toDestination();
+            // part.toDestination(); // Removed: Synths are already connected
 
             const pitchedTrackEvents: EventTime[] = track.notes.map(n => ({
                 time: n.time, note: n.name, duration: n.duration, velocity: n.velocity,
@@ -317,46 +312,49 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                     part.add(event.time, event);
                 }
             });
+            part.start(0);
             allParts.push(part);
         } else if (isDrumTrack) {
             const drumPart = new Tone.Part(((time, value) => {
-                let drumSynthToUse: Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
-                let pitchForDrum: string | number | undefined = undefined;
-                let durationForDrum = Math.max(value.duration > 0 ? value.duration : 0.05, 0.05);
+                let drumSynth: Tone.MembraneSynth | Tone.NoiseSynth | Tone.MetalSynth | undefined;
+                let pitchToPlay: string | number | undefined = undefined;
+                let effectiveDuration = Math.max(value.duration > 0 ? value.duration : 0.05, 0.05);
 
-                if (value.midi === 35 || value.midi === 36) { drumSynthToUse = synths.kick; pitchForDrum = "C1"; }
-                else if (value.midi === 38 || value.midi === 40) { drumSynthToUse = synths.snare; }
+                if (value.midi === 35 || value.midi === 36) { drumSynth = synths.kick; pitchToPlay = "C1"; }
+                else if (value.midi === 38 || value.midi === 40) { drumSynth = synths.snare; }
                 else if (value.midi === 42 || value.midi === 44 || value.midi === 46) {
-                    drumSynthToUse = synths.hiHat;
-                    pitchForDrum = value.midi === 46 ? 400 : 250;
+                    drumSynth = synths.hiHat;
+                    pitchToPlay = value.midi === 46 ? 400 : 250;
                 } else if (value.midi === 49 || value.midi === 57) { 
-                    drumSynthToUse = synths.hiHat; pitchForDrum = 600; durationForDrum = 0.5 + Math.random() * 0.5;
-                    if(drumSynthToUse instanceof Tone.MetalSynth) drumSynthToUse.set({envelope: {decay: durationForDrum, release: durationForDrum}});
+                    drumSynth = synths.hiHat; pitchToPlay = 600; effectiveDuration = 0.5 + Math.random() * 0.5;
+                    if(drumSynth instanceof Tone.MetalSynth) drumSynth.set({envelope: {decay: effectiveDuration, release: effectiveDuration}});
                 }
                 
-                if (drumSynthToUse) {
-                    if (drumSynthToUse instanceof Tone.MembraneSynth && pitchForDrum) {
-                        drumSynthToUse.triggerAttackRelease(pitchForDrum as string, durationForDrum, time, value.velocity);
-                    } else if (drumSynthToUse instanceof Tone.NoiseSynth) {
-                        drumSynthToUse.triggerAttackRelease(durationForDrum, time, value.velocity);
-                    } else if (drumSynthToUse instanceof Tone.MetalSynth) {
-                        if (pitchForDrum && typeof pitchForDrum === 'number' && drumSynthToUse.frequency) drumSynthToUse.frequency.setValueAtTime(pitchForDrum, time);
-                        drumSynthToUse.triggerAttackRelease(durationForDrum, time, value.velocity);
+                if (drumSynth) {
+                    if (drumSynth instanceof Tone.MembraneSynth && pitchToPlay) {
+                        drumSynth.triggerAttackRelease(pitchToPlay as string, effectiveDuration, time, value.velocity);
+                    } else if (drumSynth instanceof Tone.NoiseSynth) {
+                        drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
+                    } else if (drumSynth instanceof Tone.MetalSynth) {
+                        if (pitchToPlay && typeof pitchToPlay === 'number' && drumSynth.frequency) drumSynth.frequency.setValueAtTime(pitchToPlay, time);
+                        drumSynth.triggerAttackRelease(effectiveDuration, time, value.velocity);
                     }
                 }
             }));
-            drumPart.toDestination();
+            // drumPart.toDestination(); // Removed: Synths are already connected
 
             const drumEvents: EventTime[] = track.notes.map(n => ({
                 time: n.time, midi: n.midi, duration: n.duration, velocity: n.velocity,
             }));
             const correctedDrumEvents = ensureStrictlyIncreasingTimes(drumEvents, `Drum-Track-${trackIndex}`);
-            correctedDrumEvents.forEach(event => drumPart.add(event.time, event));
+            
+            correctedDrumEvents.forEach(event => {
+                drumPart.add(event.time, event);
+            });
+            drumPart.start(0);
             allParts.push(drumPart);
         }
       });
-
-      allParts.forEach(part => part.start(0));
     }, renderDuration);
 
     const wavDataBuffer = audioBufferToWav(audioBuffer);
@@ -367,3 +365,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
+
+    
