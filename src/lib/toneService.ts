@@ -4,10 +4,11 @@ import * as Tone from 'tone';
 import { Midi as MidiFileParser, type MidiJSON } from '@tonejs/midi';
 import type { MusicParameters } from '@/types';
 import { generateMidiFile as generateMidiFileOriginal } from '@/lib/midiService';
-import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal } from '@/lib/midiService'; // Keep original name for clarity
+import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal } from '@/lib/midiService';
+import { audioBufferToWav } from "./audioBufferToWav"; // Ensure this is correctly imported
 
 const SAFE_OSC_TYPE = 'triangle' as const;
-const MIN_EFFECTIVE_DURATION_SECONDS = 4.0;
+const MIN_EFFECTIVE_DURATION_SECONDS = 4.0; // Minimum duration for rendering
 
 // Helper to convert Base64 to Uint8Array
 function base64ToUint8Array(base64: string): Uint8Array {
@@ -30,10 +31,10 @@ interface EventTime { time: number; duration: number; velocity: number; name?: s
 export function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[], trackNameForDebug: string = "Track"): T[] {
     if (!events || events.length === 0) return [];
     const sortedEvents = [...events].sort((a, b) => a.time - b.time);
-    const correctedEvents: T[] = [{ ...sortedEvents[0] }];
-    const timeEpsilon = 0.000001;
+    const correctedEvents: T[] = [{ ...sortedEvents[0] }]; // Ensure we're copying the event object
+    const timeEpsilon = 0.000001; // A very small offset
     for (let i = 1; i < sortedEvents.length; i++) {
-        const currentEvent = { ...sortedEvents[i] };
+        const currentEvent = { ...sortedEvents[i] }; // Ensure we're copying the event object
         const prevEventTime = correctedEvents[correctedEvents.length - 1].time;
         if (currentEvent.time <= prevEventTime) {
             console.warn(`[ensureStrictlyIncreasingTimes - ${trackNameForDebug}] Adjusting time for event ${i}: original ${currentEvent.time.toFixed(6)}, prev ${prevEventTime.toFixed(6)}. New time: ${(prevEventTime + timeEpsilon).toFixed(6)}`);
@@ -55,7 +56,6 @@ const getSynthConfigurations = (
 ): any => {
   const genreLower = genre.toLowerCase();
   const hintsLower = instrumentHints.map(h => h.toLowerCase());
-  const ideaLower = aiGeneratedIdea.toLowerCase();
 
   let configs: any = {
     melody: { oscillator: { type: SAFE_OSC_TYPE }, envelope: { attack: 0.03, decay: 0.2, sustain: 0.7, release: 0.6 }, volume: 0 },
@@ -66,18 +66,18 @@ const getSynthConfigurations = (
     snare: { noise: { type: 'pink' as const }, volume: -2, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } },
     hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -6 },
     piano: { // FMSynth based piano
-        harmonicity: 3.1, // Brighter, more percussive
-        modulationIndex: 16, // More complex timbre
-        oscillator: { type: "sine" as const }, // Base oscillator for FMSynth
+        harmonicity: 3.1, modulationIndex: 16,
+        oscillator: { type: "sine" as const },
         envelope: { attack: 0.01, decay: 0.7, sustain: 0.1, release: 0.9 },
-        modulation: { type: "square" as const }, // Modulator type for FM
+        modulation: { type: "square" as const },
         modulationEnvelope: { attack: 0.02, decay: 0.4, sustain: 0.01, release: 0.6 },
         volume: -3
     }
   };
 
+  // Sanitize oscillator types
   for (const key in configs) {
-    const synthConfig = configs[key as keyof any] as any;
+    const synthConfig = configs[key as keyof typeof configs];
     if (synthConfig.oscillator && (synthConfig.oscillator.type === 'pwm' || synthConfig.oscillator.type === 'pulse')) {
       console.log(`[getSynthConfigurations_Sanitize] For ${key}, replacing unsafe oscillator type '${synthConfig.oscillator.type}' with '${SAFE_OSC_TYPE}'.`);
       synthConfig.oscillator.type = SAFE_OSC_TYPE;
@@ -85,25 +85,20 @@ const getSynthConfigurations = (
       if ('width' in synthConfig.oscillator) delete synthConfig.oscillator.width;
     }
   }
-
+  
   if (isKidsMode) {
     configs.melody = { oscillator: { type: 'triangle' as const }, envelope: { attack: 0.02, decay: 0.1, sustain: 0.6, release: 0.4 }, volume: 0 };
     configs.bass = { oscillator: { type: 'sine' as const }, envelope: { attack: 0.01, decay: 0.05, sustain: 0.8, release: 0.3 }, volume: -3 };
     configs.chords = { oscillator: { type: 'square' as const }, envelope: { attack: 0.1, decay: 0.2, sustain: 0.7, release: 0.5 }, volume: -6 };
     configs.arpeggio = { oscillator: { type: 'sawtooth' as const }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.4, release: 0.2 }, volume: -9 };
-    configs.kick.volume = 0;
-    configs.snare.volume = -3;
-    configs.hiHat.volume = -9;
-    configs.hiHat.frequency = 400;
-
     if (hintsLower.some(h => h.includes('piano') || h.includes('toy piano'))) {
-        configs.melody = { ...configs.piano, volume: 0 }; // Use FMSynth piano
-        configs.chords = { ...configs.piano, volume: -6 }; // Use FMSynth piano
+        configs.melody = { ...configs.piano, volume: 0 };
+        configs.chords = { ...configs.piano, volume: -6 };
     }
   } else {
-    if (hintsLower.some(h => h.includes('piano'))) {
-        configs.melody = { ...configs.piano, volume: -3 }; // Use FMSynth piano
-        configs.chords = { ...configs.piano, volume: -9 }; // Use FMSynth piano
+     if (hintsLower.some(h => h.includes('piano'))) {
+        configs.melody = { ...configs.piano, volume: -3 };
+        configs.chords = { ...configs.piano, volume: -9 };
     } else if (genreLower.includes('electronic') || genreLower.includes('pop')) {
       configs.melody.oscillator.type = SAFE_OSC_TYPE; configs.melody.volume = 0;
       configs.bass.oscillator.type = 'fatsquare' as const; ((configs.bass.oscillator) as any).count = 3; ((configs.bass.oscillator) as any).spread = 15; configs.bass.volume = 0;
@@ -114,34 +109,21 @@ const getSynthConfigurations = (
       configs.bass.oscillator.type = 'fatsquare' as const; ((configs.bass.oscillator) as any).count = 3; ((configs.bass.oscillator) as any).spread = 20; configs.bass.volume = -3;
       configs.chords.oscillator.type = 'fatsquare' as const; ((configs.chords.oscillator) as any).count = 3; ((configs.chords.oscillator) as any).spread = 25; configs.chords.volume = -9;
     } else if (genreLower.includes('jazz')) {
-      configs.melody = { ...configs.piano, volume: -3 }; // Use FMSynth piano for jazz
+      configs.melody = { ...configs.piano, volume: -3 };
       configs.bass.oscillator.type = 'sine' as const; configs.bass.volume = -3;
-      configs.chords = { ...configs.piano, volume: -9 }; // Use FMSynth piano for jazz
+      configs.chords = { ...configs.piano, volume: -9 };
     }
   }
   return configs;
 };
 
-// GM instrument numbers for common roles (approximate)
-const GM = {
-    PIANO: 0, BRIGHT_PIANO: 1, ELECTRIC_GRAND: 2, HONKY_TONK: 3, ELECTRIC_PIANO_1: 4, ELECTRIC_PIANO_2: 5,
-    CELESTA: 8, MUSIC_BOX: 10, XYLOPHONE: 13,
-    ACOUSTIC_GUITAR_NYLON: 24, ACOUSTIC_GUITAR_STEEL: 25, ELECTRIC_GUITAR_JAZZ: 26, ELECTRIC_GUITAR_CLEAN: 27, ELECTRIC_GUITAR_MUTED: 28, OVERDRIVEN_GUITAR: 29, DISTORTION_GUITAR: 30,
-    ACOUSTIC_BASS: 32, ELECTRIC_BASS_FINGER: 33, ELECTRIC_BASS_PICK: 34, FRETLESS_BASS: 35, SLAP_BASS_1: 36, SYNTH_BASS_1: 38, SYNTH_BASS_2: 39,
-    VIOLIN: 40, VIOLA: 41, CELLO: 42, STRING_ENSEMBLE_1: 48, SYNTH_STRINGS_1: 50,
-    CHOIR_AAHS: 52, VOICE_OOHS: 53, SYNTH_VOICE: 54,
-    TRUMPET: 56, TROMBONE: 57, SAXOPHONE: 65, FLUTE: 73, RECORDER: 74,
-    LEAD_SQUARE: 80, LEAD_SAWTOOTH: 81, PAD_NEW_AGE: 88, PAD_WARM: 89, PAD_POLYSYNTH: 90, PAD_SWEEP: 95,
-    FX_CRYSTAL: 98, FX_ATMOSPHERE: 99, FX_SOUNDTRACK: 100,
-    DRUM_CHANNEL: 9 // Standard MIDI drum channel is 10 (0-indexed 9)
-};
-
+const GM = { DRUM_CHANNEL: 9 }; // Standard MIDI drum channel is 10 (0-indexed 9)
 type InstrumentRole = 'melody' | 'bass' | 'chords' | 'arpeggio' | 'piano' | 'drums' | 'unknown';
 
 const getInstrumentRole = (
     gmInstrument: number,
     channel: number,
-    mapping: ReturnType<typeof mapInstrumentHintToGMOriginal>, // This is InstrumentMapping from midiService
+    mapping: ReturnType<typeof mapInstrumentHintToGMOriginal>,
     trackName: string = ''
 ): InstrumentRole => {
     if (channel === GM.DRUM_CHANNEL) return 'drums';
@@ -153,35 +135,25 @@ const getInstrumentRole = (
     if (nameLower.includes('arp') || nameLower.includes('sequence')) return 'arpeggio';
     if (nameLower.includes('piano')) return 'piano';
 
-
     if (gmInstrument === mapping.melody) return 'melody';
     if (gmInstrument === mapping.bass) return 'bass';
     if (gmInstrument === mapping.chordsPad) return 'chords';
     if (gmInstrument === mapping.arpeggioSynth) return 'arpeggio';
-
-
-    if (gmInstrument >= GM.LEAD_SQUARE && gmInstrument <= GM.LEAD_SAWTOOTH + 7) return 'melody'; // Various leads
-    if (gmInstrument === GM.FLUTE || gmInstrument === GM.RECORDER || gmInstrument === GM.SAXOPHONE || gmInstrument === GM.VIOLIN || gmInstrument === GM.TRUMPET ) return 'melody';
-    if (gmInstrument >= GM.SYNTH_BASS_1 && gmInstrument <= GM.SYNTH_BASS_2 + 2) return 'bass'; // Synth basses
-    if (gmInstrument >= GM.ACOUSTIC_BASS && gmInstrument <= GM.FRETLESS_BASS + 2) return 'bass';
-    if (gmInstrument === GM.CELLO) return 'bass';
-
-    if (gmInstrument >= GM.PAD_NEW_AGE && gmInstrument <= GM.PAD_SWEEP + 3) return 'chords'; // Various pads
-    if (gmInstrument === GM.STRING_ENSEMBLE_1 || gmInstrument === GM.SYNTH_STRINGS_1 || gmInstrument === GM.CHOIR_AAHS) return 'chords';
-    if (gmInstrument >= GM.ACOUSTIC_GUITAR_NYLON && gmInstrument <= GM.DISTORTION_GUITAR && !nameLower.includes('lead') && !nameLower.includes('solo')) return 'chords';
-
-
-    if (gmInstrument === GM.PIANO || gmInstrument === GM.BRIGHT_PIANO || gmInstrument === GM.ELECTRIC_GRAND || gmInstrument === GM.ELECTRIC_PIANO_1 || gmInstrument === GM.ELECTRIC_PIANO_2) return 'piano';
-
-    if (gmInstrument === GM.FX_CRYSTAL || gmInstrument === GM.MUSIC_BOX || gmInstrument === GM.XYLOPHONE || gmInstrument === GM.CELESTA) return 'arpeggio';
-
-    // Defaulting based on typical ranges if no specific hint or name matches
-    if ([GM.VIOLIN, GM.TRUMPET, GM.SAXOPHONE, GM.FLUTE, GM.LEAD_SQUARE, GM.LEAD_SAWTOOTH].includes(gmInstrument)) return 'melody';
-    if ([GM.CELLO, GM.ACOUSTIC_BASS, GM.ELECTRIC_BASS_FINGER, GM.SYNTH_BASS_1].includes(gmInstrument)) return 'bass';
-    if ([GM.STRING_ENSEMBLE_1, GM.PAD_WARM, GM.ACOUSTIC_GUITAR_STEEL].includes(gmInstrument)) return 'chords';
+    
+    // Fallback based on common GM instrument ranges for broader compatibility
+    if (gmInstrument >= 0 && gmInstrument <= 7) return 'piano'; // Acoustic Pianos, Chromatic Percussion (Celesta, etc.)
+    if (gmInstrument >= 8 && gmInstrument <= 15 && gmInstrument !== GM.DRUM_CHANNEL) return 'arpeggio'; // Chromatic Percussion like Glockenspiel, Music Box
+    if (gmInstrument >= 16 && gmInstrument <= 23) return (nameLower.includes('pad') ? 'chords' : 'arpeggio'); // Organs, Accordion
+    if (gmInstrument >= 24 && gmInstrument <= 31) return (nameLower.includes('lead') || nameLower.includes('solo') ? 'melody' : 'chords'); // Guitars
+    if (gmInstrument >= 32 && gmInstrument <= 39) return 'bass'; // Basses
+    if (gmInstrument >= 40 && gmInstrument <= 55) return (nameLower.includes('pad') || nameLower.includes('ensemble') ? 'chords' : 'melody'); // Strings, Choir, Voice
+    if (gmInstrument >= 56 && gmInstrument <= 79) return 'melody'; // Brass, Reed, Pipe
+    if (gmInstrument >= 80 && gmInstrument <= 87) return 'melody'; // Synth Lead
+    if (gmInstrument >= 88 && gmInstrument <= 95) return 'chords'; // Synth Pad
+    if (gmInstrument >= 96 && gmInstrument <= 103) return 'arpeggio'; // Synth Effects (often used for arpeggiated textures)
 
     console.log(`[getInstrumentRole] Unknown role for GM: ${gmInstrument}, Channel: ${channel}, Name: '${trackName}'. Defaulting to 'melody'.`);
-    return 'melody'; // Fallback
+    return 'melody';
 };
 
 
@@ -189,7 +161,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   console.log(`[WAV_GEN_STEP1_MELODY] Starting WAV generation for idea: ${params.generatedIdea.substring(0, 30)}...`);
 
   if (Tone.context.state !== 'running') {
-    console.error("[WAV_GEN_STEP1_MELODY_ERROR] Global Tone.context is NOT 'running'. Aborting WAV generation.");
+    console.error("[WAV_GEN_STEP1_MELODY_ERROR] Global Tone.context is NOT 'running'. Aborting WAV generation. User gesture might be required.");
     return null;
   }
   console.log("[WAV_GEN_STEP1_MELODY] Global Tone.context state is 'running'.");
@@ -207,7 +179,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     console.error("[WAV_GEN_STEP1_MELODY_ERROR] Invalid or missing MIDI data URI. Cannot parse MIDI. URI:", midiDataUri);
     throw new Error("Failed to generate valid MIDI data for WAV conversion.");
   }
-
+  
   const base64Midi = midiDataUri.split(',')[1];
   if (!base64Midi) {
     console.error("[WAV_GEN_STEP1_MELODY_ERROR] Failed to extract Base64 part from MIDI URI.");
@@ -219,6 +191,11 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     const midiUint8Array = base64ToUint8Array(base64Midi);
     console.log(`[WAV_GEN_STEP1_MELODY] MIDI Uint8Array created. Length: ${midiUint8Array.length}`);
     parsedMidi = new MidiFileParser(midiUint8Array).toJSON();
+    
+    if (!parsedMidi || typeof parsedMidi.duration !== 'number' || isNaN(parsedMidi.duration)) {
+      console.error("[WAV_GEN_STEP1_MELODY_ERROR] Parsed MIDI data is invalid or duration is missing/NaN. Parsed MIDI object:", parsedMidi);
+      throw new Error("Parsed MIDI data is invalid or duration is missing/NaN. Cannot proceed with WAV generation.");
+    }
     console.log(`[WAV_GEN_STEP1_MELODY] MIDI parsed. Duration: ${parsedMidi.duration.toFixed(2)}s. Tracks: ${parsedMidi.tracks.length}`);
   } catch (parseError) {
     console.error("[WAV_GEN_STEP1_MELODY_ERROR] Error parsing MIDI data with MidiFileParser:", parseError);
@@ -227,7 +204,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   }
 
   const effectiveMidiDuration = Math.max(parsedMidi.duration, MIN_EFFECTIVE_DURATION_SECONDS);
-  let renderDuration = effectiveMidiDuration + 2.0; // Add 2 seconds buffer for reverb/release tails
+  let renderDuration = effectiveMidiDuration + 2.0; 
   console.log(`[WAV_GEN_STEP1_MELODY] Calculated renderDuration: ${renderDuration.toFixed(2)}s`);
 
   const transportBpm = parsedMidi.header.tempos[0]?.bpm || params.tempoBpm || 120;
@@ -240,42 +217,38 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   try {
     const audioBuffer = await Tone.Offline(async (offlineContext) => {
       console.log(`[WAV_GEN_STEP1_MELODY_OFFLINE] Inside Tone.Offline callback. Offline Context SR: ${offlineContext.sampleRate}`);
-      offlineContext.transport.bpm.value = transportBpm; // Set BPM for offline transport too
-
-      // --- MELODY SYNTH ---
-      const melodySynthConfig = synthConfigs.piano // Force piano for melody in this test
-                                 || synthConfigs.melody
-                                 || { oscillator: { type: 'triangle' }, envelope: { attack: 0.02, decay: 0.1, sustain: 0.8, release: 0.4 }, volume: 0 };
+      offlineContext.transport.bpm.value = transportBpm;
       
-      // Use PolySynth to handle potential overlaps if MIDI has them, even though triggerAttackRelease is used.
-      // FMSynth is a good candidate for piano-like sounds.
+      // --- MELODY SYNTH ---
+      // Forcing FMSynth for piano-like sounds to avoid Salamander issues
+      const melodySynthConfig = synthConfigs.piano; 
       const melodySynth = new Tone.PolySynth(Tone.FMSynth, melodySynthConfig).connect(offlineContext.destination);
-      melodySynth.volume.value = melodySynthConfig.volume !== undefined ? melodySynthConfig.volume : 0;
+      melodySynth.volume.value = melodySynthConfig.volume !== undefined ? melodySynthConfig.volume : -3;
       console.log(`[WAV_GEN_STEP1_MELODY_OFFLINE] MelodySynth (FMSynth for piano test) created & connected. Volume: ${melodySynth.volume.value}`);
 
-      let melodyNotesFound = false;
+      let melodyNotesFoundAndScheduled = false;
       parsedMidi.tracks.forEach((track, trackIndex) => {
         if (track.notes && track.notes.length > 0) {
           const gmInstrument = track.instrument.number;
           const role = getInstrumentRole(gmInstrument, track.channel, instrumentMapping, track.name);
 
-          if (role === 'melody' || role === 'piano') { // Process if identified as melody or piano
-            melodyNotesFound = true;
+          if (role === 'melody' || role === 'piano') {
             console.log(`[WAV_GEN_STEP1_MELODY_OFFLINE_TRACK ${trackIndex}] Processing track as MELODY/PIANO. Instrument: ${track.instrument.name} (GM ${gmInstrument}), Notes: ${track.notes.length}`);
             
-            const trackNotes = track.notes.map(note => ({
+            const trackNotesInput = track.notes.map(note => ({
               name: note.name,
-              time: note.time, // seconds
-              duration: note.duration, // seconds
-              velocity: note.velocity // 0-1
+              time: note.time, 
+              duration: note.duration, 
+              velocity: note.velocity 
             }));
 
-            const scheduledNotes = ensureStrictlyIncreasingTimes(trackNotes, `Track ${trackIndex} (Melody/Piano)`);
+            const scheduledNotes = ensureStrictlyIncreasingTimes(trackNotesInput, `Track ${trackIndex} (Melody/Piano)`);
 
             scheduledNotes.forEach((note, noteIdx) => {
               if (note.name && typeof note.time === 'number' && typeof note.duration === 'number' && note.duration > 0.001 && typeof note.velocity === 'number' && note.velocity > 0) {
                 console.log(`[WAV_GEN_STEP1_MELODY_OFFLINE_SCHED] Scheduling Note: Time=${note.time.toFixed(3)}, Note=${note.name}, Dur=${note.duration.toFixed(3)}, Vel=${note.velocity.toFixed(2)}`);
                 melodySynth.triggerAttackRelease(note.name, note.duration, note.time, note.velocity);
+                melodyNotesFoundAndScheduled = true;
               } else {
                 console.warn(`[WAV_GEN_STEP1_MELODY_OFFLINE_SCHED] Skipping invalid/silent melody note ${noteIdx}:`, note);
               }
@@ -284,19 +257,9 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         }
       });
 
-      if (!melodyNotesFound) {
-        console.warn("[WAV_GEN_STEP1_MELODY_OFFLINE] No melody or piano track found in MIDI to schedule for Step 1.");
+      if (!melodyNotesFoundAndScheduled) {
+        console.warn("[WAV_GEN_STEP1_MELODY_OFFLINE] No melody or piano notes were actually scheduled.");
       }
-
-      // All other instruments are intentionally NOT scheduled in this step.
-      console.log("[WAV_GEN_STEP1_MELODY_OFFLINE] Note scheduling for melody/piano complete. Rendering should commence.");
-      
-       // Explicitly start the offline transport if Tone.Part isn't used
-       // However, for direct triggerAttackRelease with absolute times, transport start isn't strictly necessary for scheduling,
-       // but it's good practice if any internal Tone.js components rely on it.
-       // offlineContext.transport.start(0); 
-       // For direct scheduling with absolute times, this line might not be needed and could cause issues if not handled perfectly with Tone.Offline.
-       // Let's rely on Tone.Offline's own time management for now.
 
     }, renderDuration);
 
@@ -332,3 +295,9 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
+// audioBufferToWav function (if not already imported or present)
+// Ensure this function is available in scope
+// export function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer { ... }
+// For now, assuming it's imported or defined elsewhere as it's not the direct cause of this specific error.
+
