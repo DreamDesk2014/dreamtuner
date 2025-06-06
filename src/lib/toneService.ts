@@ -101,86 +101,93 @@ const MIN_EFFECTIVE_DURATION = 5.0;
 
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  console.log(`[WAV_GEN_DEBUG] Starting REVISED MINIMAL HARDCODED TEST (v2) for WAV generation.`);
+  console.log(`[WAV_GEN_DEBUG] Starting MINIMAL HARDCODED TEST (v3 - using Tone.Part) for WAV generation.`);
 
-  // Tone.start() is now handled by the UI component. We assume context is running.
-  // If not, the UI component should prevent this function from being called.
   if (Tone.context.state !== 'running') {
-    console.error("[WAV_GEN_DEBUG_ERROR] Tone.js context is NOT 'running' when generateWavFromMusicParameters (minimal v2) is called. Aborting.");
+    console.error("[WAV_GEN_DEBUG_ERROR] Tone.js context is NOT 'running' when generateWavFromMusicParameters (minimal v3) is called. Aborting.");
     return null;
   }
-  console.log("[WAV_GEN_DEBUG] Global Tone.context state is already 'running'.");
-
+  console.log("[WAV_GEN_DEBUG] Global Tone.context state is 'running'.");
 
   try {
-    Tone.Transport.stop(0);
+    Tone.Transport.stop(true); // Stop and cancel all scheduled events
     Tone.Transport.cancel(0);
     console.log("[WAV_GEN_DEBUG] Global Tone.Transport cleared and stopped.");
 
-    Tone.Destination.volume.value = 0; // Set to a reasonable volume for testing, e.g. 0dB
+    Tone.Destination.volume.value = 0; // Set to a reasonable volume for testing
     console.log("[WAV_GEN_DEBUG] Global Tone.Destination volume set to 0dB.");
 
-    Tone.Transport.bpm.value = 100; // A moderate tempo for the test
+    Tone.Transport.bpm.value = 100;
     console.log(`[WAV_GEN_DEBUG] Global Tone.Transport BPM set to: ${Tone.Transport.bpm.value}`);
 
-    const renderDuration = 4.0; // Fixed duration for this minimal test
-    console.log(`[WAV_GEN_DEBUG] Minimal test renderDuration: ${renderDuration}s`);
+    const renderDuration = 4.0;
+    console.log(`[WAV_GEN_DEBUG] Minimal test (v3) renderDuration: ${renderDuration}s`);
 
     const audioBuffer = await Tone.Offline(async (offlineContext) => {
-      console.log("[WAV_GEN_DEBUG_OFFLINE] Inside REVISED minimal Tone.Offline callback (v2). Offline Context Sample Rate:", offlineContext.sampleRate);
+      console.log("[WAV_GEN_DEBUG_OFFLINE] Inside REVISED minimal Tone.Offline callback (v3 - Tone.Part). Offline Context Sample Rate:", offlineContext.sampleRate);
+      // Note: We use offlineContext.transport for scheduling with Tone.Part
 
-      const testSynth = new Tone.Synth({ // Using Tone.Synth for simplicity
+      const testSynth = new Tone.Synth({
         oscillator: { type: 'triangle' as const },
         envelope: { attack: 0.02, decay: 0.1, sustain: 0.8, release: 0.4 },
-        volume: 0 // Max volume for testing
+        volume: 0
       }).connect(offlineContext.destination);
       console.log("[WAV_GEN_DEBUG_OFFLINE] TestSynth created and connected to offline destination. Volume:", testSynth.volume.value);
 
-      // Direct scheduling without Tone.Part, using offlineContext.currentTime for relative timing
-      testSynth.triggerAttackRelease("C4", "8n", offlineContext.currentTime + 0.5, 0.9);
-      testSynth.triggerAttackRelease("E4", "8n", offlineContext.currentTime + 1.0, 0.9);
-      testSynth.triggerAttackRelease("G4", "4n", offlineContext.currentTime + 1.5, 0.9); // Longer note
-      // Add one more note to make it distinct if the previous 3-note version was cached or similar
-      testSynth.triggerAttackRelease("C5", "8n", offlineContext.currentTime + 2.5, 0.8);
+      const notes = [
+        { time: "0:0:0", note: "C4", duration: "8n", velocity: 0.9 },
+        { time: "0:0:2", note: "E4", duration: "8n", velocity: 0.9 }, // 0:0:2 means 3rd 8th note if 4/4 time (0-indexed beats)
+        { time: "0:1:0", note: "G4", duration: "4n", velocity: 0.9 }, // Start of 2nd beat
+        { time: "0:2:0", note: "C5", duration: "8n", velocity: 0.8 }  // Start of 3rd beat
+      ];
+      
+      console.log("[WAV_GEN_DEBUG_OFFLINE] Hardcoded notes for Tone.Part:", JSON.stringify(notes));
 
+      const part = new Tone.Part((time, value) => {
+        console.log(`[WAV_GEN_DEBUG_OFFLINE_PART_V3] Triggering: Time=${time}, Note=${value.note}, Dur=${value.duration}, Vel=${value.velocity}`);
+        testSynth.triggerAttackRelease(value.note, value.duration, time, value.velocity);
+      }, notes);
 
-      console.log("[WAV_GEN_DEBUG_OFFLINE] TestSynth notes scheduled directly.");
-      // No explicit transport start inside Tone.Offline callback is needed.
-      // The rendering starts automatically after this async callback resolves.
+      part.start(0); // Start the part at the beginning of the offline transport timeline
+      console.log("[WAV_GEN_DEBUG_OFFLINE] TestPart created, events added, and part.start(0) called.");
+      
+      // The offline transport starts implicitly when the Tone.Offline promise is awaited.
+      // No explicit offlineContext.transport.start() needed.
+      
     }, renderDuration);
 
-    console.log(`[WAV_GEN_DEBUG] Minimal Tone.Offline rendering complete. AudioBuffer info: Channels: ${audioBuffer.numberOfChannels} Length: ${audioBuffer.length} SampleRate: ${audioBuffer.sampleRate} Duration: ${audioBuffer.duration.toFixed(3)}s`);
+    console.log(`[WAV_GEN_DEBUG] Minimal Tone.Offline rendering (v3) complete. AudioBuffer info: Channels: ${audioBuffer.numberOfChannels}, Length: ${audioBuffer.length}, SampleRate: ${audioBuffer.sampleRate}, Duration: ${audioBuffer.duration.toFixed(3)}s`);
 
     let isSilent = true;
     let maxVal = 0;
     for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
       const channelData = audioBuffer.getChannelData(i);
       for (let j = 0; j < channelData.length; j++) {
-        if (Math.abs(channelData[j]) > 1e-5) { // Slightly higher threshold
+        if (Math.abs(channelData[j]) > 1e-5) {
           isSilent = false;
         }
         if (Math.abs(channelData[j]) > maxVal) {
           maxVal = Math.abs(channelData[j]);
         }
       }
-      console.log(`[WAV_GEN_DEBUG] Channel ${i} max absolute value: ${maxVal.toExponential(3)}`);
+      console.log(`[WAV_GEN_DEBUG] Channel ${i} (v3) max absolute value: ${maxVal.toExponential(3)}`);
       if (!isSilent) break;
     }
 
     if (isSilent) {
-      console.warn("[WAV_GEN_DEBUG_WARN] Minimal Rendered AudioBuffer (v2) appears to be silent or extremely quiet.");
+      console.warn("[WAV_GEN_DEBUG_WARN] Minimal Rendered AudioBuffer (v3 - Tone.Part) appears to be silent or extremely quiet.");
     } else {
-      console.log("[WAV_GEN_DEBUG] Minimal Rendered AudioBuffer (v2) contains non-zero samples.");
+      console.log("[WAV_GEN_DEBUG] Minimal Rendered AudioBuffer (v3 - Tone.Part) contains non-zero samples.");
     }
 
     const wavDataBuffer = audioBufferToWav(audioBuffer);
-    console.log(`[WAV_GEN_DEBUG] Minimal WAV data buffer (v2) created. Size: ${wavDataBuffer.byteLength} bytes.`);
+    console.log(`[WAV_GEN_DEBUG] Minimal WAV data buffer (v3 - Tone.Part) created. Size: ${wavDataBuffer.byteLength} bytes.`);
     return new Blob([wavDataBuffer], { type: 'audio/wav' });
 
   } catch (error) {
-    console.error("[WAV_GEN_DEBUG_ERROR] Error in minimal WAV generation (v2):", error);
+    console.error("[WAV_GEN_DEBUG_ERROR] Error in minimal WAV generation (v3 - Tone.Part):", error);
     if (error instanceof Error) {
-        console.error(`[WAV_GEN_DEBUG_ERROR_DETAILS] Name: ${error.name}, Message: ${error.message}, Stack: ${error.stack}`);
+        console.error(`[WAV_GEN_DEBUG_ERROR_DETAILS_V3] Name: ${error.name}, Message: ${error.message}, Stack: ${error.stack}`);
     }
     return null;
   }
@@ -207,18 +214,17 @@ const getSynthConfigurations = (
     kick: { pitchDecay: 0.05, octaves: 10, oscillator: { type: "sine" as const }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: "exponential" as const }, volume: 0 },
     snare: { noise: { type: 'pink' as const }, volume: -2, envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.2 } },
     hiHat: { frequency: 250, envelope: { attack: 0.001, decay: 0.05, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3000, octaves: 1.5, volume: -6 },
-    piano: { // Defaulting to FMSynth for piano to avoid sample loading issues
+    piano: { 
         harmonicity: 3.1,
         modulationIndex: 16,
-        oscillator: { type: "sine" as const }, // FMSynth uses a main oscillator
+        oscillator: { type: "sine" as const }, 
         envelope: { attack: 0.01, decay: 0.7, sustain: 0.1, release: 0.9 },
-        modulation: { type: "square" as const }, // Modulation oscillator for FMSynth
+        modulation: { type: "square" as const }, 
         modulationEnvelope: { attack: 0.02, decay: 0.4, sustain: 0.01, release: 0.6 },
         volume: -3
     }
   };
 
-  // Sanitize oscillator types
   for (const key in configs) {
     const synthConfig = configs[key as keyof SynthConfigurations] as any;
     if (synthConfig.oscillator && (synthConfig.oscillator.type === 'pwm' || synthConfig.oscillator.type === 'pulse')) {
@@ -313,3 +319,4 @@ const getSynthConfigurations = (
   }
   return configs;
 };
+
