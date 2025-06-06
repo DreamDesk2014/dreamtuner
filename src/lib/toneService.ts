@@ -4,7 +4,7 @@ import * as Tone from 'tone';
 import { Midi as MidiFileParser } from '@tonejs/midi';
 import type { MusicParameters } from '@/types';
 import { generateMidiFile } from '@/lib/midiService'; // Assuming this generates a data URI
-import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal, ensureStrictlyIncreasingTimes } from '@/lib/midiService'; 
+import { mapInstrumentHintToGM as mapInstrumentHintToGMOriginal, ensureStrictlyIncreasingTimes } from '@/lib/midiService';
 
 // --- audiobuffer-to-wav START ---
 // This is a direct adaptation of the audiobuffer-to-wav library
@@ -94,12 +94,12 @@ interface EventTime { time: number; duration: number; velocity: number; [key: st
 
 
 interface SynthConfigurations {
-  melody: any; 
-  bass: any; 
-  chords: any; 
-  kick: any; 
-  snare: any; 
-  hiHat: any; 
+  melody: any;
+  bass: any;
+  chords: any;
+  kick: any;
+  snare: any;
+  hiHat: any;
 }
 
 // Adapted from MusicOutputDisplay
@@ -188,8 +188,8 @@ const generatePianoSampleUrls = (): Record<string, string> => {
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
   try {
-    await Tone.start(); // Ensure AudioContext is started by user gesture (implicitly via button click)
-    
+    await Tone.start();
+
     const midiDataUri = generateMidiFile(params);
     if (!midiDataUri || !midiDataUri.startsWith('data:audio/midi;base64,')) {
       console.error("Failed to generate valid MIDI data for Tone.js rendering.");
@@ -203,29 +203,26 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         console.error("MIDI duration is zero or negative, cannot render.");
         return null;
     }
-    
+
     const renderDuration = durationSeconds + 2.0; // Add 2 seconds for release tails
 
-    // Ensure params.tempoBpm is a valid number before using it
-    const tempoToSet = (typeof params.tempoBpm === 'number' && params.tempoBpm > 0) 
-                       ? params.tempoBpm 
-                       : 120; // Default to 120 BPM if invalid
+    const tempoToSet = (typeof params.tempoBpm === 'number' && params.tempoBpm > 0 && params.tempoBpm < 300)
+                       ? params.tempoBpm
+                       : 120;
 
     if (params.tempoBpm !== tempoToSet) {
       console.warn(`Original tempoBpm '${params.tempoBpm}' was invalid or out of range. Using ${tempoToSet} BPM for Tone.js rendering.`);
     }
 
-    const audioBuffer = await Tone.Offline(async (transport) => { // 'transport' is the offline context's transport
-      // Defensive check for transport and transport.bpm
-      if (transport && transport.bpm) {
-        transport.bpm.value = tempoToSet;
-      } else {
-        console.error("Tone.Offline: transport.bpm is undefined. This is unexpected. Rendering will use default tempo or global Tone.Transport tempo if it was set.");
-        // As a fallback, try to set global if offline one is missing, though it might not influence offline render.
-        if (Tone && Tone.Transport && Tone.Transport.bpm) {
-            Tone.Transport.bpm.value = tempoToSet;
-        }
-      }
+    // Set global Tone.Transport BPM before calling Tone.Offline
+    if (Tone && Tone.Transport && Tone.Transport.bpm) {
+        Tone.Transport.bpm.value = tempoToSet;
+    } else {
+        console.warn("Tone.Transport.bpm is not available to set globally. Offline rendering might use default tempo.");
+    }
+
+    const audioBuffer = await Tone.Offline(async (transport) => {
+      // No longer setting transport.bpm.value here
 
       const synthConfigs = getSynthConfigurations(
         params.instrumentHints,
@@ -254,18 +251,18 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       } else {
         synths.melody = new Tone.PolySynth(Tone.Synth, synthConfigs.melody).toDestination();
       }
-      
+
       synths.bass = new Tone.PolySynth(Tone.Synth, synthConfigs.bass).toDestination();
       synths.chords = new Tone.PolySynth(Tone.Synth, synthConfigs.chords).toDestination();
       synths.kick = new Tone.MembraneSynth(synthConfigs.kick).toDestination();
       synths.snare = new Tone.NoiseSynth(synthConfigs.snare).toDestination();
       synths.hiHat = new Tone.MetalSynth(synthConfigs.hiHat).toDestination();
-      
+
       const allParts: (Tone.Part | Tone.Sequence)[] = [];
 
       parsedMidi.tracks.forEach((track, trackIndex) => {
         const instrumentMapping = mapInstrumentHintToGMOriginal(params.instrumentHints, params.selectedGenre, params.originalInput.mode === 'kids');
-        
+
         if (track.channel === 9) { // Drum track
           const drumEvents: EventTime[] = track.notes.map(n => ({
             time: n.time,
@@ -273,7 +270,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             velocity: n.velocity,
             midi: n.midi
           }));
-          
+
           const correctedDrumEvents = ensureStrictlyIncreasingTimes(drumEvents, `Drums-Track-${trackIndex}`);
 
           correctedDrumEvents.forEach(event => {
@@ -285,11 +282,11 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             else if (event.midi === 38 || event.midi === 40) { drumSynth = synths.snare; }
             else if (event.midi === 42 || event.midi === 44 || event.midi === 46) {
               drumSynth = synths.hiHat;
-              pitchToPlay = event.midi === 46 ? 400 : 250; 
-            } else if (event.midi === 49 || event.midi === 57) { 
-                drumSynth = synths.hiHat; 
-                pitchToPlay = 600; 
-                effectiveDuration = 0.5 + Math.random() * 0.5; 
+              pitchToPlay = event.midi === 46 ? 400 : 250;
+            } else if (event.midi === 49 || event.midi === 57) {
+                drumSynth = synths.hiHat;
+                pitchToPlay = 600;
+                effectiveDuration = 0.5 + Math.random() * 0.5;
                 if(drumSynth instanceof Tone.MetalSynth) drumSynth.set({envelope: {decay: effectiveDuration, release: effectiveDuration}});
             }
 
@@ -309,11 +306,11 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
         } else { // Pitched tracks
           let activeSynth: Tone.PolySynth | Tone.Sampler | undefined;
-          
+
           if (trackIndex === 0 || track.instrument.number === instrumentMapping.melody) activeSynth = synths.melody;
           else if (track.instrument.number === instrumentMapping.bass) activeSynth = synths.bass;
           else if (track.instrument.number === instrumentMapping.chordsPad) activeSynth = synths.chords;
-          else activeSynth = synths.melody; 
+          else activeSynth = synths.melody;
 
           if (activeSynth) {
             const trackEvents: EventTime[] = track.notes.map(n => ({
@@ -322,9 +319,9 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
               duration: n.duration,
               velocity: n.velocity
             }));
-            
+
             const correctedTrackEvents = ensureStrictlyIncreasingTimes(trackEvents, `Pitched-Track-${track.name || trackIndex}`);
-            
+
             if (correctedTrackEvents.length > 0) {
                 allParts.push(new Tone.Part(((time, value) => {
                     if (value.name && typeof value.name === 'string' && activeSynth) {
@@ -336,15 +333,13 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
           }
         }
       });
-      
+
       allParts.forEach(part => part.start(0));
-      
-      // Start the offline transport instance using the 'transport' argument from the callback
+
       if (transport && typeof transport.start === 'function') {
         transport.start(0);
       } else {
         console.error("Tone.Offline: transport.start is not a function. Cannot start offline rendering properly.");
-        // Fallback to global transport if local is problematic, though it's not ideal for offline.
         if (Tone && Tone.Transport && typeof Tone.Transport.start === 'function') {
              Tone.Transport.start(0);
         }
@@ -360,3 +355,4 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
