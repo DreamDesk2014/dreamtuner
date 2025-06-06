@@ -390,7 +390,7 @@ export default function DreamTunerPage() {
   };
 
 
-  let mainSubtitle = "Translate Your Words, Images, or Video Concepts into Musical Vibrations";
+  let mainSubtitle = "Tune Anything into Music!";
   if (currentMode === 'kids') {
     mainSubtitle = "Draw, make sounds, add voice hints! Hear music & see AI art!";
   } else if (currentMode === 'comingSoon') {
@@ -631,5 +631,6 @@ export default function DreamTunerPage() {
     
 
     
+
 
 
