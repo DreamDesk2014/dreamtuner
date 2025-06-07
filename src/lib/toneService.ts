@@ -339,45 +339,53 @@ const getSynthConfigurations = (
   };
 };
 
-const createSynth = (config: any, offlineContext: Tone.OfflineContext) => {
+const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instrument: Tone.Instrument, outputNodeToConnect: Tone.ToneAudioNode } => {
     if (!config || !config.synthType) {
         const defaultConfig = { synthType: Tone.FMSynth, options: { oscillator: { type: SAFE_OSC_TYPE } }, volume: -12 };
-        const synth = new defaultConfig.synthType(defaultConfig.options);
+        const synth = new defaultConfig.synthType(defaultConfig.options) as Tone.Instrument; // Cast to base type
         synth.volume.value = defaultConfig.volume;
-        return synth;
+        return { instrument: synth, outputNodeToConnect: synth };
     }
-    let synthInstance;
+
+    let synthInstance: Tone.Instrument;
     if (config.synthType === Tone.PolySynth) {
         const subSynthType = config.subType || Tone.Synth;
-        synthInstance = new Tone.PolySynth(subSynthType);
-        if(config.options) synthInstance.set(config.options);
+        synthInstance = new Tone.PolySynth(subSynthType) as Tone.PolySynth;
+        if(config.options) (synthInstance as Tone.PolySynth).set(config.options);
     } else {
-        synthInstance = new config.synthType(config.options);
+        synthInstance = new config.synthType(config.options) as Tone.Instrument;
     }
     synthInstance.volume.value = config.volume !== undefined ? config.volume : -12;
 
-    let effectChainEndNode = synthInstance;
-    if (config.effects && Array.isArray(config.effects)) {
-        config.effects.forEach((effectConf: any) => {
-            let effectNode;
+    let finalOutputNode: Tone.ToneAudioNode = synthInstance;
+
+    if (config.effects && Array.isArray(config.effects) && config.effects.length > 0) {
+        const effectInstances = config.effects.map((effectConf: any) => {
+            let effectNodeInstance;
             if (effectConf.type === Tone.Distortion) {
-                effectNode = new Tone.Distortion(effectConf.amount || 0.4);
+                effectNodeInstance = new Tone.Distortion(effectConf.amount || 0.4);
             } else if (effectConf.type === Tone.Chorus) {
-                effectNode = new Tone.Chorus(effectConf.frequency || 1.5, effectConf.delayTime || 3.5, effectConf.depth || 0.7);
-                if (effectConf.feedback !== undefined) (effectNode as Tone.Chorus).feedback.value = effectConf.feedback;
-                if (effectConf.wet !== undefined) (effectNode as Tone.Chorus).wet.value = effectConf.wet;
+                effectNodeInstance = new Tone.Chorus(effectConf.frequency || 1.5, effectConf.delayTime || 3.5, effectConf.depth || 0.7);
+                if (effectConf.feedback !== undefined) (effectNodeInstance as Tone.Chorus).feedback.value = effectConf.feedback;
+                if (effectConf.wet !== undefined) (effectNodeInstance as Tone.Chorus).wet.value = effectConf.wet;
             } else if (effectConf.type === Tone.FeedbackDelay){
-                 effectNode = new Tone.FeedbackDelay(effectConf.delayTime || "8n", effectConf.feedback || 0.5);
-                 if (effectConf.wet !== undefined) (effectNode as Tone.FeedbackDelay).wet.value = effectConf.wet;
+                 effectNodeInstance = new Tone.FeedbackDelay(effectConf.delayTime || "8n", effectConf.feedback || 0.5);
+                 if (effectConf.wet !== undefined) (effectNodeInstance as Tone.FeedbackDelay).wet.value = effectConf.wet;
             }
-            if (effectNode) {
-                effectChainEndNode.connect(effectNode);
-                effectChainEndNode = effectNode; 
-            }
-        });
+            return effectNodeInstance;
+        }).filter(Boolean) as Tone.ToneAudioNode[]; // Ensure it's an array of ToneAudioNode
+
+        if (effectInstances.length > 0) {
+            // Chain the synth through all its effects.
+            // The synthInstance is the source, the effects are chained in order.
+            synthInstance.chain(...effectInstances);
+            finalOutputNode = effectInstances[effectInstances.length - 1];
+        }
     }
-    return effectChainEndNode;
+    // Return the actual synth instrument for triggering, and the final output node of its chain for connections.
+    return { instrument: synthInstance, outputNodeToConnect: finalOutputNode };
 };
+
 
 function weightedRandom(items: (string | number)[], weights: number[]): string | number {
     let sum = 0;
@@ -789,20 +797,31 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       await masterReverb.ready;
       console.log(`${logPrefix}_OFFLINE] Master Reverb created. Wet: ${masterReverb.wet.value}`);
 
-      const melodySynth = createSynth(activeSynthConfigs.melody, offlineContext).connect(masterReverb);
-      const bassSynth = createSynth(activeSynthConfigs.bass, offlineContext).toDestination();
-      const chordSynth = createSynth(activeSynthConfigs.chords, offlineContext).connect(masterReverb);
-      let arpeggioSynth;
-      if (arpeggioNotesToSchedule.length > 0 && activeSynthConfigs.arpeggio) {
-        arpeggioSynth = createSynth(activeSynthConfigs.arpeggio, offlineContext).connect(masterReverb);
-      }
-      console.log(`${logPrefix}_OFFLINE] Melodic/Harmonic Synths created.`);
+      const melodySynthSetup = createSynth(activeSynthConfigs.melody, offlineContext);
+      const melodySynth = melodySynthSetup.instrument;
+      melodySynthSetup.outputNodeToConnect.connect(masterReverb);
 
-      melodyNotesToSchedule.forEach((ev) => melodySynth.triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity));
-      bassNotesToSchedule.forEach((ev) => bassSynth.triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity));
-      chordEventsToSchedule.forEach((ev) => chordSynth.triggerAttackRelease(ev.notes, ev.duration, ev.time, ev.velocity));
+      const bassSynthSetup = createSynth(activeSynthConfigs.bass, offlineContext);
+      const bassSynth = bassSynthSetup.instrument;
+      bassSynthSetup.outputNodeToConnect.toDestination(); // Bass might bypass masterReverb
+
+      const chordSynthSetup = createSynth(activeSynthConfigs.chords, offlineContext);
+      const chordSynth = chordSynthSetup.instrument;
+      chordSynthSetup.outputNodeToConnect.connect(masterReverb);
+      
+      let arpeggioSynth: Tone.Instrument | undefined;
+      if (arpeggioNotesToSchedule.length > 0 && activeSynthConfigs.arpeggio) {
+        const arpSynthSetup = createSynth(activeSynthConfigs.arpeggio, offlineContext);
+        arpeggioSynth = arpSynthSetup.instrument;
+        arpSynthSetup.outputNodeToConnect.connect(masterReverb);
+      }
+      console.log(`${logPrefix}_OFFLINE] Melodic/Harmonic Synths created and connected.`);
+
+      melodyNotesToSchedule.forEach((ev) => (melodySynth as any).triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity));
+      bassNotesToSchedule.forEach((ev) => (bassSynth as any).triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity));
+      chordEventsToSchedule.forEach((ev) => (chordSynth as any).triggerAttackRelease(ev.notes, ev.duration, ev.time, ev.velocity));
       if (arpeggioSynth) {
-        arpeggioNotesToSchedule.forEach((ev) => arpeggioSynth.triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity));
+        arpeggioNotesToSchedule.forEach((ev) => (arpeggioSynth as any).triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity));
       }
       
       console.log(`${logPrefix}_OFFLINE] Setting up drum synths.`);
@@ -855,3 +874,4 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
