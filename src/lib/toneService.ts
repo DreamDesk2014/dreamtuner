@@ -80,7 +80,7 @@ const HARMONIC_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 11];
 function getScaleNoteNames(keySignature: string, mode: string, startOctave: number = 4, genre?: string, harmonicComplexity: number = 0.3): string[] {
     const baseKeyForScale = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
     const rootMidiBase = robustNoteToMidi(baseKeyForScale + '0') % 12;
-    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : ""; 
+    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : "";
     const isKids = typeof mode === 'string' ? mode.toLowerCase().includes('kids') : false;
 
     let intervals: number[];
@@ -104,11 +104,11 @@ function getScaleNoteNames(keySignature: string, mode: string, startOctave: numb
     });
 }
 
-function getChordNotesForKey(keySignature: string, mode: string, degree: number, octave: number = 3, addSeventh: boolean = false, harmonicComplexity: number = 0.3, genre?: string): string[] {
+function getChordNotesForKey(keySignature: string, mode: string, degree: number, octave: number = 3, addSeventh: boolean = false, genre?: string, harmonicComplexity: number = 0.3): string[] {
     const rootNoteName = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
     const genreLower = typeof genre === 'string' ? genre.toLowerCase() : ""; 
     
-    const fullScaleForChordRoots = getScaleNoteNames(rootNoteName, mode.replace('kids', ''), octave, genreLower, harmonicComplexity);
+    const fullScaleForChordRoots = getScaleNoteNames(rootNoteName, mode.replace('kids', ''), octave, genre, harmonicComplexity);
     
     if (fullScaleForChordRoots.length === 0) return [midiToNoteName(DEFAULT_MIDI_NOTE + (octave - 4) * 12)];
 
@@ -173,7 +173,7 @@ const getSynthConfigurations = (
   harmonicComplexity: number = 0.3,
   rhythmicDensity: number = 0.5,
 ): any => {
-  const genreLower = typeof genreInput === 'string' ? genreInput.toLowerCase() : ""; 
+  const genreLower = typeof genreInput === 'string' ? genreInput.toLowerCase() : "";
   const hintsLower = instrumentHints.map(h => typeof h === 'string' ? h.toLowerCase() : "");
 
   const baseConfigs = {
@@ -361,7 +361,7 @@ const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instr
 
     if (config.effects && Array.isArray(config.effects) && config.effects.length > 0) {
         const effectInstances = config.effects.map((effectConf: any) => {
-            let effectNodeInstance;
+            let effectNodeInstance: Tone.ToneAudioNode | undefined;
             if (effectConf.type === Tone.Distortion) {
                 effectNodeInstance = new Tone.Distortion(effectConf.amount || 0.4);
             } else if (effectConf.type === Tone.Chorus) {
@@ -373,16 +373,13 @@ const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instr
                  if (effectConf.wet !== undefined) (effectNodeInstance as Tone.FeedbackDelay).wet.value = effectConf.wet;
             }
             return effectNodeInstance;
-        }).filter(Boolean) as Tone.ToneAudioNode[]; // Ensure it's an array of ToneAudioNode
+        }).filter(Boolean) as Tone.ToneAudioNode[]; 
 
         if (effectInstances.length > 0) {
-            // Chain the synth through all its effects.
-            // The synthInstance is the source, the effects are chained in order.
             synthInstance.chain(...effectInstances);
             finalOutputNode = effectInstances[effectInstances.length - 1];
         }
     }
-    // Return the actual synth instrument for triggering, and the final output node of its chain for connections.
     return { instrument: synthInstance, outputNodeToConnect: finalOutputNode };
 };
 
@@ -420,7 +417,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   Tone.Destination.volume.value = 0; 
   Tone.Transport.bpm.value = params.tempoBpm || 120;
   
-  const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : ""; 
+  const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
   const isKidsMode = params.originalInput.mode === 'kids';
   const { harmonicComplexity, rhythmicDensity, targetArousal, targetValence } = params;
 
@@ -615,7 +612,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       const degree = progressionDegrees[i];
       const currentMeasureStartTime = startOffset + (cycle * progressionDegrees.length * measureDurationSeconds) + (i * measureDurationSeconds);
       const addSeventhForChord = !isKidsMode && (harmonicComplexity > 0.5 || genreLower.includes("jazz"));
-      const chordNoteNames = getChordNotesForKey(params.keySignature, params.mode, degree, chordOctave, addSeventhForChord, harmonicComplexity, params.selectedGenre);
+      const chordNoteNames = getChordNotesForKey(params.keySignature, params.mode, degree, chordOctave, addSeventhForChord, params.selectedGenre, harmonicComplexity);
       
       const baseVelChord = 0.3 + (targetArousal * 0.12) + (targetValence * 0.05);
 
@@ -699,13 +696,13 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   const drumEventsToSchedule: { synth: 'kick' | 'snare' | 'hiHat' | 'tambourine', time: number, duration: string, velocity: number, pitch?: string | number }[] = [];
   const numDrumMeasures = numChordCycles * progressionDegrees.length;
   let lastDrumTimes = { kick: -TIME_EPSILON, snare: -TIME_EPSILON, hiHat: -TIME_EPSILON, tambourine: -TIME_EPSILON };
+  const humanizeAmount = 0.01; // Standard humanization factor for drum timing
 
   for (let measure = 0; measure < numDrumMeasures; measure++) {
     for (let beat = 0; beat < beatsPerMeasure; beat++) {
       const beatStartTime = startOffset + (measure * measureDurationSeconds) + (beat * secondsPerBeat);
       const baseVelDrum = 0.55 + (targetArousal * 0.2);
-      const humanizeAmount = 0.01;
-
+      
       let addKick = false; let kickTime = beatStartTime;
       if (isKidsMode) { addKick = beat === 0;
       } else if (genreLower.includes("electronic") || genreLower.includes("house") || genreLower.includes("techno")) { addKick = true;
@@ -803,7 +800,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
       const bassSynthSetup = createSynth(activeSynthConfigs.bass, offlineContext);
       const bassSynth = bassSynthSetup.instrument;
-      bassSynthSetup.outputNodeToConnect.toDestination(); // Bass might bypass masterReverb
+      bassSynthSetup.outputNodeToConnect.toDestination(); 
 
       const chordSynthSetup = createSynth(activeSynthConfigs.chords, offlineContext);
       const chordSynth = chordSynthSetup.instrument;
@@ -874,4 +871,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-
