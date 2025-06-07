@@ -3,177 +3,15 @@
 import * as Tone from 'tone';
 import type { MusicParameters } from '@/types';
 import { audioBufferToWav } from "./audioBufferToWav";
+import { robustNoteToMidi, midiToNoteName, getScaleNoteNames as getScaleNoteNamesTheory, getChordNotesForKey as getChordNotesForKeyTheory, PITCH_CLASSES, NOTES_ARRAY, DEFAULT_MIDI_NOTE } from './musicTheory'; // Renamed to avoid conflict
 
-// Constants
 const SAFE_OSC_TYPE = 'triangle' as const;
-const MIN_EFFECTIVE_DURATION_SECONDS = 5.0;
-const TIME_EPSILON = 0.00001;
-const DEFAULT_MIDI_NOTE = 60; // C4
+const TIME_EPSILON = 0.00001; // Small offset for subsequent notes at the same time
+const MIN_EFFECTIVE_DURATION_SECONDS = 10; // Minimum duration for offline rendering if calculated duration is too short
 
-const MAJOR_SCALE_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
-const MINOR_SCALE_INTERVALS = [0, 2, 3, 5, 7, 8, 10];
-const BLUES_SCALE_INTERVALS = [0, 3, 5, 6, 7, 10];
-const MAJOR_PENTATONIC_INTERVALS = [0, 2, 4, 7, 9];
-const MINOR_PENTATONIC_INTERVALS = [0, 3, 5, 7, 10];
-const DORIAN_INTERVALS = [0, 2, 3, 5, 7, 9, 10];
-
-// --- Note and Scale Utilities ---
-const PITCH_CLASSES: { [key: string]: number } = {
-    'C': 0, 'B#': 0, 'BS': 0, 'C#': 1, 'DB': 1, 'CS': 1, 'D': 2, 'D#': 3, 'EB': 3, 'DS': 3,
-    'E': 4, 'FB': 4, 'F': 5, 'E#': 5, 'ES': 5, 'F#': 6, 'GB': 6, 'FS': 6, 'G': 7,
-    'G#': 8, 'AB': 8, 'GS': 8, 'A': 9, 'A#': 10, 'BB': 10, 'AS': 10, 'B': 11, 'CB': 11,
-};
-const NOTES_ARRAY = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-function robustNoteToMidi(noteNameWithOctave: string): number {
-    if (typeof noteNameWithOctave !== 'string') return DEFAULT_MIDI_NOTE;
-    const match = noteNameWithOctave.match(/([A-G])([#bSsxBF]*)(-?[0-9]+)/i);
-    if (!match) {
-        const simpleMatch = noteNameWithOctave.match(/([A-G])([#bSsxBF]*)/i);
-        if (simpleMatch) return robustNoteToMidi(noteNameWithOctave + '4');
-        return DEFAULT_MIDI_NOTE;
-    }
-    let pitchClassName = match[1].toUpperCase();
-    const accidentals = match[2]?.toUpperCase() || '';
-    const octave = parseInt(match[3], 10);
-    if (isNaN(octave)) return DEFAULT_MIDI_NOTE;
-
-    let fullPitchName = pitchClassName;
-    if (accidentals.includes('#') || accidentals.includes('S')) fullPitchName += '#';
-    else if (accidentals.includes('B') || (accidentals.includes('F') && pitchClassName !== 'F' && pitchClassName !== 'B')) fullPitchName += 'B';
-
-    let effectiveOctave = octave;
-    if (fullPitchName === 'E#') { fullPitchName = 'F'; }
-    else if (fullPitchName === 'B#') { fullPitchName = 'C'; effectiveOctave = octave + 1; }
-    else if (fullPitchName === 'CB') { fullPitchName = 'B'; effectiveOctave = octave - 1; }
-    else if (fullPitchName === 'FB') { fullPitchName = 'E'; }
-
-    let midiNumberBase = PITCH_CLASSES[fullPitchName];
-    if (midiNumberBase === undefined) {
-        midiNumberBase = PITCH_CLASSES[pitchClassName];
-        if (midiNumberBase !== undefined) {
-            for (const char of accidentals) {
-                if (char === '#' || char === 'S') midiNumberBase = (midiNumberBase + 1);
-                else if (char === 'B' || char === 'F') midiNumberBase = (midiNumberBase - 1);
-            }
-            midiNumberBase = (midiNumberBase % 12 + 12) % 12;
-        } else {
-            return DEFAULT_MIDI_NOTE;
-        }
-    }
-    const finalMidiNumber = midiNumberBase + (effectiveOctave + 1) * 12;
-    return (finalMidiNumber >= 0 && finalMidiNumber <= 127) ? finalMidiNumber : DEFAULT_MIDI_NOTE;
-}
-
-function midiToNoteName(midiNumber: number): string {
-    if (typeof midiNumber !== 'number' || isNaN(midiNumber) || midiNumber < 0 || midiNumber > 127) {
-        midiNumber = DEFAULT_MIDI_NOTE;
-    }
-    const octave = Math.floor(midiNumber / 12) - 1;
-    const noteIndex = midiNumber % 12;
-    if (noteIndex < 0 || noteIndex >= NOTES_ARRAY.length) return 'C4';
-    return NOTES_ARRAY[noteIndex] + octave;
-}
-
-// const PHRYGIAN_INTERVALS = [0, 1, 3, 5, 7, 8, 10]; // For AI genre, potentially
-
-function getScaleNoteNames(keySignature: string, mode: string, startOctaveInput: number = 4, genre?: string, harmonicComplexity: number = 0.3): string[] {
-    const baseKeyForScale = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
-    const rootMidiBase = robustNoteToMidi(baseKeyForScale + '0') % 12;
-    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : "";
-    const isKids = typeof mode === 'string' ? mode.toLowerCase().includes('kids') : false;
-    const startOctave = isKids ? 4 : startOctaveInput;
-
-
-    let intervals: number[];
-    if (isKids) {
-        intervals = MAJOR_PENTATONIC_INTERVALS;
-    } else if (genreLower.includes('blues') || (genreLower.includes('jazz') && harmonicComplexity < 0.4)) {
-        intervals = BLUES_SCALE_INTERVALS;
-    } else if (genreLower.includes('jazz')) {
-        intervals = (typeof mode === 'string' ? mode.toLowerCase().includes('minor') : false) ? DORIAN_INTERVALS : MAJOR_SCALE_INTERVALS;
-    } else if ((genreLower.includes('folk') || genreLower.includes('country'))) {
-        intervals = (typeof mode === 'string' ? mode.toLowerCase().includes('minor') : false) ? MINOR_PENTATONIC_INTERVALS : MAJOR_PENTATONIC_INTERVALS;
-    } else {
-        intervals = (typeof mode === 'string' ? mode.toLowerCase().includes('minor') : false) ? MINOR_SCALE_INTERVALS : MAJOR_SCALE_INTERVALS;
-    }
-    return intervals.map(interval => {
-        const currentMidiValue = rootMidiBase + interval;
-        const octaveOffset = Math.floor(currentMidiValue / 12);
-        const noteMidiNumber = (currentMidiValue % 12) + (startOctave + octaveOffset + 1) * 12;
-        return midiToNoteName(noteMidiNumber);
-    });
-}
-
-function getChordNotesForKey(keySignature: string, mode: string, degree: number, octaveInput: number = 3, addSeventh: boolean = false, genre?: string, harmonicComplexity: number = 0.3): string[] {
-    const rootNoteName = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
-    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : "";
-    const isKids = typeof mode === 'string' ? mode.toLowerCase().includes('kids') : false;
-    const octave = isKids ? 3 : octaveInput;
-
-
-    const fullScaleForChordRoots = getScaleNoteNames(rootNoteName, typeof mode === 'string' ? mode.replace('kids', '') : "", octave, genre, harmonicComplexity);
-
-    if (fullScaleForChordRoots.length === 0) return [midiToNoteName(DEFAULT_MIDI_NOTE + (octave - 4) * 12)];
-
-    const chordRootInScaleOctave = fullScaleForChordRoots[(degree - 1 + fullScaleForChordRoots.length) % fullScaleForChordRoots.length];
-    const finalChordRootMidi = robustNoteToMidi(chordRootInScaleOctave);
-
-    const majorKeyQualities = [
-        { type: 'Maj7', third: 4, fifth: 7, seventh: 11 },
-        { type: 'm7', third: 3, fifth: 7, seventh: 10 },
-        { type: 'm7', third: 3, fifth: 7, seventh: 10 },
-        { type: 'Maj7', third: 4, fifth: 7, seventh: 11 },
-        { type: 'Dom7', third: 4, fifth: 7, seventh: 10 },
-        { type: 'm7', third: 3, fifth: 7, seventh: 10 },
-        { type: 'm7b5', third: 3, fifth: 6, seventh: 10 }
-    ];
-    const naturalMinorKeyQualities = [
-        { type: 'm7', third: 3, fifth: 7, seventh: 10 },
-        { type: 'm7b5', third: 3, fifth: 6, seventh: 10 },
-        { type: 'Maj7', third: 4, fifth: 7, seventh: 11 },
-        { type: 'm7', third: 3, fifth: 7, seventh: 10 },
-        { type: 'm7', third: 3, fifth: 7, seventh: 10 }, 
-        { type: 'Maj7', third: 4, fifth: 7, seventh: 11 },
-        { type: 'Dom7', third: 4, fifth: 7, seventh: 10 }
-    ];
-
-    let qualityDefinition;
-    const isMinorKeyOverall = typeof mode === 'string' ? mode.toLowerCase().includes('minor') : false;
-    const currentDegreeIndex = (degree - 1 + 7) % 7;
-
-    if (isMinorKeyOverall) {
-        qualityDefinition = naturalMinorKeyQualities[currentDegreeIndex];
-        if (degree === 5 && (harmonicComplexity > 0.4 || genreLower.includes("jazz") || genreLower.includes("classical"))) {
-            qualityDefinition = { type: 'Dom7', third: 4, fifth: 7, seventh: 10 };
-        } else if (degree === 7 && harmonicComplexity > 0.5) { 
-            qualityDefinition = { type: 'dim', third:3, fifth:6, seventh: 9};
-        }
-    } else {
-        qualityDefinition = majorKeyQualities[currentDegreeIndex];
-    }
-
-    const notes = [
-        midiToNoteName(finalChordRootMidi),
-        midiToNoteName(finalChordRootMidi + qualityDefinition.third),
-        midiToNoteName(finalChordRootMidi + qualityDefinition.fifth)
-    ];
-
-    const shouldAddSeventh = addSeventh ||
-                       (genreLower.includes("jazz")) ||
-                       (qualityDefinition.type === 'Dom7') ||
-                       (qualityDefinition.type === 'm7b5') ||
-                       (qualityDefinition.type.includes('Maj7') && harmonicComplexity > 0.6);
-
-
-    if (shouldAddSeventh && !isKids) {
-        notes.push(midiToNoteName(finalChordRootMidi + qualityDefinition.seventh));
-    }
-
-    return notes.filter(name => name && typeof name === 'string');
-}
-
-// --- Synth Configurations ---
+// --- Synth Configurations (Copied from soundDesign.ts, simplified for direct use) ---
+// This is a subset of what was in soundDesign.ts, focused on what generateWavFromMusicParameters needs
+// This should be kept in sync or refactored if soundDesign.ts changes significantly.
 const getSynthConfigurations = (
   instrumentHints: string[] = [],
   genreInput?: string,
@@ -190,16 +28,16 @@ const getSynthConfigurations = (
         options: { harmonicity: 2.8, modulationIndex: 10, detune: 0, oscillator: { type: "sine" as const, partials: [1, 0.25, 0.12] }, envelope: { attack: 0.015, decay: 0.8, sustain: 0.4, release: 1.2 }, modulation: { type: "triangle" as const }, modulationEnvelope: { attack: 0.025, decay: 0.2, sustain: 0.01, release: 0.4 } },
         volume: -9,
         effects: [{type: Tone.Chorus, frequency: 0.9, delayTime: 3.5, depth: 0.06, feedback: 0.03, wet: 0.1}],
-        filterType: 'lowpass' as const, filterFrequency: 5000, filterRolloff: -12 as const,
-        filterEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.01, release: 1.2, baseFrequency: 300, octaves: 3} // Release matched
+        filterType: 'lowpass' as const, filterFrequency: 5000, filterRolloff: -12 as Tone.Rolloff,
+        filterEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.01, release: 1.2, baseFrequency: 300, octaves: 3}
     },
     synthLeadElectronic: {
         synthType: Tone.Synth,
         options: { oscillator: { type: "fatsawtooth" as const, count: 3, spread: 25 }, envelope: { attack: 0.04, decay: 1.5, sustain: 0.6, release: 1.0 } }, volume: -10,
         effects: [
             {type: Tone.FeedbackDelay, delayTime: "8n.", feedback: 0.25, wet:0.2},
-            {type: Tone.Filter, frequency: 3500, type: 'lowpass' as const, rolloff: -12 as const, Q: 0.8},
-            {type: Tone.LFO, frequency: 5, min: -5, max: 5, amplitude:0.3, targetParam: "detune", autostart: true} // Subtle vibrato
+            {type: Tone.Filter, frequency: 3500, type: 'lowpass' as const, rolloff: -12 as Tone.Rolloff, Q: 0.8},
+            {type: Tone.LFO, frequency: 5, min: -5, max: 5, amplitude:0.3, targetParam: "detune", autostart: true}
         ]
     },
     rockGuitarLead: { synthType: Tone.Synth, options: { oscillator: { type: "fatsquare" as const, count: 2, spread: 15 }, envelope: { attack: 0.01, decay: 0.7, sustain: 0.4, release: 0.5 } }, volume: -11, effects: [{type: Tone.Distortion, amount: 0.4}] },
@@ -211,15 +49,15 @@ const getSynthConfigurations = (
         options: { harmonicity: 2.2, modulationIndex: 7, envelope: { attack: 0.015, decay: 1.2, sustain: 0.4, release: 1.8 }, oscillator: {type: "sine" as const, partials: [1, 0.4, 0.08]} },
         volume: -18,
         effects: [{type: Tone.Chorus, frequency: 1.1, delayTime: 3.0, depth: 0.25, wet: 0.15}],
-        filterType: 'lowpass' as const, filterFrequency: 4500, filterRolloff: -12 as const,
-        filterEnvelope: { attack: 0.01, decay: 0.4, sustain: 0.01, release: 1.8, baseFrequency: 250, octaves: 3} // Release matched
+        filterType: 'lowpass' as const, filterFrequency: 4500, filterRolloff: -12 as Tone.Rolloff,
+        filterEnvelope: { attack: 0.01, decay: 0.4, sustain: 0.01, release: 1.8, baseFrequency: 250, octaves: 3}
     },
     warmPadChords: {
         synthType: Tone.PolySynth, subType: Tone.AMSynth,
         options: { harmonicity: 0.7, modulationType: "sawtooth" as const, envelope: { attack: 1.5, decay: 2.0, sustain: 0.8, release: 3.5 } }, volume: -22,
         effects: [
             {type: Tone.LFO, frequency: 0.2, min: 400, max: 1200, targetParam:"filterFrequency", autostart:true },
-            {type: Tone.Filter, type: "lowpass" as const, frequency: 800, rolloff: -12 as const, Q: 0.7 }
+            {type: Tone.Filter, type: "lowpass" as const, frequency: 800, rolloff: -12 as Tone.Rolloff, Q: 0.7 }
         ]
     },
     stringEnsembleChords: {
@@ -227,7 +65,7 @@ const getSynthConfigurations = (
         options: { oscillator: {type: "fatsawtooth" as const, count: 5, spread: 40}, envelope: {attack: 0.8, decay: 2.0, sustain:0.8, release: 2.5}}, volume: -20,
         effects: [
              {type: Tone.LFO, frequency: 0.25, min: 500, max: 1500, targetParam:"filterFrequency", autostart:true },
-             {type: Tone.Filter, type: "lowpass" as const, frequency: 1000, rolloff: -12 as const, Q: 0.8 }
+             {type: Tone.Filter, type: "lowpass" as const, frequency: 1000, rolloff: -12 as Tone.Rolloff, Q: 0.8 }
         ]
     },
 
@@ -238,17 +76,17 @@ const getSynthConfigurations = (
     subBassElectronic: { synthType: Tone.Synth, options: { oscillator: { type: "sine" as const }, envelope: { attack: 0.02, decay: 0.5, sustain: 1, release: 0.8 } }, volume: -7 },
     rockBassPicked: { synthType: Tone.Synth, options: { oscillator: {type: "fatsquare" as const, count:2, spread:10}, envelope: { attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.5 }}, volume: -8, effects: [{type: Tone.Distortion, amount: 0.1}]},
     jazzUprightBass: { synthType: Tone.FMSynth, options: { harmonicity: 0.8, modulationIndex: 1.5, envelope: { attack: 0.03, decay: 0.7, sustain: 0.1, release: 0.9 }, oscillator:{type:"sine" as const, partials: [1, 0.1, 0.02]}}, volume: -10},
-    funkSlapBass: { synthType: Tone.Synth, options: { oscillator: {type: "sawtooth" as const}, envelope: {attack: 0.005, decay: 0.15, sustain: 0.01, release: 0.2}, filter: {type: "lowpass", Q: 3, rolloff: -24, frequency: 800}, filterEnvelope: {attack:0.005, decay:0.05, sustain:0, release:0.1, baseFrequency:200, octaves:2.5} }, volume: -8 },
+    funkSlapBass: { synthType: Tone.Synth, options: { oscillator: {type: "sawtooth" as const}, envelope: {attack: 0.005, decay: 0.15, sustain: 0.01, release: 0.2}, filter: {type: "lowpass" as Tone.FilterType, Q: 3, rolloff: -24 as Tone.Rolloff, frequency: 800}, filterEnvelope: {attack:0.005, decay:0.05, sustain:0, release:0.1, baseFrequency:200, octaves:2.5} }, volume: -8 },
 
-    kidsToyPiano: { synthType: Tone.FMSynth, options: { harmonicity: 4.0, modulationIndex: 7, oscillator: {type: "triangle" as const}, envelope: {attack: 0.008, decay: 0.25, sustain: 0.4, release: 0.4}}, volume: -10}, // Increased sustain/release
-    kidsXylophone: { synthType: Tone.MetalSynth, options: { harmonicity: 2.0, modulationIndex: 1.0, octaves: 0.2, envelope: {attack:0.002, decay:0.3, release:0.5}}, volume: -13}, // Increased release
+    kidsToyPiano: { synthType: Tone.FMSynth, options: { harmonicity: 4.0, modulationIndex: 7, oscillator: {type: "triangle" as const}, envelope: {attack: 0.008, decay: 0.25, sustain: 0.4, release: 0.4}}, volume: -10},
+    kidsXylophone: { synthType: Tone.MetalSynth, options: { harmonicity: 2.0, modulationIndex: 1.0, octaves: 0.2, envelope: {attack:0.002, decay:0.3, release:0.5}}, volume: -13},
     kidsUkuleleBass: { synthType: Tone.PluckSynth, options: {attackNoise: 0.5, dampening: 1800, resonance: 0.55}, volume: -12},
     kidsSimplePad: {
         synthType: Tone.PolySynth, subType: Tone.Synth,
-        options: {oscillator: {type: "triangle" as const}, envelope: {attack: 0.3, decay:0.6, sustain:0.7, release:1.2}}, volume: -20, // Increased sustain/release
+        options: {oscillator: {type: "triangle" as const}, envelope: {attack: 0.3, decay:0.6, sustain:0.7, release:1.2}}, volume: -20,
         effects: [
              {type: Tone.LFO, frequency: 0.15, min: 300, max: 900, targetParam:"filterFrequency", autostart:true },
-             {type: Tone.Filter, type: "lowpass" as const, frequency: 600, rolloff: -12 as const, Q: 0.6 }
+             {type: Tone.Filter, type: "lowpass" as const, frequency: 600, rolloff: -12 as Tone.Rolloff, Q: 0.6 }
         ]
     },
     kidsSimpleArp: { synthType: Tone.Synth, options: {oscillator: {type: "square" as const }, envelope: {attack:0.015, decay:0.12, sustain:0.15, release:0.22}}, volume: -22},
@@ -308,7 +146,7 @@ const getSynthConfigurations = (
       chordsConf = { ...baseConfigs.electricPianoChords, volume: -16 };
       arpConf = { ...baseConfigs.pluckArp, volume: -24 };
       kickConf = { ...baseConfigs.kick, volume: -10, envelope: {...baseConfigs.kick.envelope, decay:0.15, sustain:0.001} };
-      snareConf = { ...baseConfigs.snare, volume: -16, noise: {type: 'pink', playbackRate: 0.5} };
+      snareConf = { ...baseConfigs.snare, volume: -16, noise: {type: 'pink' as const, playbackRate: 0.5} };
       hiHatConf = { ...baseConfigs.rideCymbal, volume: -20 };
       useRideCymbal = true;
     } else if (genreLower.includes("ambient") || genreLower.includes("new age")) {
@@ -392,7 +230,7 @@ const getSynthConfigurations = (
 
 const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instrument: Tone.Instrument, outputNodeToConnect: Tone.ToneAudioNode, filterEnv?: Tone.FrequencyEnvelope } => {
     if (!config || !config.synthType) {
-        const defaultConfig = { synthType: Tone.FMSynth, options: { oscillator: { type: SAFE_OSC_TYPE } }, volume: -12 };
+        const defaultConfig = { synthType: Tone.FMSynth, options: { oscillator: { type: SAFE_OSC_TYPE as any } }, volume: -12 };
         const instrument = new defaultConfig.synthType(defaultConfig.options);
         instrument.volume.value = defaultConfig.volume;
         return { instrument, outputNodeToConnect: instrument };
@@ -401,10 +239,10 @@ const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instr
     let instrument: Tone.Instrument;
     if (config.synthType === Tone.PolySynth) {
         const subSynthType = config.subType || Tone.Synth;
-        instrument = new Tone.PolySynth({synth: subSynthType});
-        if (config.options) (instrument as Tone.PolySynth).set(config.options);
+        instrument = new Tone.PolySynth({synth: subSynthType as any} as any); // Cast needed due to PolySynth constructor signature
+        if (config.options) (instrument as Tone.PolySynth).set(config.options as any);
     } else {
-        instrument = new config.synthType(config.options);
+        instrument = new config.synthType(config.options as any);
     }
     instrument.volume.value = config.volume !== undefined ? config.volume : -12;
 
@@ -414,9 +252,9 @@ const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instr
 
 
     if (config.filterType || (config.effects && config.effects.some((eff: any) => eff.targetParam === "filterFrequency"))) {
-        mainFilterForLFO = new Tone.Filter(config.filterFrequency || 5000, config.filterType || 'lowpass', config.filterRolloff || -12);
+        mainFilterForLFO = new Tone.Filter(config.filterFrequency || 5000, config.filterType || 'lowpass', config.filterRolloff || -12 as Tone.Rolloff);
         if (config.filterEnvelope) {
-            filterEnv = new Tone.FrequencyEnvelope(config.filterEnvelope);
+            filterEnv = new Tone.FrequencyEnvelope(config.filterEnvelope as any);
             filterEnv.connect(mainFilterForLFO.frequency);
         }
         instrument.connect(mainFilterForLFO);
@@ -438,12 +276,12 @@ const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instr
                  effectNodeInstance = new Tone.FeedbackDelay(effectConf.delayTime || "8n", effectConf.feedback || 0.5);
                  if (effectConf.wet !== undefined) (effectNodeInstance as Tone.FeedbackDelay).wet.value = effectConf.wet;
             } else if (effectConf.type === Tone.Filter && effectConf.targetParam !== "filterFrequency" && !mainFilterForLFO ) { 
-                 effectNodeInstance = new Tone.Filter(effectConf.frequency || 1000, effectConf.type || 'lowpass', effectConf.rolloff || -12);
+                 effectNodeInstance = new Tone.Filter(effectConf.frequency || 1000, effectConf.type || 'lowpass', effectConf.rolloff || -12 as Tone.Rolloff);
                  if (effectConf.Q !== undefined) (effectNodeInstance as Tone.Filter).Q.value = effectConf.Q;
             } else if (effectConf.type === Tone.LFO) {
                 const lfo = new Tone.LFO(effectConf.frequency, effectConf.min, effectConf.max);
                 if (effectConf.amplitude !== undefined) lfo.amplitude.value = effectConf.amplitude;
-                if (effectConf.targetParam === "detune") {
+                if (effectConf.targetParam === "detune" && instrument.detune) {
                     lfo.connect(instrument.detune);
                 } else if (effectConf.targetParam === "filterFrequency" && mainFilterForLFO) {
                     lfo.connect(mainFilterForLFO.frequency);
@@ -474,7 +312,6 @@ const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instr
     return { instrument, outputNodeToConnect: currentOutputNode, filterEnv };
 };
 
-
 function weightedRandom(items: (string | number)[], weights: number[]): string | number {
     let sum = 0;
     const r = Math.random();
@@ -491,6 +328,27 @@ function applyHumanization(time: number, intensity: number = 0.01): number {
   const randomOffset = (Math.random() * 2 - 1) * intensity * (0.005 + Math.random() * 0.005);
   return time + randomOffset;
 }
+
+
+// Simplified getScaleNoteNames and getChordNotesForKey for internal use if needed,
+// or ensure the imported ones are used correctly.
+function getScaleNotes(keySignature: string, mode: string, startOctave: number, selectedGenre?: string, harmonicComplexity?: number): string[] {
+    return getScaleNoteNamesTheory(keySignature, mode === 'major' ? MAJOR_SCALE_INTERVALS : MINOR_SCALE_INTERVALS, startOctave);
+}
+
+function getChordNotes(keySignature: string, mode: string, degree: number, octave: number, addSeventh: boolean, selectedGenre?: string, harmonicComplexity?: number): string[] {
+    const scaleNotes = getScaleNotes(keySignature, mode, octave, selectedGenre, harmonicComplexity);
+    const rootNoteOfChord = scaleNotes[(degree - 1 + scaleNotes.length) % scaleNotes.length];
+    if (!rootNoteOfChord) return [];
+
+    const rootMidi = robustNoteToMidi(rootNoteOfChord);
+    let chordIntervals = mode === 'major' ? MAJOR_CHORD_INTERVALS : MINOR_CHORD_INTERVALS; // Simplified
+    if (addSeventh) { // Basic 7th logic
+        chordIntervals = mode === 'major' ? [...MAJOR_CHORD_INTERVALS, 10] : [...MINOR_CHORD_INTERVALS, 10];
+    }
+    return chordIntervals.map(interval => midiToNoteName(rootMidi + interval));
+}
+
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
   const logPrefix = "[WAV_GEN_REVERT_CKPT1_V2]";
@@ -538,7 +396,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
   const melodyNotesToSchedule: { time: number, note: string, duration: string, velocity: number, filterAttack?:boolean }[] = [];
   const melodyOctave = isKidsMode ? 4 : (genreLower.includes("jazz") || genreLower.includes("classical") ? 5 : 4);
-  const scaleNoteNames = getScaleNoteNames(params.keySignature, params.mode, melodyOctave, params.selectedGenre, harmonicComplexity);
+  const scaleNoteNames = getScaleNotes(params.keySignature, params.mode, melodyOctave, params.selectedGenre, harmonicComplexity);
   let melodyCurrentTime = startOffset;
   let lastMelodyEventTime = -TIME_EPSILON;
   let lastMelodyNoteMidi = -1;
@@ -597,7 +455,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
           }
 
           const currentChordDegree = progressionDegreesInput[Math.floor(melodyCurrentTime / measureDurationSeconds) % progressionDegreesInput.length];
-          const chordNotesForMelody = getChordNotesForKey(params.keySignature, params.mode, currentChordDegree, melodyOctave, harmonicComplexity > 0.5, params.selectedGenre, harmonicComplexity)
+          const chordNotesForMelody = getChordNotes(params.keySignature, params.mode, currentChordDegree, melodyOctave, harmonicComplexity > 0.5, params.selectedGenre, harmonicComplexity)
                                        .map(n => robustNoteToMidi(n));
 
           let nextNoteMidi;
@@ -648,11 +506,11 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     for (let i=0; i < progressionDegreesInput.length; i++) {
         const degree = progressionDegreesInput[i];
         const currentMeasureStartTime = startOffset + (cycle * progressionDegreesInput.length * measureDurationSeconds) + (i * measureDurationSeconds);
-        const chordNotesForBass = getChordNotesForKey(params.keySignature, params.mode, degree, bassOctave, harmonicComplexity > 0.5, params.selectedGenre, harmonicComplexity);
+        const chordNotesForBass = getChordNotes(params.keySignature, params.mode, degree, bassOctave, harmonicComplexity > 0.5, params.selectedGenre, harmonicComplexity);
         const rootNote = chordNotesForBass[0] || midiToNoteName(DEFAULT_MIDI_NOTE + (bassOctave -4)*12);
         const fifthNote = chordNotesForBass[2 % chordNotesForBass.length] || rootNote;
         const thirdNote = chordNotesForBass[1 % chordNotesForBass.length] || rootNote;
-        const scaleForWalk = getScaleNoteNames(params.keySignature, params.mode, bassOctave, params.selectedGenre, harmonicComplexity);
+        const scaleForWalk = getScaleNotes(params.keySignature, params.mode, bassOctave, params.selectedGenre, harmonicComplexity);
 
         const baseVelBass = (isKidsMode ? 0.45 : 0.55) + (targetArousal * 0.12);
 
@@ -731,7 +589,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       const degree = progressionDegreesInput[i];
       const currentMeasureStartTime = startOffset + (cycle * progressionDegreesInput.length * measureDurationSeconds) + (i * measureDurationSeconds);
       const addSeventhForChord = !isKidsMode && (harmonicComplexity > 0.5 || genreLower.includes("jazz"));
-      const chordNoteNames = getChordNotesForKey(params.keySignature, params.mode, degree, chordOctave, addSeventhForChord, params.selectedGenre, harmonicComplexity);
+      const chordNoteNames = getChordNotes(params.keySignature, params.mode, degree, chordOctave, addSeventhForChord, params.selectedGenre, harmonicComplexity);
 
       const baseVelChord = (isKidsMode ? 0.25 : 0.35) + (targetArousal * 0.10) + (targetValence * 0.04);
 
@@ -955,12 +813,12 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       }
 
       console.log(`${logPrefix}_OFFLINE] Setting up drum synths.`);
-      const kickSynth = new Tone.MembraneSynth(activeSynthConfigs.kick).toDestination();
-      const snareSynth = new Tone.NoiseSynth(activeSynthConfigs.snare).toDestination();
-      const hiHatSynth = new Tone.MetalSynth(activeSynthConfigs.hiHat).toDestination();
+      const kickSynth = new Tone.MembraneSynth(activeSynthConfigs.kick as any).toDestination();
+      const snareSynth = new Tone.NoiseSynth(activeSynthConfigs.snare as any).toDestination();
+      const hiHatSynth = new Tone.MetalSynth(activeSynthConfigs.hiHat as any).toDestination();
       let tambourineSynth;
       if (activeSynthConfigs.tambourine) {
-        tambourineSynth = new Tone.NoiseSynth(activeSynthConfigs.tambourine).toDestination();
+        tambourineSynth = new Tone.NoiseSynth(activeSynthConfigs.tambourine as any).toDestination();
       }
       console.log(`${logPrefix}_OFFLINE] Drum synths created.`);
 
@@ -1004,4 +862,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-
