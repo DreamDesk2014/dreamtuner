@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { SparklesIcon } from '@/components/icons/SparklesIcon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea"; // For 6 Senses - Removed as feature is reverted
 import { MUSIC_GENRES } from '@/lib/constants';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
 import { Mic, MicOff, Image as LucideImage, Download, Share2 } from 'lucide-react';
@@ -17,13 +18,14 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { generateMidiFile } from '@/lib/midiService';
 import { dataURLtoFile } from '@/lib/utils';
-import { logEvent, getSessionId } from '@/lib/firestoreService'; // Import Firestore logging
+import { logEvent, getSessionId } from '@/lib/firestoreService'; 
+// import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"; // Removed
 
 interface KidsModeTabProps {
   onTuneCreation: (
     musicInput: AppInput, 
     artInput: RenderKidsDrawingInput | null,
-    drawingToolSummary?: { colorsUsedCount: number; wasClearCanvasUsed: boolean; } // Add summary here
+    drawingToolSummary?: { colorsUsedCount: number; wasClearCanvasUsed: boolean; } 
   ) => Promise<{ musicError?: string; artError?: string; musicParamsResult?: MusicParameters, artUrlResult?: string }>;
   isLoadingMusic: boolean;
   isRenderingArt: boolean;
@@ -65,9 +67,12 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
   const [isSharingKidsCreation, setIsSharingKidsCreation] = useState<boolean>(false);
   const [shareKidsError, setShareKidsError] = useState<string | null>(null);
 
-  // State for drawing tool usage summary
   const [colorsUsedThisSession, setColorsUsedThisSession] = useState<Set<string>>(new Set());
   const [wasClearCanvasUsedThisSession, setWasClearCanvasUsedThisSession] = useState<boolean>(false);
+
+  // State for 6 Senses removed
+  // const [sightDescKids, setSightDescKids] = useState('');
+  // ... and so on for other senses
 
   const resetDrawingToolSummary = () => {
     setColorsUsedThisSession(new Set());
@@ -76,7 +81,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
 
   useEffect(() => {
     if (drawingCanvasRef.current) {
-      drawingCanvasRef.current.clearCanvas(); // This will also trigger onClearCanvasUserAction
+      drawingCanvasRef.current.clearCanvas(); 
     }
     resetKidsTranscript();
     if (isListeningKids) {
@@ -86,6 +91,8 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
     setLocalError(null);
     setShareKidsError(null);
     resetDrawingToolSummary(); 
+    // Reset 6 senses state
+    // setSightDescKids(''); ... etc.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
@@ -95,9 +102,6 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
 
   const handleClearCanvasForLogging = () => {
     setWasClearCanvasUsedThisSession(true);
-    // Colors used should ideally reset if the canvas is cleared and drawing starts anew
-    // For simplicity, we log if clear was used *at any point* before this submission.
-    // A more complex logic could reset colorsUsedThisSession here too.
   };
 
   const handleLocalDrawingSubmit = async () => {
@@ -149,6 +153,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
             mode: 'kids',
             voiceDescription: hasVoice ? voiceTranscript : undefined,
             drawingSoundSequence: recordedSoundSequence,
+            // 6 Senses fields removed
         };
         renderArtInput = { 
             drawingDataUri: drawingDataURL, 
@@ -166,6 +171,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
             mode: 'kids',
             voiceDescription: voiceTranscript,
             drawingSoundSequence: recordedSoundSequence, 
+            // 6 Senses fields removed
         };
         renderArtInput = { 
             originalVoiceHint: voiceTranscript,
@@ -183,7 +189,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
     };
     
     await onTuneCreation(appInputForMusic, renderArtInput, drawingToolSummary);
-    resetDrawingToolSummary(); // Reset summary for next creation
+    resetDrawingToolSummary(); 
   };
 
   const handleKidsVoiceInputToggle = () => {
@@ -389,6 +395,8 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
           {speechErrorKids && <p className="mt-1 text-xs text-red-400 text-center">{speechErrorKids}</p>}
         </div>
 
+        {/* 6 Senses UI Accordion Removed */}
+
         <div className="mt-4">
           <Label htmlFor={genreSelectId + "-kids"} className="block text-lg font-medium text-stardust-blue mb-3">
             What kind of music style? (Optional):
@@ -477,4 +485,3 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
     </Card>
   );
 };
-

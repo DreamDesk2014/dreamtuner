@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useId, useEffect, useRef } from 'react';
 import { SparklesIcon } from './icons/SparklesIcon';
 import { DocumentTextIcon, PhotographIcon, VideoCameraIcon, XCircleIcon, UploadCloudIcon } from './icons/HeroIcons';
-import { Mic, MicOff, RotateCcw, Camera, CameraOff, AudioLines, StopCircle } from 'lucide-react'; // Removed Video, VideoOff
+import { Mic, MicOff, RotateCcw, Camera, CameraOff, AudioLines, StopCircle } from 'lucide-react'; 
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
 import type { InputType as StandardInputType, AppInput, FilePreview } from '@/types';
 import { MAX_IMAGE_FILE_SIZE_BYTES, MAX_IMAGE_FILE_SIZE_MB, MUSIC_GENRES } from '@/lib/constants';
@@ -17,6 +17,8 @@ import { Slider } from "@/components/ui/slider";
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from '@/hooks/use-toast';
+// Accordion import removed as 6 Senses UI is removed
+// import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const readFileAsDataURL = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -47,8 +49,6 @@ const mapSliderToFloat = (value: number | undefined): number | undefined => {
   return (value - 50) / 50;
 };
 
-// const MAX_VIDEO_RECORDING_DURATION_MS = 4000; // Removed as video recording is disabled
-
 interface InputFormProps {
   onSubmit: (input: AppInput) => void;
   isLoading: boolean;
@@ -75,7 +75,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Audio Recording State
   const [isRecordingAudio, setIsRecordingAudio] = useState<boolean>(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [hasMicrophonePermission, setHasMicrophonePermission] = useState<boolean | null>(null);
@@ -83,15 +82,9 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
 
-  // Video Recording State (references and some state removed or commented out)
-  // const [isRecordingVideo, setIsRecordingVideo] = useState<boolean>(false); // Removed
-  // const [videoRecordingError, setVideoRecordingError] = useState<string | null>(null); // Removed
-  // const videoMediaRecorderRef = useRef<MediaRecorder | null>(null); // Removed
-  // const recordedVideoChunksRef = useRef<Blob[]>([]); // Removed
-  // const recordingTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Removed
-  // const [recordingCountdown, setRecordingCountdown] = useState<number>(0); // Removed
-  // const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null); // Removed
-
+  // State for 6 Senses removed
+  // const [sightDescription, setSightDescription] = useState('');
+  // ... and so on for other senses
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -103,6 +96,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const genreSelectId = useId();
   const energySliderId = useId();
   const positivitySliderId = useId();
+  // Ids for 6 Senses inputs removed
 
   const {
     transcript,
@@ -142,7 +136,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         }
 
         try {
-            // Request audio: false, as video recording is disabled. If re-enabled, this might need audio: true.
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); 
             streamRef.current = stream;
             currentStreamForCleanup = stream;
@@ -212,22 +205,17 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     return () => { 
       stopLocalStream(streamRef, videoRef);
       stopLocalStream(audioStreamRef); 
-      // No video recorder cleanup needed as it's disabled
     };
   }, [showCameraPreview, currentStandardInputType]); 
-
-  // useEffect for video recording countdown removed
 
 
   const handleToggleCameraPreview = () => {
     if (showCameraPreview) {
       setShowCameraPreview(false); 
-      // No need to stop video recording as it's disabled
     } else {
       setFilePreview(null); 
       setFileError(null);
       setAudioError(null);
-      // setVideoRecordingError(null); // videoRecordingError state removed
       if (isRecordingAudio) handleToggleAudioRecording();
       setHasCameraPermission(null); 
       setCameraError(null);
@@ -286,8 +274,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     setShowCameraPreview(false); 
     setIsProcessingCamera(false);
   };
-
-  // handleToggleVideoRecording function removed
 
   const handleVoiceInputToggle = () => {
     if (isListening) {
@@ -399,12 +385,10 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (showCameraPreview) setShowCameraPreview(false); 
     if (isRecordingAudio) handleToggleAudioRecording(); 
-    // No need to check for isRecordingVideo as it's disabled
-
 
     const file = event.target.files?.[0];
     if (file) {
-      setFileError(null); setAudioError(null); // setVideoRecordingError(null); // videoRecordingError removed
+      setFileError(null); setAudioError(null); 
       const fileDetails: FilePreview = {
         name: file.name,
         type: file.type,
@@ -450,7 +434,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading || isListening || isProcessingCamera || isRecordingAudio ) return; // Removed isRecordingVideo
+    if (isLoading || isListening || isProcessingCamera || isRecordingAudio ) return; 
 
     let appInputPartial: Omit<AppInput, 'mode' | 'genre' | 'userEnergy' | 'userPositivity'> | null = null;
     let contentForFlow: string | undefined = undefined;
@@ -473,7 +457,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         additionalContext: additionalContext.trim() || undefined,
       };
     } else if (currentStandardInputType === 'video' && filePreview) { 
-      if (filePreview.url && (filePreview.type.startsWith('audio/') /* || filePreview.type.startsWith('video/') - video data URI disabled */)) { 
+      if (filePreview.url && (filePreview.type.startsWith('audio/'))) { 
         contentForFlow = filePreview.url.split(',')[1];
         mimeTypeForFlow = filePreview.type;
         if (!contentForFlow) {
@@ -497,6 +481,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         mode: 'standard',
         userEnergy: mapSliderToFloat(energySlider),
         userPositivity: mapSliderToFloat(positivitySlider),
+        // 6 Senses fields removed from finalAppInput
       };
       onSubmit(finalAppInput); 
     } else {
@@ -508,7 +493,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const isSubmitDisabled = isLoading || isListening || isProcessingCamera || isRecordingAudio ||
     (currentStandardInputType === 'text' && !text.trim()) ||
     ((currentStandardInputType === 'image' || currentStandardInputType === 'video') && !filePreview && !showCameraPreview) || 
-    !!fileError || !!audioError; // Removed !!videoRecordingError
+    !!fileError || !!audioError; 
 
   const inputOptions: { type: StandardInputType, label: string, icon: React.FC<any> }[] = [
     { type: 'text', label: 'Text', icon: DocumentTextIcon },
@@ -520,7 +505,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     setFilePreview(null);
     setFileError(null);
     setAudioError(null);
-    // setVideoRecordingError(null); // videoRecordingError removed
     const fileInput = document.getElementById(fileInputId) as HTMLInputElement;
     if (fileInput) fileInput.value = '';
     
@@ -536,8 +520,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         audioStreamRef.current = null;
     }
     setHasMicrophonePermission(null);
-
-    // No video recording reset needed
   };
 
   const handleInputTypeChange = (newType: StandardInputType) => {
@@ -547,6 +529,8 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     resetTranscript();
     if (isListening) stopListening();
     resetAllMediaInputs();
+    // Reset 6 Senses fields
+    // setSightDescription(''); ... etc.
   };
 
   const resetEnergySlider = () => setEnergySlider(50);
@@ -691,17 +675,16 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                   {hasCameraPermission && currentStandardInputType === 'video' && (
                       <Button
                           type="button"
-                          disabled // Always disabled for now
+                          disabled 
                           className={`w-full mt-3 text-primary-foreground bg-slate-500 opacity-70 cursor-not-allowed`}
                       >
                          Coming Soon! Live Video Recording Feature
                       </Button>
                   )}
-                  {/* {videoRecordingError && <p className="mt-1 text-xs text-red-400">{videoRecordingError}</p>} Removed */}
               </Card>
           )}
 
-          {!showCameraPreview && !isRecordingAudio && ( // Removed !isRecordingVideo
+          {!showCameraPreview && !isRecordingAudio && ( 
             <div>
                 <Label htmlFor={fileInputId} className="block text-sm font-medium text-stardust-blue mb-1">
                 Upload {currentStandardInputType === 'image' ? 'Image' : 'Video/Audio'} File:
@@ -752,7 +735,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                   <p className="text-xs text-muted-foreground mt-1">Preview of your live audio recording.</p>
                 </CardContent>
               )}
-              {filePreview.url && filePreview.type.startsWith('video/') && ( // Still allow preview if a video *file* was uploaded
+              {filePreview.url && filePreview.type.startsWith('video/') && ( 
                 <CardContent className="p-3 pt-0">
                   <video controls src={filePreview.url} className="w-full mt-2 rounded-md max-h-60" />
                   <p className="text-xs text-muted-foreground mt-1">Preview of your video (conceptual analysis).</p>
@@ -783,6 +766,8 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         </div>
       )}
       
+      {/* 6 Senses Accordion UI Removed */}
+
       <Separator className="my-6 bg-slate-700" />
 
       <div>
@@ -896,7 +881,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
             </svg>
             Finalizing Audio...
             </>
-        ) : ( // Removed isRecordingVideo condition
+        ) : ( 
           <>
             <SparklesIcon className="w-5 h-5 mr-2 text-yellow-300 group-hover:scale-110 transition-transform" />
             Generate Musical Essence
@@ -906,5 +891,3 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     </form>
   );
 };
-
-    

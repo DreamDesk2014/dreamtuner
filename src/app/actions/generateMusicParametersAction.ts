@@ -5,6 +5,7 @@ import { generateMusicalParameters as generateMusicalParametersFlow, type Genera
 
 export async function generateMusicParametersAction(input: AppInput): Promise<MusicParameters | { error: string }> {
   try {
+    // FlowInput no longer expects sensory descriptions
     const flowInput: FlowInput = {
       type: input.type,
       genre: input.genre,
@@ -14,15 +15,12 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
     if (input.type === 'text') {
       flowInput.content = input.content;
     } else if (input.type === 'image') {
-      // content is base64 for image, mimeType is also present
-      // fileDetails.url will contain the data URI for the image
-      flowInput.fileDetails = { // Pass the full fileDetails for images
+      flowInput.fileDetails = { 
         name: input.fileDetails.name,
         type: input.fileDetails.type,
         size: input.fileDetails.size,
         url: input.fileDetails.url, 
       };
-      // These are specific to image type in this block based on original structure
       if (input.voiceDescription) { 
         flowInput.voiceDescription = input.voiceDescription;
       }
@@ -32,23 +30,13 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
       if (input.drawingSoundSequence && input.mode === 'kids') {
         flowInput.drawingSoundSequence = input.drawingSoundSequence;
       }
-    } else if (input.type === 'video') { // This now handles uploaded video/audio concepts AND live recorded audio
-      flowInput.fileDetails = input.fileDetails; // name, type, size, and URL (if live audio recording)
-      // For live audio recordings, input.content (base64) and input.mimeType are also passed from InputForm
-      // The flow expects audio data URI in fileDetails.url
-      if (input.fileDetails.url && input.fileDetails.type.startsWith('audio/')) {
-        // This means fileDetails.url is a data URI of recorded audio.
-        // The flow's prompt will use {{media url=fileDetails.url}}
-      }
-      // No need to explicitly pass input.content or input.mimeType to flowInput
-      // if the data URI is correctly in flowInput.fileDetails.url
-
+    } else if (input.type === 'video') { 
+      flowInput.fileDetails = input.fileDetails; 
       if (input.additionalContext) { 
         flowInput.additionalContext = input.additionalContext;
       }
     }
     
-    // Add mood slider values if present (for standard mode)
     if (input.mode === 'standard') {
       if (input.userEnergy !== undefined) {
         flowInput.userEnergy = input.userEnergy;
@@ -88,4 +76,3 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
     return { error: `Failed to generate music parameters: ${errorMessage}` };
   }
 }
-
