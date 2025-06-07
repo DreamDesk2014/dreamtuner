@@ -80,17 +80,17 @@ const HARMONIC_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 11];
 function getScaleNoteNames(keySignature: string, mode: string, startOctave: number = 4, genre?: string, harmonicComplexity: number = 0.3): string[] {
     const baseKeyForScale = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
     const rootMidiBase = robustNoteToMidi(baseKeyForScale + '0') % 12;
-    const genreLower = genre?.toLowerCase();
+    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : "";
     const isKids = mode.toLowerCase().includes('kids');
 
     let intervals: number[];
     if (isKids) {
         intervals = MAJOR_PENTATONIC_INTERVALS;
-    } else if (genreLower?.includes('blues')) {
+    } else if (genreLower.includes('blues')) {
         intervals = BLUES_SCALE_INTERVALS;
-    } else if (genreLower?.includes('jazz')) {
+    } else if (genreLower.includes('jazz')) {
         intervals = mode.toLowerCase().includes('minor') ? DORIAN_INTERVALS : (harmonicComplexity > 0.6 ? MIXOLYDIAN_INTERVALS : STANDARD_MAJOR_INTERVALS);
-    } else if ((genreLower?.includes('folk') || genreLower?.includes('country'))) {
+    } else if ((genreLower.includes('folk') || genreLower.includes('country'))) {
         intervals = mode.toLowerCase().includes('minor') ? MINOR_PENTATONIC_INTERVALS : MAJOR_PENTATONIC_INTERVALS;
     } else {
         intervals = mode.toLowerCase().includes('minor') ? (harmonicComplexity > 0.6 ? HARMONIC_MINOR_INTERVALS : STANDARD_MINOR_INTERVALS) : STANDARD_MAJOR_INTERVALS;
@@ -104,9 +104,12 @@ function getScaleNoteNames(keySignature: string, mode: string, startOctave: numb
     });
 }
 
-function getChordNotesForKey(keySignature: string, mode: string, degree: number, octave: number = 3, harmonicComplexity: number = 0.3, genre?: string): string[] {
+function getChordNotesForKey(keySignature: string, mode: string, degree: number, octave: number = 3, addSeventh: boolean = false, harmonicComplexity: number = 0.3, genre?: string): string[] {
     const rootNoteName = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
-    const fullScaleForChordRoots = getScaleNoteNames(rootNoteName, mode.replace('kids', ''), octave, genre, harmonicComplexity);
+    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : ""; // Ensure genreLower is always a string
+    
+    // Get scale based on key, mode, and octave for chord roots
+    const fullScaleForChordRoots = getScaleNoteNames(rootNoteName, mode.replace('kids', ''), octave, genreLower, harmonicComplexity);
     
     if (fullScaleForChordRoots.length === 0) return [midiToNoteName(DEFAULT_MIDI_NOTE + (octave - 4) * 12)];
 
@@ -114,33 +117,40 @@ function getChordNotesForKey(keySignature: string, mode: string, degree: number,
     const finalChordRootMidi = robustNoteToMidi(chordRootInScaleOctave);
 
     // Diatonic chord qualities for a major key
-    const majorKeyQualities = [
+    const majorKeyQualities = [ // 0-indexed degree
         { type: 'Maj7', third: 4, fifth: 7, seventh: 11 }, // I
         { type: 'm7', third: 3, fifth: 7, seventh: 10 },   // ii
         { type: 'm7', third: 3, fifth: 7, seventh: 10 },   // iii
         { type: 'Maj7', third: 4, fifth: 7, seventh: 11 }, // IV
         { type: 'Dom7', third: 4, fifth: 7, seventh: 10 }, // V
         { type: 'm7', third: 3, fifth: 7, seventh: 10 },   // vi
-        { type: 'm7b5', third: 3, fifth: 6, seventh: 10 } // vii°
+        { type: 'm7b5', third: 3, fifth: 6, seventh: 10 }  // vii°
     ];
+     // Diatonic chord qualities for a natural minor key
+    const naturalMinorKeyQualities = [ // 0-indexed degree
+        { type: 'm7', third: 3, fifth: 7, seventh: 10 },    // i
+        { type: 'm7b5', third: 3, fifth: 6, seventh: 10 },  // ii°
+        { type: 'Maj7', third: 4, fifth: 7, seventh: 11 },  // III
+        { type: 'm7', third: 3, fifth: 7, seventh: 10 },    // iv
+        { type: 'm7', third: 3, fifth: 7, seventh: 10 },    // v (natural minor)
+        { type: 'Maj7', third: 4, fifth: 7, seventh: 11 },  // VI
+        { type: 'Dom7', third: 4, fifth: 7, seventh: 10 }   // VII (natural minor)
+    ];
+
 
     let qualityDefinition;
     const isMinorKeyOverall = mode.toLowerCase().includes('minor');
+    const currentDegreeIndex = (degree - 1 + 7) % 7;
+
 
     if (isMinorKeyOverall) {
-        // Natural minor chords (Aeolian mode: vi of relative major)
-        // Degree 1 (minor tonic) is like vi of Major.
-        // Degree 2 (minor supertonic) is like vii° of Major.
-        // Degree 3 (minor mediant) is like I of Major.
-        // etc.
-        const minorToMajorDegree = [5, 6, 0, 1, 2, 3, 4]; // maps minor degree (0-indexed) to major degree (0-indexed) for quality lookup
-        qualityDefinition = majorKeyQualities[minorToMajorDegree[(degree - 1 + 7) % 7]];
-        // Harmonic minor adjustment: V chord is often Major/Dominant
+        qualityDefinition = naturalMinorKeyQualities[currentDegreeIndex];
+        // Harmonic minor V chord adjustment
         if (degree === 5 && harmonicComplexity > 0.4) {
-            qualityDefinition = majorKeyQualities[4]; // V Dom7
+            qualityDefinition = { type: 'Dom7', third: 4, fifth: 7, seventh: 10 }; // V Dom7 in harmonic/melodic minor
         }
     } else { // Major key
-        qualityDefinition = majorKeyQualities[(degree - 1 + 7) % 7];
+        qualityDefinition = majorKeyQualities[currentDegreeIndex];
     }
     
     const notes = [
@@ -149,12 +159,14 @@ function getChordNotesForKey(keySignature: string, mode: string, degree: number,
         midiToNoteName(finalChordRootMidi + qualityDefinition.fifth)
     ];
 
-    const addSeventh = harmonicComplexity > 0.55 || 
-                       (genre?.toLowerCase().includes("jazz")) || 
+    const shouldAddSeventh = addSeventh || 
+                       (genreLower.includes("jazz")) || 
                        (qualityDefinition.type === 'Dom7') ||
-                       (qualityDefinition.type === 'm7b5');
+                       (qualityDefinition.type === 'm7b5') ||
+                       (qualityDefinition.type.includes('Maj7') && harmonicComplexity > 0.6);
 
-    if (addSeventh) {
+
+    if (shouldAddSeventh) {
         notes.push(midiToNoteName(finalChordRootMidi + qualityDefinition.seventh));
     }
     return notes.filter(name => name && typeof name === 'string');
@@ -164,12 +176,12 @@ function getChordNotesForKey(keySignature: string, mode: string, degree: number,
 // --- Synth Configurations ---
 const getSynthConfigurations = (
   instrumentHints: string[] = [],
-  genre: string = '',
+  genreInput?: string, // Make genre optional here to align with how it might be passed
   isKidsMode: boolean = false,
   harmonicComplexity: number = 0.3,
   rhythmicDensity: number = 0.5,
 ): any => {
-  const genreLower = genre.toLowerCase();
+  const genreLower = typeof genreInput === 'string' ? genreInput.toLowerCase() : "";
   const hintsLower = instrumentHints.map(h => h.toLowerCase());
 
   const baseConfigs = {
@@ -420,7 +432,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   Tone.Destination.volume.value = -3; // Overall mix level
   Tone.Transport.bpm.value = params.tempoBpm || 120;
   
-  const genreLower = params.selectedGenre?.toLowerCase() || "";
+  const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
   const isKidsMode = params.originalInput.mode === 'kids';
   const { harmonicComplexity, rhythmicDensity, targetArousal, targetValence } = params;
 
