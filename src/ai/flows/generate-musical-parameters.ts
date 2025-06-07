@@ -183,7 +183,7 @@ const prompt = ai.definePrompt({
 
     Please ensure the generated musical parameters are stylistically appropriate for '{{{genre}}}', while still reflecting the core essence of the primary input.
 
-    {{#eq genre "Rock"}}
+    {{#if isGenreRock}}
       For Rock:
       - Key Signature: Often major or minor, can have bluesy inflections (e.g., C major, A minor, E minor blues).
       - Mode: Major or Minor.
@@ -196,7 +196,7 @@ const prompt = ai.definePrompt({
       - TargetArousal: 0.5 to 0.9 (high energy).
       - Avoid: Do not use instruments like classical flute or harp. Avoid overly complex, highly syncopated jazz rhythms, or weak, thin drum sounds. The feeling should be powerful and direct.
       - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax]. Example: "A classic rock track with a memorable guitar riff, solid drums, and a catchy chorus that builds in intensity."
-    {{else eq genre "Jazz"}}
+    {{else if isGenreJazz}}
       For Jazz (e.g., Swing, Bebop, Cool Jazz):
       - Key Signature: Can be complex, often utilizing modes beyond simple major/minor.
       - Mode: Major, Minor, or Modal (e.g., Dorian, Mixolydian).
@@ -209,7 +209,7 @@ const prompt = ai.definePrompt({
       - TargetArousal: 0.1 to 0.7 (can range from very mellow to highly energetic).
       - Avoid: Avoid rigid, straight 4/4 rock drum beats or simple power-chord harmonies. The feel should be fluid, interactive, and harmonically rich, not stiff.
       - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax]. Example: "A smooth jazz combo piece featuring a walking bass, intricate piano chording, and an expressive saxophone melody over a rich harmonic progression."
-    {{else eq genre "Electronic"}}
+    {{else if isGenreElectronic}}
       For Electronic (e.g., House, Synthpop, Techno):
       - Key Signature: Often minor or major, can be modal.
       - Mode: Major or Minor, sometimes Dorian or Mixolydian.
@@ -222,7 +222,7 @@ const prompt = ai.definePrompt({
       - TargetArousal: 0.6 to 0.9 (energetic, designed for movement).
       - Avoid: Avoid traditional acoustic instruments like violins or acoustic guitars unless explicitly requested or fitting a subgenre (e.g., some forms of IDM). Avoid overly complex, non-repetitive melodic structures for dance-focused subgenres.
       - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax]. Example: "A classic house track with a four-on-the-floor kick, a funky synth bassline, layered with shimmering pads and a catchy lead synth melody."
-    {{else eq genre "Cinematic"}}
+    {{else if isGenreCinematic}}
       For Cinematic (e.g., Film Score, Orchestral):
       - Key Signature: Highly variable, can be major, minor, atonal, or modal.
       - Mode: Major, Minor, or other modes depending on the desired emotion.
@@ -239,7 +239,7 @@ const prompt = ai.definePrompt({
       {{! Fallback for other genres }}
       For the genre '{{{genre}}}', your task is to first briefly define its key musical characteristics in 1-2 sentences (e.g., typical instruments, tempo range, rhythmic feel, common mood). Then, generate all the musical parameters below based on your own definition. This ensures your output is internally consistent with your understanding of the genre.
       - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax]. Describe a musical vision.
-    {{/eq}}
+    {{/if}}
   {{else}} {{! No genre selected by user }}
     {{! Generate parameters without specific genre guidance, relying on input type and content }}
     - generatedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax]. Describe a musical vision based on the input content.
@@ -280,6 +280,7 @@ const generateMusicalParametersFlow = ai.defineFlow(
     outputSchema: GenerateMusicalParametersOutputSchema,
   },
   async (input: GenerateMusicalParametersInput) => {
+    const genreLower = input.genre?.toLowerCase();
     const handlebarsContext = {
       ...input,
       isKidsMode: input.mode === 'kids',
@@ -289,9 +290,17 @@ const generateMusicalParametersFlow = ai.defineFlow(
       isInputVideoWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('video/'),
       isInputVideoFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('video/'),
       isInputAudioFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('audio/'),
+      // Boolean flags for genre
+      isGenreRock: genreLower === 'rock',
+      isGenreJazz: genreLower === 'jazz',
+      isGenreElectronic: genreLower === 'electronic',
+      isGenreCinematic: genreLower === 'cinematic',
+      // Add more genre flags here if you add more {{else if isGenreXYZ}} blocks
     };
     const {output} = await prompt(handlebarsContext);
     return output!;
   }
 );
+    
+
     
