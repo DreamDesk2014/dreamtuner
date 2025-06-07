@@ -37,10 +37,10 @@ export const MAX_IMAGE_FILE_SIZE_MB = MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024);
 export const MUSIC_GENRES = [
   "Pop", "Rock", "Jazz", "Electronic", "Ambient",
   "Classical", "Folk", "Cinematic", "Hip Hop", "Blues",
-  "Reggae", "Country", "Metal", "Funk", "Soul"
+  "Reggae", "Country", "Metal", "Funk", "Soul", "AI" // Added "AI" genre
 ].sort();
 
-export const SOUND_LOADING_TIMEOUT_MS = 40000; 
+export const SOUND_LOADING_TIMEOUT_MS = 40000;
 export const SOUNDFONT_URL = 'https://storage.googleapis.com/magentadata/js/soundfonts/sgm_plus/';
 
 export const TARGET_TOTAL_MIDI_SECONDS = 35; // Target overall MIDI duration

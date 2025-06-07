@@ -235,6 +235,18 @@ const prompt = ai.definePrompt({
       - TargetArousal: Highly variable (-0.9 to 0.9).
       - Avoid: Avoid overly "pop" song structures unless it's for a specific type of montage. Avoid typical rock/electronic drum machine beats unless for a hybrid score. The focus is often on orchestral color and emotional development.
       - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax]. Example: "An epic orchestral score opening with somber strings, building with powerful brass and timpani to a dramatic, emotionally charged climax."
+    {{else if isGenreAI}}
+      For AI Genre (Experimental, Digital Soundscapes):
+      - Key Signature: Can be minor, modal (e.g., Lydian, Phrygian), or atonal if harmonic complexity is high. Favor keys that allow for ethereal or slightly dissonant textures (e.g., F# minor, C Lydian).
+      - Mode: Often minor or modal. "Major" can be used if aiming for a bright, digital-positive feel.
+      - TempoBpm: Highly variable. Can be very slow and atmospheric (60-90 BPM), or fast and glitchy (130-180 BPM). Default to mid-range (90-120 BPM) if not strongly influenced by input.
+      - MoodTags: Suggest ["futuristic", "digital", "algorithmic", "ethereal", "glitchy", "abstract", "cybernetic", "dreamlike", "surreal", "inharmonic", "processed"].
+      - InstrumentHints: Suggest ["Synth Pad (Glacial, Evolving, Granular)", "Synth Lead (Digital Sine, Pure, FM Bell-like)", "Arpeggiator (Algorithmic, Stuttering, RandomSeed)", "Noise Texture (Filtered White, Pink Noise Wash)", "Granular Cloud (Shimmering, Abstract)", "FM Bells (Crystal, Inharmonic Tones)", "Bass (Deep Sine Wave, Pulsating Sub)", "Percussion (Digital Clicks, Micro-Beats, Resonant Pings, Granular Hits)"]. Avoid traditional acoustic instrument names unless highly processed (e.g., "Processed Piano Texture").
+      - RhythmicDensity: Can range from very sparse (0.1-0.3) for ambient AI to very dense and complex (0.7-0.9) for glitch AI. Moderate (0.4-0.6) is a good default.
+      - HarmonicComplexity: Generally higher (0.5-0.9). Allow for dissonance, tone clusters, parallel harmonies, or unconventional progressions. Lower complexity (0.3-0.5) for more minimalist AI sounds.
+      - TargetValence: Can be very neutral (around 0.0) or pushed to extremes based on input. The genre itself doesn't dictate strong valence.
+      - TargetArousal: Highly dependent on input. Can be very low (calm, ambient AI) or very high (intense, glitchy AI).
+      - GeneratedIdea (max 45 words): Structure: [Core Texture/Concept] + [Key Sonic Elements/Movement] + [Digital Characteristic] + [Overall Atmosphere]. Example: "An algorithmic soundscape of evolving granular pads and crystalline FM bells, creating a futuristic and ethereal digital dream."
     {{else}}
       {{! Fallback for other genres - user provided a genre not in the above list }}
       For the genre '{{{genre}}}', your task is to first briefly define its key musical characteristics in 1-2 sentences (e.g., typical instruments, tempo range, rhythmic feel, common mood). Then, generate all the musical parameters below based on your own definition. This ensures your output is internally consistent with your understanding of the genre.
@@ -294,14 +306,10 @@ const generateMusicalParametersFlow = ai.defineFlow(
       isGenreJazz: genreLower === 'jazz',
       isGenreElectronic: genreLower === 'electronic',
       isGenreCinematic: genreLower === 'cinematic',
+      isGenreAI: genreLower === 'ai', // Added AI genre flag
       // Add more genre flags here if you add more {{else if isGenreXYZ}} blocks
     };
     const {output} = await prompt(handlebarsContext);
     return output!;
   }
 );
-    
-
-    
-
-    
