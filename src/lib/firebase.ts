@@ -1,7 +1,7 @@
 
 // Firebase project configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDazjuojYQ7spIg0jw3P91_bEdLXEjyjwo",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: "resonanceai-gopeq.firebaseapp.com",
   projectId: "resonanceai-gopeq",
   storageBucket: "resonanceai-gopeq.appspot.com", // Corrected to .appspot.com as per standard Firebase naming
