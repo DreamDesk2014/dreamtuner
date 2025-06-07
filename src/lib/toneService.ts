@@ -4,38 +4,26 @@ import * as Tone from 'tone';
 import type { MusicParameters } from '@/types';
 import { audioBufferToWav } from "./audioBufferToWav";
 
+// Constants
 const SAFE_OSC_TYPE = 'triangle' as const;
-const MIN_EFFECTIVE_DURATION_SECONDS = 4.0;
+const MIN_EFFECTIVE_DURATION_SECONDS = 5.0; // Increased slightly
 const TIME_EPSILON = 0.00001; // Small offset to ensure unique times
+const DEFAULT_MIDI_NOTE = 60; // C4
 
-function weightedRandom(items: (string | number)[], weights: number[]): string | number {
-    let sum = 0;
-    const r = Math.random();
-    for (let i = 0; i < items.length; i++) {
-        if (weights[i] < 0) continue;
-        sum += weights[i];
-        if (r <= sum) return items[i];
-    }
-    const validItems = items.filter((_, idx) => (weights[idx] ?? 0) > 0);
-    return validItems.length > 0 ? validItems[validItems.length - 1] : (items[items.length - 1] || "4n");
-}
-
+// --- Note and Scale Utilities (Adapted from midiService for internal use) ---
 const PITCH_CLASSES: { [key: string]: number } = {
     'C': 0, 'B#': 0, 'BS': 0, 'C#': 1, 'DB': 1, 'CS': 1, 'D': 2, 'D#': 3, 'EB': 3, 'DS': 3,
     'E': 4, 'FB': 4, 'F': 5, 'E#': 5, 'ES': 5, 'F#': 6, 'GB': 6, 'FS': 6, 'G': 7,
     'G#': 8, 'AB': 8, 'GS': 8, 'A': 9, 'A#': 10, 'BB': 10, 'AS': 10, 'B': 11, 'CB': 11,
 };
 const NOTES_ARRAY = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const DEFAULT_MIDI_NOTE = 60; // C4
 
 function robustNoteToMidi(noteNameWithOctave: string): number {
     if (typeof noteNameWithOctave !== 'string') return DEFAULT_MIDI_NOTE;
     const match = noteNameWithOctave.match(/([A-G])([#bSsxBF]*)(-?[0-9]+)/i);
     if (!match) {
         const simpleMatch = noteNameWithOctave.match(/([A-G])([#bSsxBF]*)/i);
-        if (simpleMatch) {
-            return robustNoteToMidi(noteNameWithOctave + '4');
-        }
+        if (simpleMatch) return robustNoteToMidi(noteNameWithOctave + '4'); // Default to octave 4
         return DEFAULT_MIDI_NOTE;
     }
     let pitchClassName = match[1].toUpperCase();
@@ -46,7 +34,7 @@ function robustNoteToMidi(noteNameWithOctave: string): number {
     let fullPitchName = pitchClassName;
     if (accidentals.includes('#') || accidentals.includes('S')) fullPitchName += '#';
     else if (accidentals.includes('B') || (accidentals.includes('F') && pitchClassName !== 'F' && pitchClassName !== 'B')) fullPitchName += 'B';
-
+    
     let effectiveOctave = octave;
     if (fullPitchName === 'E#') { fullPitchName = 'F'; }
     else if (fullPitchName === 'B#') { fullPitchName = 'C'; effectiveOctave = octave + 1; }
@@ -80,16 +68,16 @@ function midiToNoteName(midiNumber: number): string {
     return NOTES_ARRAY[noteIndex] + octave;
 }
 
-const STANDARD_MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
-const STANDARD_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10];
-const BLUES_SCALE_INTERVALS = [0, 3, 5, 6, 7, 10];
+const STANDARD_MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]; // Ionian
+const STANDARD_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // Natural Minor (Aeolian)
+const BLUES_SCALE_INTERVALS = [0, 3, 5, 6, 7, 10]; // Minor Blues
 const MAJOR_PENTATONIC_INTERVALS = [0, 2, 4, 7, 9];
 const MINOR_PENTATONIC_INTERVALS = [0, 3, 5, 7, 10];
 const DORIAN_INTERVALS = [0, 2, 3, 5, 7, 9, 10];
 const MIXOLYDIAN_INTERVALS = [0, 2, 4, 5, 7, 9, 10];
+const HARMONIC_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 11];
 
-
-function getScaleNoteNames(keySignature: string, mode: string, startOctave: number = 4, genre?: string): string[] {
+function getScaleNoteNames(keySignature: string, mode: string, startOctave: number = 4, genre?: string, harmonicComplexity: number = 0.3): string[] {
     const baseKeyForScale = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
     const rootMidiBase = robustNoteToMidi(baseKeyForScale + '0') % 12;
     const genreLower = genre?.toLowerCase();
@@ -97,21 +85,15 @@ function getScaleNoteNames(keySignature: string, mode: string, startOctave: numb
 
     let intervals: number[];
     if (isKids) {
-        intervals = MAJOR_PENTATONIC_INTERVALS; // Default to major pentatonic for kids
+        intervals = MAJOR_PENTATONIC_INTERVALS;
     } else if (genreLower?.includes('blues')) {
         intervals = BLUES_SCALE_INTERVALS;
-    } else if (genreLower?.includes('jazz') && mode.toLowerCase().includes('minor')) {
-        intervals = DORIAN_INTERVALS;
     } else if (genreLower?.includes('jazz')) {
-        intervals = MIXOLYDIAN_INTERVALS;
-    } else if ((genreLower?.includes('folk') || genreLower?.includes('country')) && mode.toLowerCase().includes('minor')) {
-        intervals = MINOR_PENTATONIC_INTERVALS;
-    } else if (genreLower?.includes('folk') || genreLower?.includes('country')) {
-        intervals = MAJOR_PENTATONIC_INTERVALS;
-    } else if (mode.toLowerCase().includes('minor')) {
-        intervals = STANDARD_MINOR_INTERVALS;
+        intervals = mode.toLowerCase().includes('minor') ? DORIAN_INTERVALS : (harmonicComplexity > 0.6 ? MIXOLYDIAN_INTERVALS : STANDARD_MAJOR_INTERVALS);
+    } else if ((genreLower?.includes('folk') || genreLower?.includes('country'))) {
+        intervals = mode.toLowerCase().includes('minor') ? MINOR_PENTATONIC_INTERVALS : MAJOR_PENTATONIC_INTERVALS;
     } else {
-        intervals = STANDARD_MAJOR_INTERVALS;
+        intervals = mode.toLowerCase().includes('minor') ? (harmonicComplexity > 0.6 ? HARMONIC_MINOR_INTERVALS : STANDARD_MINOR_INTERVALS) : STANDARD_MAJOR_INTERVALS;
     }
 
     return intervals.map(interval => {
@@ -122,222 +104,258 @@ function getScaleNoteNames(keySignature: string, mode: string, startOctave: numb
     });
 }
 
-function getChordNotesForKey(keySignature: string, mode: string, degree: number, octave: number = 3, addSeventh: boolean = false, harmonicComplexity: number = 0.3): string[] {
+function getChordNotesForKey(keySignature: string, mode: string, degree: number, octave: number = 3, harmonicComplexity: number = 0.3, genre?: string): string[] {
     const rootNoteName = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
-    const fullScaleForChordRoots = getScaleNoteNames(rootNoteName, mode.replace('kids', ''), octave); // Use standard scale for chord root finding
+    const fullScaleForChordRoots = getScaleNoteNames(rootNoteName, mode.replace('kids', ''), octave, genre, harmonicComplexity);
     
     if (fullScaleForChordRoots.length === 0) return [midiToNoteName(DEFAULT_MIDI_NOTE + (octave - 4) * 12)];
 
     const chordRootInScaleOctave = fullScaleForChordRoots[(degree - 1 + fullScaleForChordRoots.length) % fullScaleForChordRoots.length];
-    const finalChordRootMidi = robustNoteToMidi(chordRootInScaleOctave); // Already in correct octave from getScaleNoteNames
+    const finalChordRootMidi = robustNoteToMidi(chordRootInScaleOctave);
 
-    let thirdInterval = 4; let fifthInterval = 7; let seventhInterval = 10;
+    // Diatonic chord qualities for a major key
+    const majorKeyQualities = [
+        { type: 'Maj7', third: 4, fifth: 7, seventh: 11 }, // I
+        { type: 'm7', third: 3, fifth: 7, seventh: 10 },   // ii
+        { type: 'm7', third: 3, fifth: 7, seventh: 10 },   // iii
+        { type: 'Maj7', third: 4, fifth: 7, seventh: 11 }, // IV
+        { type: 'Dom7', third: 4, fifth: 7, seventh: 10 }, // V
+        { type: 'm7', third: 3, fifth: 7, seventh: 10 },   // vi
+        { type: 'm7b5', third: 3, fifth: 6, seventh: 10 } // vii°
+    ];
+
+    let qualityDefinition;
     const isMinorKeyOverall = mode.toLowerCase().includes('minor');
 
-    // Diatonic chord qualities based on major key system, then adjusted for minor
-    const majorKeyQualities = [
-        { third: 4, fifth: 7, seventh: 11 }, // I Maj7
-        { third: 3, fifth: 7, seventh: 10 }, // ii m7
-        { third: 3, fifth: 7, seventh: 10 }, // iii m7
-        { third: 4, fifth: 7, seventh: 11 }, // IV Maj7
-        { third: 4, fifth: 7, seventh: 10 }, // V Dom7
-        { third: 3, fifth: 7, seventh: 10 }, // vi m7
-        { third: 3, fifth: 6, seventh: 10 }, // vii m7b5
-    ];
-
-    const qualityIndex = (degree - 1 + 7) % 7;
-    let quality = majorKeyQualities[qualityIndex];
-
     if (isMinorKeyOverall) {
-        // Adjust for natural minor based on its relationship to relative major
-        // Minor tonic is vi of relative major. So, degree 1 in minor is like degree 6 in major.
-        const relativeMajorDegree = (degree + 5 -1 + 7) % 7; // e.g. minor tonic (1) is major's 6th degree
-        quality = majorKeyQualities[relativeMajorDegree];
-        // Common alteration: V chord in minor is often Major/Dominant
+        // Natural minor chords (Aeolian mode: vi of relative major)
+        // Degree 1 (minor tonic) is like vi of Major.
+        // Degree 2 (minor supertonic) is like vii° of Major.
+        // Degree 3 (minor mediant) is like I of Major.
+        // etc.
+        const minorToMajorDegree = [5, 6, 0, 1, 2, 3, 4]; // maps minor degree (0-indexed) to major degree (0-indexed) for quality lookup
+        qualityDefinition = majorKeyQualities[minorToMajorDegree[(degree - 1 + 7) % 7]];
+        // Harmonic minor adjustment: V chord is often Major/Dominant
         if (degree === 5 && harmonicComplexity > 0.4) {
-             quality = majorKeyQualities[4]; // Make V dominant in minor
+            qualityDefinition = majorKeyQualities[4]; // V Dom7
         }
+    } else { // Major key
+        qualityDefinition = majorKeyQualities[(degree - 1 + 7) % 7];
     }
     
-    thirdInterval = quality.third;
-    fifthInterval = quality.fifth;
-    seventhInterval = quality.seventh;
-
     const notes = [
         midiToNoteName(finalChordRootMidi),
-        midiToNoteName(finalChordRootMidi + thirdInterval),
-        midiToNoteName(finalChordRootMidi + fifthInterval)
+        midiToNoteName(finalChordRootMidi + qualityDefinition.third),
+        midiToNoteName(finalChordRootMidi + qualityDefinition.fifth)
     ];
-    if (addSeventh || harmonicComplexity > 0.6) {
-        notes.push(midiToNoteName(finalChordRootMidi + seventhInterval));
+
+    const addSeventh = harmonicComplexity > 0.55 || 
+                       (genre?.toLowerCase().includes("jazz")) || 
+                       (qualityDefinition.type === 'Dom7') ||
+                       (qualityDefinition.type === 'm7b5');
+
+    if (addSeventh) {
+        notes.push(midiToNoteName(finalChordRootMidi + qualityDefinition.seventh));
     }
     return notes.filter(name => name && typeof name === 'string');
 }
 
 
+// --- Synth Configurations ---
 const getSynthConfigurations = (
   instrumentHints: string[] = [],
   genre: string = '',
   isKidsMode: boolean = false,
   harmonicComplexity: number = 0.3,
+  rhythmicDensity: number = 0.5,
 ): any => {
   const genreLower = genre.toLowerCase();
   const hintsLower = instrumentHints.map(h => h.toLowerCase());
 
-  // Base configurations with more variety
   const baseConfigs = {
-    pianoMelody: { synthType: Tone.FMSynth, options: { harmonicity: 3.1, modulationIndex: 12, detune: 0, oscillator: { type: "sine" as const, partials: [1, 0.1, 0.05] }, envelope: { attack: 0.005, decay: 0.6, sustain: 0.1, release: 0.8 }, modulation: { type: "triangle" as const }, modulationEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.01, release: 0.4 } }, volume: -9, effects: [{type: Tone.Chorus, frequency: 0.7, delayTime: 3, depth: 0.1, feedback: 0.03}] },
-    electricPianoChords: { synthType: Tone.PolySynth, subType: Tone.FMSynth, options: { harmonicity: 2.5, modulationIndex: 8, envelope: { attack: 0.03, decay: 1.0, sustain: 0.2, release: 1.2 }, oscillator: {type: "sine" as const, partials: [1, 0.5, 0.1]} }, volume: -20, effects: [{type: Tone.Chorus, frequency: 1.2, delayTime: 2.8, depth: 0.3}] },
-    warmPadChords: { synthType: Tone.PolySynth, subType: Tone.AMSynth, options: { harmonicity: 0.8, modulationType: "sawtooth" as const, envelope: { attack: 1.2, decay: 1.8, sustain: 0.7, release: 3.0 } }, volume: -24 },
-    pluckArp: { synthType: Tone.PluckSynth, options: { attackNoise: 0.7, dampening: 3500, resonance: 0.80 }, volume: -20 },
-    acousticGuitarArp: { synthType: Tone.PluckSynth, options: { attackNoise: 1.0, dampening: 2800, resonance: 0.65 }, volume: -18 },
+    // Melody / Lead Synths
+    pianoMelody: { synthType: Tone.PolySynth, subType: Tone.FMSynth, options: { harmonicity: 2.8, modulationIndex: 10, detune: 0, oscillator: { type: "sine" as const, partials: [1, 0.2, 0.1] }, envelope: { attack: 0.01, decay: 0.7, sustain: 0.05, release: 0.9 }, modulation: { type: "triangle" as const }, modulationEnvelope: { attack: 0.02, decay: 0.25, sustain: 0.01, release: 0.5 } }, volume: -9, effects: [{type: Tone.Chorus, frequency: 0.8, delayTime: 3.2, depth: 0.05, feedback: 0.02}] },
+    synthLeadElectronic: { synthType: Tone.Synth, options: { oscillator: { type: "fatsawtooth" as const, count: 3, spread: 25 }, envelope: { attack: 0.04, decay: 1.5, sustain: 0.3, release: 1.0 } }, volume: -10, effects: [{type: Tone.FeedbackDelay, delayTime: "8n.", feedback: 0.25, wet:0.2}] },
+    rockGuitarLead: { synthType: Tone.Synth, options: { oscillator: { type: "fatsquare" as const, count: 2, spread: 15 }, envelope: { attack: 0.015, decay: 0.8, sustain: 0.1, release: 0.6 } }, volume: -10, effects: [{type: Tone.Distortion, amount: 0.35}] },
+    acousticGuitarLead: { synthType: Tone.PluckSynth, options: { attackNoise: 0.8, dampening: 3200, resonance: 0.75 }, volume: -14, effects: [{type: Tone.Chorus, frequency: 0.5, delayTime: 4, depth: 0.03}] },
+    fluteLead: { synthType: Tone.Synth, options: { oscillator: {type: "triangle8" as const }, envelope: {attack: 0.05, decay: 0.4, sustain: 0.6, release: 0.3}}, volume: -12},
+
+    // Chord / Pad Synths
+    electricPianoChords: { synthType: Tone.PolySynth, subType: Tone.FMSynth, options: { harmonicity: 2.2, modulationIndex: 7, envelope: { attack: 0.04, decay: 1.2, sustain: 0.15, release: 1.5 }, oscillator: {type: "sine" as const, partials: [1, 0.4, 0.08]} }, volume: -18, effects: [{type: Tone.Chorus, frequency: 1.1, delayTime: 3.0, depth: 0.25}] },
+    warmPadChords: { synthType: Tone.PolySynth, subType: Tone.AMSynth, options: { harmonicity: 0.7, modulationType: "sawtooth" as const, envelope: { attack: 1.5, decay: 2.0, sustain: 0.8, release: 3.5 } }, volume: -22 },
+    stringEnsembleChords: { synthType: Tone.PolySynth, subType: Tone.Synth, options: { oscillator: {type: "fatsawtooth" as const, count: 5, spread: 40}, envelope: {attack: 0.8, decay: 2.0, sustain:0.6, release: 2.5}}, volume: -20},
+
+    // Arpeggio Synths
+    pluckArp: { synthType: Tone.PluckSynth, options: { attackNoise: 0.6, dampening: 3800, resonance: 0.82 }, volume: -20 },
+    synthArpElectronic: { synthType: Tone.Synth, options: { oscillator: {type: "triangle" as const}, envelope: { attack: 0.01, decay: 0.15, sustain: 0.05, release: 0.25}}, volume: -22 },
     
-    synthLeadElectronic: { synthType: Tone.Synth, options: { oscillator: { type: "fatsawtooth" as const, count: 3, spread: 30 }, envelope: { attack: 0.03, decay: 1.2, sustain: 0.4, release: 0.9 } }, volume: -10, effects: [{type: Tone.FeedbackDelay, delayTime: "8n", feedback: 0.3, wet:0.25}] },
-    rockGuitarLead: { synthType: Tone.Synth, options: { oscillator: { type: "fatsquare" as const, count: 2, spread: 20 }, envelope: { attack: 0.01, decay: 0.7, sustain: 0.2, release: 0.5 } }, volume: -10, effects: [{type: Tone.Distortion, amount: 0.4}] },
-    
+    // Bass Synths
     defaultBass: { synthType: Tone.FMSynth, options: { harmonicity: 1.0, modulationIndex: 2.5, envelope: { attack: 0.015, decay: 0.2, sustain: 0.8, release: 0.6 }, oscillator: { type: "triangle" as const } }, volume: -9 },
-    subBassElectronic: { synthType: Tone.Synth, options: { oscillator: { type: "sine" as const }, envelope: { attack: 0.015, decay: 0.4, sustain: 1, release: 0.7 } }, volume: -8 },
-    rockBassPicked: { synthType: Tone.Synth, options: { oscillator: {type: "fatsquare" as const, count:2, spread:15}, envelope: { attack: 0.012, decay: 0.35, sustain: 0.6, release: 0.55 }}, volume: -9, effects: [{type: Tone.Distortion, amount: 0.15}]},
-    jazzUprightBass: { synthType: Tone.FMSynth, options: { harmonicity: 0.7, modulationIndex: 1.8, envelope: { attack: 0.025, decay: 0.6, sustain: 0.15, release: 0.8 }, oscillator:{type:"sine" as const}}, volume: -10},
+    subBassElectronic: { synthType: Tone.Synth, options: { oscillator: { type: "sine" as const }, envelope: { attack: 0.02, decay: 0.5, sustain: 1, release: 0.8 } }, volume: -7 },
+    rockBassPicked: { synthType: Tone.Synth, options: { oscillator: {type: "fatsquare" as const, count:2, spread:10}, envelope: { attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.5 }}, volume: -8, effects: [{type: Tone.Distortion, amount: 0.1}]},
+    jazzUprightBass: { synthType: Tone.FMSynth, options: { harmonicity: 0.8, modulationIndex: 1.5, envelope: { attack: 0.03, decay: 0.7, sustain: 0.1, release: 0.9 }, oscillator:{type:"sine" as const, partials: [1, 0.1, 0.02]}}, volume: -10},
+    funkSlapBass: { synthType: Tone.Synth, options: { oscillator: {type: "sawtooth" as const}, envelope: {attack: 0.005, decay: 0.15, sustain: 0.01, release: 0.2}, filter: {type: "lowpass", Q: 3, rolloff: -24, frequency: 800}, filterEnvelope: {attack:0.005, decay:0.05, sustain:0, release:0.1, baseFrequency:200, octaves:2.5} }, volume: -8 },
 
-    kidsToyPiano: { synthType: Tone.FMSynth, options: { harmonicity: 4.5, modulationIndex: 8, oscillator: {type: "triangle" as const}, envelope: {attack: 0.005, decay: 0.2, sustain: 0.01, release: 0.15}}, volume: -10},
-    kidsXylophone: { synthType: Tone.MetalSynth, options: { harmonicity: 6, modulationIndex: 5, octaves:1.5, envelope: {attack:0.001, decay:0.3, release:0.3}}, volume: -9},
-    kidsUkuleleBass: { synthType: Tone.PluckSynth, options: {attackNoise: 0.6, dampening: 2000, resonance: 0.6}, volume: -12},
-    kidsSimplePad: { synthType: Tone.PolySynth, subType: Tone.Synth, options: {oscillator: {type: "triangle" as const}, envelope: {attack: 0.2, decay:0.5, sustain:0.5, release:0.8}}, volume: -22},
-    kidsSimpleArp: { synthType: Tone.Synth, options: {oscillator: {type: "square" as const }, envelope: {attack:0.01, decay:0.1, sustain:0.2, release:0.2}}, volume: -24},
+    // Kids Mode Synths
+    kidsToyPiano: { synthType: Tone.FMSynth, options: { harmonicity: 4.0, modulationIndex: 7, oscillator: {type: "triangle" as const}, envelope: {attack: 0.008, decay: 0.25, sustain: 0.01, release: 0.2}}, volume: -10},
+    kidsXylophone: { synthType: Tone.MetalSynth, options: { harmonicity: 5.5, modulationIndex: 4.5, octaves:1.2, envelope: {attack:0.002, decay:0.35, release:0.35}}, volume: -9},
+    kidsUkuleleBass: { synthType: Tone.PluckSynth, options: {attackNoise: 0.5, dampening: 1800, resonance: 0.55}, volume: -12},
+    kidsSimplePad: { synthType: Tone.PolySynth, subType: Tone.Synth, options: {oscillator: {type: "triangle" as const}, envelope: {attack: 0.3, decay:0.6, sustain:0.4, release:0.9}}, volume: -20},
+    kidsSimpleArp: { synthType: Tone.Synth, options: {oscillator: {type: "square" as const }, envelope: {attack:0.015, decay:0.12, sustain:0.15, release:0.22}}, volume: -22},
 
-    // Drums (volumes adjusted for better mix presence initially)
-    kick: { pitchDecay: 0.04, octaves: 5, oscillator: { type: "sine" as const }, envelope: { attack: 0.001, decay: 0.3, sustain: 0.005, release: 1.0, attackCurve: "exponential" as const }, volume: -4 },
-    kickElectronic: { pitchDecay: 0.05, octaves: 6, oscillator: { type: "sine" as const }, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.2 }, volume: -2 },
-    kickRock: { pitchDecay: 0.025, octaves: 4.5, envelope: { attack: 0.002, decay: 0.2, sustain: 0.001, release: 0.8 }, volume: -3 },
-    snare: { noise: { type: 'pink' as const, playbackRate: 0.8 }, volume: -10, envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.12 } },
-    snareElectronic: { noise: { type: 'white' as const, playbackRate: 1.0 }, volume: -8, envelope: { attack: 0.002, decay: 0.1, sustain: 0.01, release: 0.15 } },
-    hiHat: { frequency: 400, envelope: { attack: 0.001, decay: 0.04, release: 0.04 }, harmonicity: 3.0, modulationIndex: 10, resonance: 2500, octaves: 1.2, volume: -18 }, // Slightly louder
-    hiHatElectronic: { frequency: 500, envelope: { attack: 0.001, decay: 0.025, release: 0.03 }, harmonicity: 2.5, modulationIndex: 8, resonance: 3000, octaves: 1.0, volume: -16 },
+    // Drums
+    kick: { pitchDecay: 0.035, octaves: 4.5, oscillator: { type: "sine" as const }, envelope: { attack: 0.0015, decay: 0.25, sustain: 0.002, release: 0.9, attackCurve: "exponential" as const }, volume: -5 },
+    kickElectronic: { pitchDecay: 0.045, octaves: 5.5, oscillator: { type: "sine" as const }, envelope: { attack: 0.001, decay: 0.35, sustain: 0.005, release: 1.1 }, volume: -3 },
+    kickRock: { pitchDecay: 0.02, octaves: 4, envelope: { attack: 0.0025, decay: 0.18, sustain: 0.001, release: 0.7 }, volume: -4 },
+    snare: { noise: { type: 'pink' as const, playbackRate: 0.7 }, volume: -12, envelope: { attack: 0.0015, decay: 0.07, sustain: 0, release: 0.1 } },
+    snareElectronic: { noise: { type: 'white' as const, playbackRate: 0.9 }, volume: -10, envelope: { attack: 0.0025, decay: 0.09, sustain: 0.005, release: 0.13 } },
+    hiHat: { frequency: 380, envelope: { attack: 0.001, decay: 0.035, release: 0.035 }, harmonicity: 2.8, modulationIndex: 9, resonance: 2200, octaves: 1.1, volume: -18 },
+    hiHatElectronic: { frequency: 480, envelope: { attack: 0.001, decay: 0.02, release: 0.025 }, harmonicity: 2.2, modulationIndex: 7, resonance: 2800, octaves: 0.9, volume: -16 },
+    rideCymbal: { frequency: 300, envelope: { attack: 0.01, decay: 1.5, sustain: 0, release: 2.0 }, harmonicity: 4, modulationIndex:15, resonance: 5000, octaves: 2.5, volume: -20},
     
-    kidsKick: { pitchDecay: 0.04, octaves: 4, envelope: { attack: 0.002, decay: 0.15, sustain: 0.01, release: 0.5 }, volume: -6 },
-    kidsSnare: { noise: { type: 'white' as const }, volume: -14, envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.08 } },
-    kidsHiHat: { frequency: 450, envelope: { attack: 0.001, decay: 0.02, release: 0.02 }, harmonicity: 2.5, octaves: 1, volume: -20 },
-    tambourine: { noise: {type: 'white' as const, playbackRate: 1.5}, envelope: {attack:0.005, decay:0.05, sustain:0, release:0.06}, volume: -18},
+    kidsKick: { pitchDecay: 0.03, octaves: 3.5, envelope: { attack: 0.0025, decay: 0.12, sustain: 0.005, release: 0.4 }, volume: -7 },
+    kidsSnare: { noise: { type: 'white' as const }, volume: -15, envelope: { attack: 0.0015, decay: 0.04, sustain: 0, release: 0.07 } },
+    kidsHiHat: { frequency: 420, envelope: { attack: 0.001, decay: 0.015, release: 0.015 }, harmonicity: 2.2, octaves: 0.8, volume: -22 },
+    tambourine: { noise: {type: 'white' as const, playbackRate: 1.6}, envelope: {attack:0.006, decay:0.06, sustain:0, release:0.07}, volume: -17},
   };
 
-  let melodyConf = { ...baseConfigs.pianoMelody }; // Default to piano
+  let melodyConf = { ...baseConfigs.pianoMelody };
   let bassConf = { ...baseConfigs.defaultBass };
-  let chordsConf = { ...baseConfigs.warmPadChords }; // Default to warm pad
+  let chordsConf = { ...baseConfigs.warmPadChords };
   let arpConf = { ...baseConfigs.pluckArp };
-  let kickConf = isKidsMode ? { ...baseConfigs.kidsKick } : { ...baseConfigs.kick };
-  let snareConf = isKidsMode ? { ...baseConfigs.kidsSnare } : { ...baseConfigs.snare };
-  let hiHatConf = isKidsMode ? { ...baseConfigs.kidsHiHat } : { ...baseConfigs.hiHat };
+  let kickConf = { ...baseConfigs.kick };
+  let snareConf = { ...baseConfigs.snare };
+  let hiHatConf = { ...baseConfigs.hiHat };
   let useTambourine = false;
+  let useRideCymbal = false;
 
   if (isKidsMode) {
     melodyConf = Math.random() < 0.5 ? {...baseConfigs.kidsToyPiano} : {...baseConfigs.kidsXylophone};
     bassConf = {...baseConfigs.kidsUkuleleBass};
     chordsConf = {...baseConfigs.kidsSimplePad};
     arpConf = {...baseConfigs.kidsSimpleArp};
+    kickConf = {...baseConfigs.kidsKick};
+    snareConf = {...baseConfigs.kidsSnare};
+    hiHatConf = {...baseConfigs.kidsHiHat};
     if (hintsLower.some(h => h.includes("tambourine") || h.includes("shaker"))) useTambourine = true;
   } else {
     // Genre-based adjustments
-    if (genreLower.includes("electronic")) {
+    if (genreLower.includes("electronic") || genreLower.includes("synthwave") || genreLower.includes("techno") || genreLower.includes("house")) {
       melodyConf = { ...baseConfigs.synthLeadElectronic };
       bassConf = { ...baseConfigs.subBassElectronic };
-      chordsConf = { ...baseConfigs.warmPadChords, volume: -22 }; // Slightly quieter pad for electronic
-      arpConf = { ...baseConfigs.pluckArp, volume: -20 };
+      chordsConf = { ...baseConfigs.warmPadChords, volume: -20 };
+      arpConf = { ...baseConfigs.synthArpElectronic };
       kickConf = { ...baseConfigs.kickElectronic };
       snareConf = { ...baseConfigs.snareElectronic };
       hiHatConf = { ...baseConfigs.hiHatElectronic };
-    } else if (genreLower.includes("rock") || genreLower.includes("metal")) {
+    } else if (genreLower.includes("rock") || genreLower.includes("metal") || genreLower.includes("punk")) {
       melodyConf = { ...baseConfigs.rockGuitarLead };
       bassConf = { ...baseConfigs.rockBassPicked };
-      chordsConf = { ...baseConfigs.rockGuitarLead, synthType: Tone.PolySynth, subType: Tone.Synth, options: {...baseConfigs.rockGuitarLead.options}, volume: -18 }; // Power chords essentially
-      arpConf = { ...baseConfigs.defaultBass, volume: -26 }; 
+      chordsConf = { ...baseConfigs.rockGuitarLead, synthType: Tone.PolySynth, subType: Tone.Synth, options: {...baseConfigs.rockGuitarLead.options, envelope: {...baseConfigs.rockGuitarLead.options.envelope, attack:0.005, decay:0.5, sustain:0.01, release:0.3}}, volume: -16 };
+      arpConf = { ...baseConfigs.defaultBass, volume: -28 }; 
       kickConf = { ...baseConfigs.kickRock };
-    } else if (genreLower.includes("jazz")) {
+    } else if (genreLower.includes("jazz") || genreLower.includes("swing") || genreLower.includes("blues")) {
       melodyConf = { ...baseConfigs.pianoMelody, volume: -10 };
       bassConf = { ...baseConfigs.jazzUprightBass };
-      chordsConf = { ...baseConfigs.electricPianoChords, volume: -18 };
-      arpConf = { ...baseConfigs.pluckArp, volume: -25 };
-      kickConf = { ...baseConfigs.kick, volume: -12 }; // Lighter kick
-      snareConf = { ...baseConfigs.snare, volume: -18 }; // Lighter snare/brushes
-      hiHatConf = { ...baseConfigs.hiHat, frequency: 550, volume: -22 }; // More ride-like
-    } else if (genreLower.includes("ambient")) {
-        melodyConf = { ...baseConfigs.warmPadChords, synthType: Tone.PolySynth, subType: Tone.AMSynth, volume: -18 };
-        bassConf = { ...baseConfigs.subBassElectronic, volume: -15 };
-        chordsConf = { ...baseConfigs.warmPadChords, volume: -20 };
-        arpConf = { ...baseConfigs.pluckArp, volume: -24, options: {...baseConfigs.pluckArp.options, dampening: 4500, attackNoise: 0.4}};
-    } else if (genreLower.includes("folk") || genreLower.includes("country")) {
-        melodyConf = { ...baseConfigs.acousticGuitarArp, synthType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarArp.options}, volume: -12 };
-        bassConf = { ...baseConfigs.jazzUprightBass, volume: -14}; 
-        chordsConf = { synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarArp.options}, volume: -18 };
-        arpConf = { ...baseConfigs.acousticGuitarArp, volume: -20 };
+      chordsConf = { ...baseConfigs.electricPianoChords, volume: -16 };
+      arpConf = { ...baseConfigs.pluckArp, volume: -26 };
+      kickConf = { ...baseConfigs.kick, volume: -10, envelope: {...baseConfigs.kick.envelope, decay:0.15, sustain:0.001} };
+      snareConf = { ...baseConfigs.snare, volume: -16, noise: {type: 'pink', playbackRate: 0.5} }; // Softer snare
+      hiHatConf = { ...baseConfigs.rideCymbal, volume: -20 }; // Use ride for jazz/blues
+      useRideCymbal = true;
+    } else if (genreLower.includes("ambient") || genreLower.includes("new age")) {
+        melodyConf = { ...baseConfigs.warmPadChords, synthType: Tone.PolySynth, subType: Tone.AMSynth, volume: -16 };
+        bassConf = { ...baseConfigs.subBassElectronic, volume: -14, options: {...baseConfigs.subBassElectronic.options, envelope: {...baseConfigs.subBassElectronic.options.envelope, attack:0.5, release:1.5}} };
+        chordsConf = { ...baseConfigs.warmPadChords, volume: -18 };
+        arpConf = { ...baseConfigs.pluckArp, volume: -22, options: {...baseConfigs.pluckArp.options, dampening: 4800, attackNoise: 0.3}};
+        kickConf = { ...baseConfigs.kick, volume: -15, envelope: {...baseConfigs.kick.envelope, decay: 0.5, sustain:0.05} };
+        snareConf = { ...baseConfigs.snare, volume: -25 };
+        hiHatConf = { ...baseConfigs.hiHat, volume: -28 };
+    } else if (genreLower.includes("folk") || genreLower.includes("country") || genreLower.includes("acoustic")) {
+        melodyConf = { ...baseConfigs.acousticGuitarLead };
+        bassConf = { ...baseConfigs.jazzUprightBass, volume: -12}; 
+        chordsConf = { synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarLead.options}, volume: -16 };
+        arpConf = { ...baseConfigs.acousticGuitarLead, volume: -18 };
         if (hintsLower.some(h => h.includes("tambourine"))) useTambourine = true;
-    } else if (genreLower.includes("funk") || genreLower.includes("soul")) {
-        melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, volume: -12}; 
-        bassConf = { ...baseConfigs.defaultBass, options: {...baseConfigs.defaultBass.options, harmonicity: 1.3, modulationIndex: 3.8, oscillator: {type: "sawtooth" as const}}, volume: -8};
-        chordsConf = { ...baseConfigs.electricPianoChords, volume: -17};
-        arpConf = { ...baseConfigs.pluckArp, volume: -22};
-        kickConf = { ...baseConfigs.kick, volume: -3 };
-        snareConf = { ...baseConfigs.snare, volume: -9 };
+    } else if (genreLower.includes("funk") || genreLower.includes("soul") || genreLower.includes("disco")) {
+        melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, volume: -11}; 
+        bassConf = { ...baseConfigs.funkSlapBass};
+        chordsConf = { ...baseConfigs.electricPianoChords, volume: -15};
+        arpConf = { ...baseConfigs.pluckArp, volume: -20};
+        kickConf = { ...baseConfigs.kick, volume: -4 };
+        snareConf = { ...baseConfigs.snare, volume: -10 };
         hiHatConf = { ...baseConfigs.hiHat, volume: -17 };
-    } else if (genreLower.includes("classical") || genreLower.includes("cinematic")) {
-        melodyConf = { ...baseConfigs.pianoMelody, volume: -10 }; 
-        bassConf = { ...baseConfigs.defaultBass, options: {...baseConfigs.defaultBass.options, oscillator:{type:"sine" as const}}, volume: -15 }; 
-        chordsConf = { ...baseConfigs.warmPadChords, volume: -20 }; 
-        arpConf = { ...baseConfigs.pluckArp, volume: -22 }; 
+    } else if (genreLower.includes("classical") || genreLower.includes("cinematic") || genreLower.includes("orchestral")) {
+        melodyConf = { ...baseConfigs.pianoMelody, volume: -8 }; 
+        bassConf = { ...baseConfigs.defaultBass, options: {...baseConfigs.defaultBass.options, oscillator:{type:"sine" as const}}, volume: -14 }; 
+        chordsConf = { ...baseConfigs.stringEnsembleChords }; 
+        arpConf = { ...baseConfigs.pluckArp, volume: -20 }; 
+        hiHatConf = {...baseConfigs.hiHat, volume: -25} // Very subtle hi-hats or none for classical often
     }
 
     // Override with specific instrument hints (higher priority)
     hintsLower.forEach(hint => {
       if (hint.includes('piano')) {
-        melodyConf = { ...baseConfigs.pianoMelody, volume: -9 };
-        if (!hintsLower.some(h => /pad|string/i.test(h))) { // Don't override pads if also mentioned
-            chordsConf = { ...baseConfigs.pianoMelody, synthType: Tone.PolySynth, subType: Tone.FMSynth, options: {...baseConfigs.pianoMelody.options}, volume: -18 };
+        melodyConf = { ...baseConfigs.pianoMelody };
+        if (!hintsLower.some(h => /pad|string/i.test(h) || genreLower.includes("jazz"))) {
+            chordsConf = { ...baseConfigs.pianoMelody, synthType: Tone.PolySynth, subType: Tone.FMSynth, options: {...baseConfigs.pianoMelody.options}, volume: -16 };
         }
-      } else if (hint.includes('electric piano')) {
-        melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, options: {...baseConfigs.electricPianoChords.options}, volume: -12};
-        chordsConf = { ...baseConfigs.electricPianoChords, volume: -20 };
-      } else if (hint.includes('synth pad') || hint.includes('warm pad')) {
-        chordsConf = { ...baseConfigs.warmPadChords, volume: -22 };
-        if (!hintsLower.some(h => /piano|lead|guitar|pluck/i.test(h))) melodyConf = {...baseConfigs.warmPadChords, synthType: Tone.PolySynth, subType: Tone.AMSynth, volume: -15};
-      } else if (hint.includes('pluck') || hint.includes('bell') || hint.includes('xylophone')) {
-        melodyConf = { ...baseConfigs.pluckArp, synthType: Tone.PluckSynth, options: {...baseConfigs.pluckArp.options}, volume: -15 };
-        arpConf = { ...baseConfigs.pluckArp, volume: -18 };
-      } else if (hint.includes('synth lead') || hint.includes('bright synth')) {
-        melodyConf = { ...baseConfigs.synthLeadElectronic, volume: -10 };
-      } else if (hint.includes('guitar') && hint.includes('acoustic')) {
-          melodyConf = {...baseConfigs.acousticGuitarArp, synthType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarArp.options}, volume: -12};
-          chordsConf = {synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarArp.options}, volume: -18};
-          arpConf = {...baseConfigs.acousticGuitarArp, volume: -20};
+      } else if (hint.includes('electric piano') || hint.includes('rhodes')) {
+        melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, options: {...baseConfigs.electricPianoChords.options}, volume: -11};
+        chordsConf = { ...baseConfigs.electricPianoChords, volume: -18 };
+      } else if (hint.includes('pad') || hint.includes('warm pad') || hint.includes('synth pad')) {
+        chordsConf = { ...baseConfigs.warmPadChords };
+        if (!hintsLower.some(h => /piano|lead|guitar|pluck/i.test(h))) melodyConf = {...baseConfigs.warmPadChords, synthType: Tone.PolySynth, subType: Tone.AMSynth, volume: -14};
+      } else if (hint.includes('strings') || hint.includes('orchestra') || hint.includes('ensemble')) {
+        chordsConf = {...baseConfigs.stringEnsembleChords};
+        if (!hintsLower.some(h => /piano|lead|guitar|pluck/i.test(h))) melodyConf = {...baseConfigs.stringEnsembleChords, synthType: Tone.PolySynth, subType: Tone.Synth, volume: -14};
+      } else if (hint.includes('pluck') || hint.includes('bell') || hint.includes('xylophone') || hint.includes('celesta')) {
+        melodyConf = { ...baseConfigs.pluckArp, synthType: Tone.PluckSynth, options: {...baseConfigs.pluckArp.options}, volume: -14 };
+        arpConf = { ...baseConfigs.pluckArp };
+      } else if (hint.includes('synth lead') || hint.includes('bright synth') || hint.includes('lead synth')) {
+        melodyConf = { ...baseConfigs.synthLeadElectronic };
+      } else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) {
+          melodyConf = {...baseConfigs.acousticGuitarLead};
+          if (!hintsLower.some(h => /pad|string|piano/i.test(h))) chordsConf = {synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarLead.options}, volume: -16};
+          arpConf = {...baseConfigs.acousticGuitarLead, volume: -18};
       } else if (hint.includes('guitar') && (hint.includes('rock') || hint.includes('electric') || hint.includes('distort'))) {
-          melodyConf = {...baseConfigs.rockGuitarLead, volume: -10};
-          chordsConf = {...baseConfigs.rockGuitarLead, synthType: Tone.PolySynth, subType: Tone.Synth, options: {...baseConfigs.rockGuitarLead.options}, volume: -18}; // Distorted "power chords"
-      } else if (hint.includes('sub bass')) {
-          bassConf = {...baseConfigs.subBassElectronic, volume: -8};
-      } else if (hint.includes('upright bass') || hint.includes('jazz bass')) {
-          bassConf = {...baseConfigs.jazzUprightBass, volume: -10};
-      } else if (hint.includes('picked bass') || (hint.includes('rock') && hint.includes('bass'))) {
-          bassConf = {...baseConfigs.rockBassPicked, volume: -9};
+          melodyConf = {...baseConfigs.rockGuitarLead};
+          if (!hintsLower.some(h => /pad|string|piano/i.test(h))) chordsConf = {...baseConfigs.rockGuitarLead, synthType: Tone.PolySynth, subType: Tone.Synth, options: {...baseConfigs.rockGuitarLead.options, envelope: {...baseConfigs.rockGuitarLead.options.envelope, attack:0.005, decay:0.5, sustain:0.01, release:0.3}}, volume: -16};
+      } else if (hint.includes('flute') || hint.includes('recorder')) {
+          melodyConf = {...baseConfigs.fluteLead};
+      }
+       // Bass specific hints
+      if (hint.includes('sub bass') || (hint.includes("bass") && genreLower.includes("electronic"))) {
+          bassConf = {...baseConfigs.subBassElectronic};
+      } else if (hint.includes('upright bass') || (hint.includes("bass") && genreLower.includes("jazz"))) {
+          bassConf = {...baseConfigs.jazzUprightBass};
+      } else if (hint.includes('picked bass') || (hint.includes("bass") && (genreLower.includes("rock") || genreLower.includes("metal")))) {
+          bassConf = {...baseConfigs.rockBassPicked};
+      } else if (hint.includes('slap bass') || (hint.includes("bass") && (genreLower.includes("funk") || genreLower.includes("soul")))) {
+          bassConf = {...baseConfigs.funkSlapBass};
       }
     });
   }
 
   return {
     melody: melodyConf, bass: bassConf, chords: chordsConf, arpeggio: arpConf,
-    kick: kickConf, snare: snareConf, hiHat: hiHatConf, tambourine: useTambourine ? {...baseConfigs.tambourine} : null,
+    kick: kickConf, snare: snareConf, hiHat: useRideCymbal ? {...baseConfigs.rideCymbal} : hiHatConf, 
+    tambourine: useTambourine ? {...baseConfigs.tambourine} : null,
   };
 };
 
 const createSynth = (config: any, offlineContext: Tone.OfflineContext) => {
     if (!config || !config.synthType) {
-        console.warn("[CreateSynth_WARN] Invalid synth config, using default FMSynth", config);
-        // Fallback to a very basic FMSynth if config is entirely missing
-        const defaultConfig = { synthType: Tone.FMSynth, options: { oscillator: { type: "triangle" as const } }, volume: -12 };
-        return new defaultConfig.synthType(defaultConfig.options);
+        const defaultConfig = { synthType: Tone.FMSynth, options: { oscillator: { type: SAFE_OSC_TYPE } }, volume: -12 };
+        const synth = new defaultConfig.synthType(defaultConfig.options);
+        synth.volume.value = defaultConfig.volume;
+        return synth;
     }
     let synthInstance;
     if (config.synthType === Tone.PolySynth) {
-        const subSynthType = config.subType || Tone.Synth; // Default to Tone.Synth if subType not specified
-        synthInstance = new Tone.PolySynth(subSynthType, config.options);
+        const subSynthType = config.subType || Tone.Synth;
+        synthInstance = new Tone.PolySynth(subSynthType);
+        if(config.options) synthInstance.set(config.options);
     } else {
         synthInstance = new config.synthType(config.options);
     }
@@ -351,55 +369,70 @@ const createSynth = (config: any, offlineContext: Tone.OfflineContext) => {
                 effectNode = new Tone.Distortion(effectConf.amount || 0.4);
             } else if (effectConf.type === Tone.Chorus) {
                 effectNode = new Tone.Chorus(effectConf.frequency || 1.5, effectConf.delayTime || 3.5, effectConf.depth || 0.7);
-                if (effectConf.feedback) (effectNode as Tone.Chorus).feedback.value = effectConf.feedback;
+                if (effectConf.feedback !== undefined) (effectNode as Tone.Chorus).feedback.value = effectConf.feedback;
+                if (effectConf.wet !== undefined) (effectNode as Tone.Chorus).wet.value = effectConf.wet;
             } else if (effectConf.type === Tone.FeedbackDelay){
                  effectNode = new Tone.FeedbackDelay(effectConf.delayTime || "8n", effectConf.feedback || 0.5);
-                 if (effectConf.wet) (effectNode as Tone.FeedbackDelay).wet.value = effectConf.wet;
+                 if (effectConf.wet !== undefined) (effectNode as Tone.FeedbackDelay).wet.value = effectConf.wet;
             }
+            // Add more effects here (Phaser, Tremolo, AutoFilter, etc.)
             if (effectNode) {
                 effectChainEndNode.connect(effectNode);
-                effectChainEndNode = effectNode; // Update the end of the chain
+                effectChainEndNode = effectNode; 
             }
         });
     }
-    // The final node in the chain (either the synth itself or the last effect) is returned.
-    // This node will then be connected to reverb or destination.
     return effectChainEndNode;
 };
 
+function weightedRandom(items: (string | number)[], weights: number[]): string | number {
+    let sum = 0;
+    const r = Math.random();
+    for (let i = 0; i < items.length; i++) {
+        if ((weights[i] ?? 0) <= 0) continue; // Ensure weight is positive
+        sum += weights[i];
+        if (r <= sum) return items[i];
+    }
+    // Fallback if all weights are zero or rounding errors
+    const validItems = items.filter((_, idx) => (weights[idx] ?? 0) > 0);
+    return validItems.length > 0 ? validItems[validItems.length - 1] : (items[items.length - 1] || "4n");
+}
 
+function applyHumanization(time: number, intensity: number = 0.01): number { // intensity: max deviation in seconds
+    return time + (Math.random() * 2 - 1) * intensity;
+}
+
+// --- Main WAV Generation Function ---
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  const logPrefix = "[WAV_GEN_DYNAMIC_V3]";
+  const logPrefix = "[WAV_GEN_DYNAMIC_V3]"; // New version prefix
   console.log(`${logPrefix} Starting dynamic synthesis for: ${params.generatedIdea.substring(0, 30)}...`);
 
   if (typeof Tone === 'undefined' || !Tone.context) {
     console.error(`${logPrefix}_ERROR] Tone.js or Tone.context is not available. Aborting.`);
     return null;
   }
-  if (Tone.context.state !== 'running') {
-    console.warn(`${logPrefix}_WARN] Global Tone.context is NOT 'running' (state: ${Tone.context.state}). Attempting Tone.start() internally, but this might not be ideal if called not from a direct user gesture.`);
-    // await Tone.start(); // This might fail if not a direct user gesture context. MusicOutputDisplay handles the main Tone.start()
-    if (Tone.context.state !== 'running') {
-        console.error(`${logPrefix}_ERROR] Global Tone.context still NOT 'running' after internal attempt. Aborting WAV generation.`);
-        return null;
-    }
+   if (Tone.context.state !== 'running') {
+    console.warn(`${logPrefix}_WARN] Global Tone.context is NOT 'running' (state: ${Tone.context.state}). This function expects Tone.start() to have been called via user gesture.`);
+    return null; // Abort if context not running, as Tone.Offline relies on it.
   }
   
   Tone.Transport.stop(true); Tone.Transport.cancel(0);
-  Tone.Destination.volume.value = -6; // Overall mix level slightly reduced
+  Tone.Destination.volume.value = -3; // Overall mix level
   Tone.Transport.bpm.value = params.tempoBpm || 120;
   
   const genreLower = params.selectedGenre?.toLowerCase() || "";
-  if (genreLower.includes("jazz") || genreLower.includes("swing")) {
-    Tone.Transport.swing = 0.25; 
+  const isKidsMode = params.originalInput.mode === 'kids';
+  const { harmonicComplexity, rhythmicDensity, targetArousal, targetValence } = params;
+
+  if (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.4)) {
+    Tone.Transport.swing = 0.20; 
     Tone.Transport.swingSubdivision = "8n";
   } else {
     Tone.Transport.swing = 0;
   }
   console.log(`${logPrefix} Transport BPM: ${Tone.Transport.bpm.value}, Swing: ${Tone.Transport.swing}`);
 
-  const isKidsMode = params.originalInput.mode === 'kids';
-  const activeSynthConfigs = getSynthConfigurations(params.instrumentHints, params.selectedGenre, isKidsMode, params.harmonicComplexity);
+  const activeSynthConfigs = getSynthConfigurations(params.instrumentHints, params.selectedGenre, isKidsMode, harmonicComplexity, rhythmicDensity);
 
   const startOffset = 0.1; 
   const secondsPerBeat = 60 / (Tone.Transport.bpm.value);
@@ -407,162 +440,168 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   const measureDurationSeconds = beatsPerMeasure * secondsPerBeat;
   let overallMaxTime = startOffset;
 
-  const progressionDegrees = params.mode.toLowerCase().includes('minor') ? [1, 6, 3, 7] : [1, 5, 6, 4];
-  const numChordCycles = isKidsMode ? 2 : (genreLower.includes("ambient") || genreLower.includes("classical") ? 3 : 4); // Fewer cycles for kids/ambient
-  const chordDurationNotation = "1m";
+  const progressionDegrees = isKidsMode ? [1, 4, 5, 1] : 
+                            (genreLower.includes("blues") ? [1,1,4,1,5,4,1,1] : // Basic 12-bar-ish blues structure (simplified)
+                            (genreLower.includes("jazz") ? [2,5,1,6] : // ii-V-I-vi common jazz
+                             [1, 5, 6, 4])); // I-V-vi-IV common pop/rock
+  const numChordCycles = isKidsMode ? 2 : (genreLower.includes("ambient") ? 3 : (genreLower.includes("blues") ? 1 : 4));
   const totalChordProgressionSeconds = numChordCycles * progressionDegrees.length * measureDurationSeconds;
-
 
   // --- Melody Generation ---
   const melodyNotesToSchedule: { time: number, note: string, duration: string, velocity: number }[] = [];
   const melodyOctave = isKidsMode ? 5 : (genreLower.includes("jazz") || genreLower.includes("classical") ? 5 : 4);
-  const scaleNoteNames = getScaleNoteNames(params.keySignature, params.mode, melodyOctave, params.selectedGenre);
+  const scaleNoteNames = getScaleNoteNames(params.keySignature, params.mode, melodyOctave, params.selectedGenre, harmonicComplexity);
   let melodyCurrentTime = startOffset;
-  let currentMelodyScaleIndex = Math.floor(Math.random() * Math.max(1, scaleNoteNames.length));
+  let lastMelodyEventTime = -TIME_EPSILON;
   
   if (scaleNoteNames.length > 0) {
+      let currentMelodyScaleIndex = Math.floor(Math.random() * scaleNoteNames.length);
       while (melodyCurrentTime < totalChordProgressionSeconds - TIME_EPSILON) {
           let noteDurationNotation: string;
-          const density = params.rhythmicDensity || 0.5;
-          const arousalFactor = (params.targetArousal + 1) / 2; // 0 to 1
+          const arousalFactor = (targetArousal + 1) / 2; // 0 to 1
 
           if (isKidsMode) {
-            noteDurationNotation = weightedRandom(["4n", "8n", "2n"], [0.6 + density*0.2, 0.3 - density*0.1, 0.1]) as string;
-          } else if (genreLower.includes("jazz") && density > 0.3) {
+            noteDurationNotation = weightedRandom(["4n", "8n", "2n"], [0.6 + rhythmicDensity*0.2, 0.3 - rhythmicDensity*0.1, 0.1]) as string;
+          } else if (genreLower.includes("jazz") && rhythmicDensity > 0.3) {
             noteDurationNotation = weightedRandom(["8n", "16n", "8t", "4n"], [0.4 + arousalFactor*0.2, 0.3, 0.2, 0.1 - arousalFactor*0.1]) as string;
-          } else if (density < 0.33) {
+          } else if (rhythmicDensity < 0.33) {
             noteDurationNotation = weightedRandom(["2n", "4n", "1m"], [0.5, 0.4 - arousalFactor*0.1, 0.1 + arousalFactor*0.1]) as string;
-          } else if (density < 0.66) {
+          } else if (rhythmicDensity < 0.66) {
             noteDurationNotation = weightedRandom(["4n", "8n", "2n"], [0.5, 0.3 + arousalFactor*0.1, 0.2 - arousalFactor*0.1]) as string;
           } else {
             noteDurationNotation = weightedRandom(["8n", "16n", "4n", "8t"], [0.5 + arousalFactor*0.2, 0.3, 0.15 - arousalFactor*0.1, 0.05]) as string;
           }
           let noteDurationSec = Tone.Time(noteDurationNotation).toSeconds();
 
-          if (melodyCurrentTime + noteDurationSec > totalChordProgressionSeconds + TIME_EPSILON) { // Ensure melody fits
+          if (melodyCurrentTime + noteDurationSec > totalChordProgressionSeconds + TIME_EPSILON) {
               noteDurationSec = totalChordProgressionSeconds - melodyCurrentTime;
-              if (noteDurationSec <= TIME_EPSILON * 2) break; // Too short to schedule
-              // Find closest standard duration
+              if (noteDurationSec <= TIME_EPSILON * 5) break; 
               if (noteDurationSec >= Tone.Time("1m").toSeconds() - TIME_EPSILON) noteDurationNotation = "1m";
               else if (noteDurationSec >= Tone.Time("2n").toSeconds() - TIME_EPSILON) noteDurationNotation = "2n";
               else if (noteDurationSec >= Tone.Time("4n").toSeconds() - TIME_EPSILON) noteDurationNotation = "4n";
               else if (noteDurationSec >= Tone.Time("8n").toSeconds() - TIME_EPSILON) noteDurationNotation = "8n";
               else if (noteDurationSec >= Tone.Time("16n").toSeconds() - TIME_EPSILON) noteDurationNotation = "16n";
               else break; 
-              noteDurationSec = Tone.Time(noteDurationNotation).toSeconds(); // Recalculate actual duration
+              noteDurationSec = Tone.Time(noteDurationNotation).toSeconds();
           }
            if (melodyCurrentTime >= totalChordProgressionSeconds - TIME_EPSILON) break;
 
-          const restProbability = isKidsMode ? 0.1 : (0.20 - (density * 0.15) - arousalFactor * 0.05);
-          if (Math.random() < restProbability && melodyCurrentTime > startOffset + secondsPerBeat * 0.25 && melodyNotesToSchedule.length > 0) {
-              let restDurNotation = density < 0.5 ? "8n" : "16n";
+          const restProbability = isKidsMode ? 0.15 : (0.25 - (rhythmicDensity * 0.20) - arousalFactor * 0.08);
+          if (Math.random() < restProbability && melodyCurrentTime > startOffset + secondsPerBeat * 0.5 && melodyNotesToSchedule.length > 0) {
+              let restDurNotation = rhythmicDensity < 0.5 ? "8n" : "16n";
               if (noteDurationNotation === "2n" || noteDurationNotation === "1m") restDurNotation = "4n";
               const restDurSec = Tone.Time(restDurNotation).toSeconds();
               if (melodyCurrentTime + restDurSec <= totalChordProgressionSeconds + TIME_EPSILON) {
                   melodyCurrentTime += restDurSec;
-                   if (melodyCurrentTime >= totalChordProgressionSeconds - TIME_EPSILON) break;
+                  if (melodyCurrentTime >= totalChordProgressionSeconds - TIME_EPSILON) break;
                   continue;
               }
           }
 
           const stepRoll = Math.random();
           let step: number;
-          if (stepRoll < 0.55) step = Math.random() < 0.5 ? 1 : -1; 
-          else if (stepRoll < 0.80) step = Math.random() < 0.5 ? 2 : -2; 
-          else step = Math.random() < 0.5 ? (Math.random() < 0.7 ? 3 : 4) : (Math.random() < 0.7 ? -3 : -4); // Occasional larger leaps
+          if (stepRoll < 0.60) step = Math.random() < 0.5 ? 1 : -1; 
+          else if (stepRoll < 0.85) step = Math.random() < 0.5 ? 2 : -2; 
+          else step = Math.random() < 0.5 ? (Math.random() < 0.6 ? 3 : 4) : (Math.random() < 0.6 ? -3 : -4);
           currentMelodyScaleIndex = (currentMelodyScaleIndex + step + scaleNoteNames.length * 7) % scaleNoteNames.length;
           const noteName = scaleNoteNames[currentMelodyScaleIndex];
           
-          // Velocity influenced by arousal and a bit of randomness
-          const baseVelMelody = isKidsMode ? 0.6 : 0.65;
-          const velocity = Math.min(0.95, Math.max(0.25, baseVelMelody + (params.targetArousal * 0.15) + (Math.random() * 0.1 - 0.05)));
+          const baseVelMelody = isKidsMode ? 0.55 : 0.60;
+          const velocity = Math.min(0.9, Math.max(0.2, baseVelMelody + (targetArousal * 0.2) + (targetValence * 0.05) + (Math.random() * 0.15 - 0.075)));
 
-          let newTime = melodyCurrentTime;
-          if (melodyNotesToSchedule.length > 0) {
-            const lastEvent = melodyNotesToSchedule[melodyNotesToSchedule.length - 1];
-            const lastEventEndTime = lastEvent.time + Tone.Time(lastEvent.duration).toSeconds();
-            if (newTime < lastEventEndTime - TIME_EPSILON) newTime = lastEventEndTime + TIME_EPSILON;
-          }
+          let newTime = applyHumanization(melodyCurrentTime, 0.015);
+          if (newTime <= lastMelodyEventTime) newTime = lastMelodyEventTime + TIME_EPSILON;
           if (newTime >= totalChordProgressionSeconds - TIME_EPSILON) break;
 
           melodyNotesToSchedule.push({ time: newTime, note: noteName, duration: noteDurationNotation, velocity });
+          lastMelodyEventTime = newTime;
           overallMaxTime = Math.max(overallMaxTime, newTime + noteDurationSec);
           melodyCurrentTime = newTime + noteDurationSec;
       }
   }
   console.log(`${logPrefix} Generated ${melodyNotesToSchedule.length} melody notes. Melody time: ${melodyCurrentTime.toFixed(2)}s`);
 
-  // --- Bass Line Generation ---
+  // --- Bass Line Generation (Overhauled) ---
   const bassNotesToSchedule: { time: number, note: string, duration: string, velocity: number }[] = [];
   const bassOctave = isKidsMode ? 2 : (genreLower.includes("jazz") || genreLower.includes("funk") ? 2 : (genreLower.includes("rock") || genreLower.includes("metal") ? 1 : 2));
-  let lastBassTime = -TIME_EPSILON;
+  let lastBassEventTime = -TIME_EPSILON;
 
   for (let cycle = 0; cycle < numChordCycles; cycle++) {
     for (let i=0; i < progressionDegrees.length; i++) {
         const degree = progressionDegrees[i];
-        const measureStartTime = startOffset + (cycle * progressionDegrees.length * measureDurationSeconds) + (i * measureDurationSeconds);
-        const chordNotesForBass = getChordNotesForKey(params.keySignature, params.mode, degree, bassOctave, params.harmonicComplexity > 0.5, params.harmonicComplexity);
+        const currentMeasureStartTime = startOffset + (cycle * progressionDegrees.length * measureDurationSeconds) + (i * measureDurationSeconds);
+        const chordNotesForBass = getChordNotesForKey(params.keySignature, params.mode, degree, bassOctave, harmonicComplexity > 0.5, params.selectedGenre);
         const rootNote = chordNotesForBass[0];
-        const fifthNote = chordNotesForBass[2 % chordNotesForBass.length] || rootNote; // Fallback to root if no 5th
+        const fifthNote = chordNotesForBass[2 % chordNotesForBass.length] || rootNote;
+        const thirdNote = chordNotesForBass[1 % chordNotesForBass.length] || rootNote;
+        const scaleForWalk = getScaleNoteNames(params.keySignature, params.mode, bassOctave, params.selectedGenre, harmonicComplexity);
 
-        const baseVelBass = 0.55 + (params.targetArousal * 0.1);
+        const baseVelBass = 0.5 + (targetArousal * 0.15);
         
         if (isKidsMode) {
-            let time = measureStartTime;
-            if (time <= lastBassTime) time = lastBassTime + TIME_EPSILON;
-            bassNotesToSchedule.push({ time, note: rootNote, duration: "2n", velocity: Math.min(0.8, baseVelBass + 0.1) });
-            lastBassTime = time;
-            overallMaxTime = Math.max(overallMaxTime, time + Tone.Time("2n").toSeconds());
-
-            time = measureStartTime + Tone.Time("2n").toSeconds();
-            if (time <= lastBassTime) time = lastBassTime + TIME_EPSILON;
-            bassNotesToSchedule.push({ time, note: rootNote, duration: "2n", velocity: Math.min(0.8, baseVelBass) });
-            lastBassTime = time;
+            let time = applyHumanization(currentMeasureStartTime, 0.01);
+            if (time <= lastBassEventTime) time = lastBassEventTime + TIME_EPSILON;
+            bassNotesToSchedule.push({ time, note: rootNote, duration: "2n", velocity: Math.min(0.75, baseVelBass + 0.1) });
+            lastBassEventTime = time;
             overallMaxTime = Math.max(overallMaxTime, time + Tone.Time("2n").toSeconds());
         } else if (genreLower.includes("jazz")) {
-            const scaleForWalk = getScaleNoteNames(params.keySignature, params.mode, bassOctave, params.selectedGenre);
-            let currentWalkNote = rootNote;
+            let currentWalkNoteMidi = robustNoteToMidi(rootNote);
             for (let beat = 0; beat < beatsPerMeasure; beat++) {
-                let time = measureStartTime + beat * secondsPerBeat;
-                if (time <= lastBassTime) time = lastBassTime + TIME_EPSILON;
-                bassNotesToSchedule.push({ time, note: currentWalkNote, duration: "4n", velocity: Math.min(0.8, baseVelBass + (beat === 0 ? 0.1 : -0.05) + Math.random()*0.05) });
-                lastBassTime = time;
+                let time = applyHumanization(currentMeasureStartTime + beat * secondsPerBeat, 0.02);
+                if (time <= lastBassEventTime) time = lastBassEventTime + TIME_EPSILON;
+                bassNotesToSchedule.push({ time, note: midiToNoteName(currentWalkNoteMidi), duration: "4n", velocity: Math.min(0.75, baseVelBass + (beat === 0 ? 0.05 : -0.05) + Math.random()*0.04) });
+                lastBassEventTime = time;
                 overallMaxTime = Math.max(overallMaxTime, time + secondsPerBeat);
-                // Simple walk: move to next scale tone, prioritizing chord tones
-                const currentRootMidi = robustNoteToMidi(currentWalkNote);
-                const nextNoteOptions = scaleForWalk.filter(n => Math.abs(robustNoteToMidi(n) - currentRootMidi) <=2 && n !== currentWalkNote );
-                currentWalkNote = nextNoteOptions.length > 0 ? nextNoteOptions[Math.floor(Math.random()*nextNoteOptions.length)] : scaleForWalk[(scaleForWalk.indexOf(currentWalkNote)+1+scaleForWalk.length)%scaleForWalk.length];
+                // Simple walking logic: move to next closest scale tone or chord tone
+                const targetNotesMidi = beat < 2 ? [robustNoteToMidi(thirdNote), robustNoteToMidi(fifthNote)] : [robustNoteToMidi(fifthNote), robustNoteToMidi(rootNote) + (Math.random() < 0.3 ? 7 : 0)]; // Add variety
+                let closestDist = Infinity;
+                let nextNoteMidi = currentWalkNoteMidi;
+                [...targetNotesMidi, ...scaleForWalk.map(n => robustNoteToMidi(n))].forEach(tnMidi => {
+                    if (tnMidi === currentWalkNoteMidi) return;
+                    const dist = Math.abs(tnMidi - currentWalkNoteMidi);
+                    if (dist < closestDist && dist <=4 ) { // Prioritize closer steps
+                        closestDist = dist;
+                        nextNoteMidi = tnMidi;
+                    }
+                });
+                currentWalkNoteMidi = nextNoteMidi;
             }
         } else if (genreLower.includes("funk") || genreLower.includes("soul")) {
             const pattern = [
                 { note: rootNote, timeOffset: 0, duration: "8n", accent: true },
-                { note: rootNote, timeOffset: secondsPerBeat * 0.75, duration: "16n", accent: false }, // Syncopated
+                { rest: true, timeOffset: secondsPerBeat * 0.5, duration: "16n" },
+                { note: rootNote, timeOffset: secondsPerBeat * 0.75, duration: "16n", accent: false }, 
                 { note: fifthNote, timeOffset: secondsPerBeat * 1.5, duration: "8n", accent: false },
-                { note: rootNote, timeOffset: secondsPerBeat * 2.5, duration: "8n", accent: true },
-                { note: fifthNote, timeOffset: secondsPerBeat * 3.25, duration: "16n", accent: false},
+                { rest: true, timeOffset: secondsPerBeat * 2.0, duration: "16n"},
+                { note: rootNote, timeOffset: secondsPerBeat * 2.25, duration: "16n", accent: true },
+                { note: thirdNote, timeOffset: secondsPerBeat * 3.0, duration: "8n", accent: false },
+                { note: fifthNote, timeOffset: secondsPerBeat * 3.5, duration: "8n", accent: false},
             ];
             pattern.forEach(p => {
-                let time = measureStartTime + p.timeOffset;
-                if (time <= lastBassTime) time = lastBassTime + TIME_EPSILON;
-                bassNotesToSchedule.push({ time, note: p.note, duration: p.duration, velocity: Math.min(0.85, baseVelBass + (p.accent ? 0.15:0) + Math.random()*0.05)});
-                lastBassTime = time;
+                if (p.rest) return;
+                let time = applyHumanization(currentMeasureStartTime + p.timeOffset, 0.015);
+                if (time <= lastBassEventTime) time = lastBassEventTime + TIME_EPSILON;
+                bassNotesToSchedule.push({ time, note: p.note as string, duration: p.duration, velocity: Math.min(0.8, baseVelBass + (p.accent ? 0.1 : 0) + Math.random()*0.05)});
+                lastBassEventTime = time;
                 overallMaxTime = Math.max(overallMaxTime, time + Tone.Time(p.duration).toSeconds());
             });
-        } else if (genreLower.includes("electronic") && params.rhythmicDensity > 0.4) {
-            for (let beat = 0; beat < beatsPerMeasure * 2; beat++) { // 8th notes
-                 let time = measureStartTime + beat * (secondsPerBeat / 2);
-                 if (time <= lastBassTime) time = lastBassTime + TIME_EPSILON;
-                 bassNotesToSchedule.push({ time, note: rootNote, duration: "8n", velocity: Math.min(0.8, baseVelBass + (beat % 2 === 0 ? 0.05 : 0)) });
-                 lastBassTime = time;
-                 overallMaxTime = Math.max(overallMaxTime, time + secondsPerBeat/2);
+        } else if (genreLower.includes("electronic") && rhythmicDensity > 0.3) {
+            const subdivisions = rhythmicDensity > 0.65 ? 4 : 2; // 16ths or 8ths
+            const noteDur = subdivisions === 4 ? "16n" : "8n";
+            for (let beat = 0; beat < beatsPerMeasure * subdivisions; beat++) {
+                 let time = applyHumanization(currentMeasureStartTime + beat * (secondsPerBeat / subdivisions), 0.005);
+                 if (time <= lastBassEventTime) time = lastBassEventTime + TIME_EPSILON;
+                 bassNotesToSchedule.push({ time, note: rootNote, duration: noteDur, velocity: Math.min(0.75, baseVelBass + (beat % subdivisions === 0 ? 0.05 : 0)) });
+                 lastBassEventTime = time;
+                 overallMaxTime = Math.max(overallMaxTime, time + secondsPerBeat/subdivisions);
             }
         }
-        else { // Default Rock/Pop/etc. Quarter notes
+        else { // Default Rock/Pop/Country etc.
             for (let beat = 0; beat < beatsPerMeasure; beat++) {
-                let time = measureStartTime + beat * secondsPerBeat;
-                if (time <= lastBassTime) time = lastBassTime + TIME_EPSILON;
-                bassNotesToSchedule.push({ time, note: rootNote, duration: "4n", velocity: Math.min(0.8, baseVelBass + (beat === 0 || beat === 2 ? 0.1 : 0)) });
-                lastBassTime = time;
+                let time = applyHumanization(currentMeasureStartTime + beat * secondsPerBeat, 0.01);
+                if (time <= lastBassEventTime) time = lastBassEventTime + TIME_EPSILON;
+                bassNotesToSchedule.push({ time, note: (beat === 1 && rhythmicDensity > 0.4 && Math.random() < 0.3) ? fifthNote : rootNote, duration: "4n", velocity: Math.min(0.8, baseVelBass + (beat === 0 || beat === 2 ? 0.1 : -0.05)) });
+                lastBassEventTime = time;
                 overallMaxTime = Math.max(overallMaxTime, time + secondsPerBeat);
             }
         }
@@ -570,86 +609,89 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   }
   console.log(`${logPrefix} Generated ${bassNotesToSchedule.length} bass notes.`);
 
-
-  // --- Chord Generation ---
+  // --- Chord Generation (with Rhythmic Variation) ---
   const chordEventsToSchedule: { time: number, notes: string[], duration: string, velocity: number }[] = [];
   const chordOctave = isKidsMode ? 3 : (genreLower.includes("jazz") || genreLower.includes("classical") ? 4 : 3);
-  let lastChordTime = -TIME_EPSILON;
+  let lastChordEventTime = -TIME_EPSILON;
 
   for (let cycle = 0; cycle < numChordCycles; cycle++) {
     for (let i=0; i < progressionDegrees.length; i++) {
       const degree = progressionDegrees[i];
-      const measureStartTime = startOffset + (cycle * progressionDegrees.length * measureDurationSeconds) + (i * measureDurationSeconds);
-      const addSeventhForChord = !isKidsMode && (params.harmonicComplexity > 0.55 || genreLower.includes("jazz"));
-      const chordNoteNames = getChordNotesForKey(params.keySignature, params.mode, degree, chordOctave, addSeventhForChord, params.harmonicComplexity);
+      const currentMeasureStartTime = startOffset + (cycle * progressionDegrees.length * measureDurationSeconds) + (i * measureDurationSeconds);
+      const addSeventhForChord = !isKidsMode && (harmonicComplexity > 0.5 || genreLower.includes("jazz"));
+      const chordNoteNames = getChordNotesForKey(params.keySignature, params.mode, degree, chordOctave, addSeventhForChord, harmonicComplexity, params.selectedGenre);
       
-      const baseVelChord = 0.35 + (params.targetArousal * 0.1);
+      const baseVelChord = 0.3 + (targetArousal * 0.12) + (targetValence * 0.05);
 
       if (chordNoteNames.length > 0) {
-          if (!isKidsMode && (genreLower.includes("funk") || genreLower.includes("reggae"))) {
-              const numStabs = params.rhythmicDensity > 0.5 ? 4 : 2;
-              const stabDuration = numStabs === 4 ? "16n" : "8n";
+          if (isKidsMode || genreLower.includes("ambient") || genreLower.includes("classical")) {
+            let time = applyHumanization(currentMeasureStartTime, 0.01);
+            if (time <= lastChordEventTime) time = lastChordEventTime + TIME_EPSILON;
+            chordEventsToSchedule.push({ time, notes: chordNoteNames, duration: "1m", velocity: Math.min(0.6, baseVelChord) });
+            lastChordEventTime = time;
+            overallMaxTime = Math.max(overallMaxTime, time + measureDurationSeconds);
+          } else if (genreLower.includes("funk") || genreLower.includes("reggae") || (genreLower.includes("electronic") && rhythmicDensity > 0.6)) {
+              const numStabs = rhythmicDensity > 0.6 ? (genreLower.includes("reggae") ? 2 : 4) : 2; // Reggae often off-beat stabs
+              const stabDuration = numStabs === 4 ? "16n" : (genreLower.includes("reggae") ? "4n" : "8n");
               for(let s=0; s < numStabs; s++) {
-                  let time = measureStartTime + s * (measureDurationSeconds / numStabs) + (Math.random()-0.5)*0.03; // Add slight humanization
-                  if (s > 0 && time <= lastChordTime) time = lastChordTime + TIME_EPSILON;
-                  chordEventsToSchedule.push({ time, notes: chordNoteNames, duration: stabDuration, velocity: Math.min(0.7, baseVelChord + 0.1 + Math.random()*0.05) });
-                  lastChordTime = time;
+                  let timeOffset = s * (measureDurationSeconds / numStabs);
+                  if (genreLower.includes("reggae")) timeOffset = (s * 2 + 1) * (secondsPerBeat); // Off-beats 2 and 4
+                  let time = applyHumanization(currentMeasureStartTime + timeOffset, 0.015);
+                  if (time <= lastChordEventTime) time = lastChordEventTime + TIME_EPSILON;
+                  
+                  chordEventsToSchedule.push({ time, notes: chordNoteNames, duration: stabDuration, velocity: Math.min(0.65, baseVelChord + 0.1 + Math.random()*0.05) });
+                  lastChordEventTime = time;
                   overallMaxTime = Math.max(overallMaxTime, time + Tone.Time(stabDuration).toSeconds());
+                  if (genreLower.includes("reggae") && s >=1) break; // Only two stabs for reggae
               }
-          } else if (!isKidsMode && (genreLower.includes("rock") || genreLower.includes("metal")) && params.rhythmicDensity > 0.4){
-              const numStrums = params.rhythmicDensity > 0.7 ? 4 : 2; // More strums for higher density
-              const strumDur = numStrums === 4 ? "4n" : "2n";
-              for(let s=0; s < numStrums; s++) { 
-                 let time = measureStartTime + s * (measureDurationSeconds / numStrums);
-                 if (s > 0 && time <= lastChordTime) time = lastChordTime + TIME_EPSILON;
-                 chordEventsToSchedule.push({ time, notes: chordNoteNames, duration: strumDur, velocity: Math.min(0.7, baseVelChord + Math.random()*0.1) });
-                 lastChordTime = time;
-                 overallMaxTime = Math.max(overallMaxTime, time + Tone.Time(strumDur).toSeconds());
-              }
+          } else if (genreLower.includes("rock") || genreLower.includes("pop") || genreLower.includes("country")){
+              const strumPattern = rhythmicDensity > 0.55 ? ["0", "0.5", "1", "1.5", "2", "2.5", "3", "3.5"] : ["0", "1", "2", "3"]; // 8ths or Quarters
+              const strumDur = rhythmicDensity > 0.55 ? "8n" : "4n";
+              strumPattern.forEach(beatOffsetStr => {
+                  let time = applyHumanization(currentMeasureStartTime + parseFloat(beatOffsetStr) * secondsPerBeat, 0.01);
+                  if (time <= lastChordEventTime) time = lastChordEventTime + TIME_EPSILON;
+                  chordEventsToSchedule.push({ time, notes: chordNoteNames, duration: strumDur, velocity: Math.min(0.6, baseVelChord + (beatOffsetStr === "0" ? 0.05 : 0) + Math.random()*0.03) });
+                  lastChordEventTime = time;
+                  overallMaxTime = Math.max(overallMaxTime, time + Tone.Time(strumDur).toSeconds());
+              });
           } else { // Default sustained chords
-            let time = measureStartTime;
-            if (time <= lastChordTime) time = lastChordTime + TIME_EPSILON;
-            chordEventsToSchedule.push({ time, notes: chordNoteNames, duration: chordDurationNotation, velocity: Math.min(0.65, baseVelChord) });
-            lastChordTime = time;
-            overallMaxTime = Math.max(overallMaxTime, time + Tone.Time(chordDurationNotation).toSeconds());
+            let time = applyHumanization(currentMeasureStartTime, 0.01);
+            if (time <= lastChordEventTime) time = lastChordEventTime + TIME_EPSILON;
+            chordEventsToSchedule.push({ time, notes: chordNoteNames, duration: "1m", velocity: Math.min(0.6, baseVelChord) });
+            lastChordEventTime = time;
+            overallMaxTime = Math.max(overallMaxTime, time + measureDurationSeconds);
           }
       }
     }
   }
   console.log(`${logPrefix} Generated ${chordEventsToSchedule.length} chord events.`);
 
-  // --- Arpeggio Generation ---
+  // --- Arpeggio Generation (More Contextual) ---
   const arpeggioNotesToSchedule: { time: number, note: string, duration: string, velocity: number }[] = [];
-  const arpeggioOctave = isKidsMode ? 4 : (params.harmonicComplexity > 0.4 ? 5 : 4);
-  const arpNoteDurationNotation = !isKidsMode && (params.rhythmicDensity > 0.55 || genreLower.includes("electronic")) ? "16n" : "8n";
-  const arpNoteDurationSeconds = Tone.Time(arpNoteDurationNotation).toSeconds();
-  let lastArpTime = -TIME_EPSILON;
+  const arpeggioOctave = isKidsMode ? 4 : (harmonicComplexity > 0.3 ? 5 : 4);
+  let lastArpEventTime = -TIME_EPSILON;
   
-  const shouldPlayArp = !isKidsMode || (isKidsMode && params.harmonicComplexity > 0.15 && params.rhythmicDensity > 0.1);
-  if (shouldPlayArp) {
+  const playArp = !isKidsMode || (isKidsMode && harmonicComplexity > 0.1 && rhythmicDensity > 0.05);
+  if (playArp && (genreLower.includes("electronic") || genreLower.includes("pop") || genreLower.includes("ambient") || genreLower.includes("classical") || isKidsMode || harmonicComplexity > 0.4)) {
     chordEventsToSchedule.forEach(chordEvent => {
         const currentChordNotesForArp = chordEvent.notes.map(n => midiToNoteName(robustNoteToMidi(n.replace(/[0-9]+$/, String(arpeggioOctave)))));
         if (currentChordNotesForArp.length > 0) {
-            const arpPatternBase = [
-                currentChordNotesForArp[0],
-                currentChordNotesForArp[1 % currentChordNotesForArp.length],
-                currentChordNotesForArp[Math.min(2, currentChordNotesForArp.length -1)], // Ensure 3rd note is valid
-                currentChordNotesForArp[1 % currentChordNotesForArp.length], // Example: Up-down like
-            ];
-            const arpPattern = genreLower.includes("classical") ? // Different pattern for classical
-                [currentChordNotesForArp[0], currentChordNotesForArp[Math.min(1, currentChordNotesForArp.length-1)], currentChordNotesForArp[Math.min(2, currentChordNotesForArp.length-1)], midiToNoteName(robustNoteToMidi(currentChordNotesForArp[0])+12)]
-                : arpPatternBase;
-
+            const arpPattern = [0, 1, 2, 1]; // Indices for up-down like pattern from chord tones
+            if (genreLower.includes("classical")) arpPattern.push(0, 2, 1, 2); // More classical pattern
+            
+            const arpNoteDurationNotation = (rhythmicDensity > 0.6 || genreLower.includes("electronic")) ? "16n" : "8n";
+            const arpNoteDurationSeconds = Tone.Time(arpNoteDurationNotation).toSeconds();
             const notesPerBeatForArp = arpNoteDurationNotation === "16n" ? 4 : 2;
-            const beatsToArpeggiate = isKidsMode ? 1 : (params.rhythmicDensity > 0.25 && params.harmonicComplexity > 0.25 ? (genreLower.includes("ambient") ? beatsPerMeasure : 2) : 1);
+            const beatsToArpeggiate = isKidsMode ? 1 : (rhythmicDensity > 0.2 && harmonicComplexity > 0.2 ? (genreLower.includes("ambient") ? beatsPerMeasure : 2) : (harmonicComplexity > 0.5 ? 1 : 0));
 
             for (let beat = 0; beat < beatsToArpeggiate; beat++) {
                 for (let i = 0; i < notesPerBeatForArp; i++) {
-                    let time = chordEvent.time + (beat * secondsPerBeat) + (i * arpNoteDurationSeconds);
-                    if (time < chordEvent.time + Tone.Time(chordEvent.duration).toSeconds() - TIME_EPSILON) {
-                        if (time <= lastArpTime) time = lastArpTime + TIME_EPSILON;
-                        arpeggioNotesToSchedule.push({ time, note: arpPattern[i % arpPattern.length], duration: arpNoteDurationNotation, velocity: Math.min(0.55, 0.25 + (params.targetArousal * 0.1) + Math.random() * 0.05) });
-                        lastArpTime = time;
+                    let time = applyHumanization(chordEvent.time + (beat * secondsPerBeat) + (i * arpNoteDurationSeconds), 0.008);
+                     if (time < chordEvent.time + Tone.Time(chordEvent.duration).toSeconds() - TIME_EPSILON * 2) {
+                        if (time <= lastArpEventTime) time = lastArpEventTime + TIME_EPSILON;
+                        const noteIndexInChord = arpPattern[i % arpPattern.length] % currentChordNotesForArp.length;
+                        arpeggioNotesToSchedule.push({ time, note: currentChordNotesForArp[noteIndexInChord], duration: arpNoteDurationNotation, velocity: Math.min(0.5, 0.2 + (targetArousal * 0.12) + Math.random() * 0.04) });
+                        lastArpEventTime = time;
                         overallMaxTime = Math.max(overallMaxTime, time + arpNoteDurationSeconds);
                     }
                 }
@@ -659,83 +701,101 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   }
   console.log(`${logPrefix} Generated ${arpeggioNotesToSchedule.length} arpeggio notes.`);
 
-  // --- Drum Generation ---
+  // --- Drum Generation (Overhauled) ---
   const drumEventsToSchedule: { synth: 'kick' | 'snare' | 'hiHat' | 'tambourine', time: number, duration: string, velocity: number, pitch?: string | number }[] = [];
   const numDrumMeasures = numChordCycles * progressionDegrees.length;
-  let lastKickTimeD = -TIME_EPSILON, lastSnareTimeD = -TIME_EPSILON, lastHiHatTimeD = -TIME_EPSILON, lastTambourineTimeD = -TIME_EPSILON;
+  let lastDrumTimes = { kick: -TIME_EPSILON, snare: -TIME_EPSILON, hiHat: -TIME_EPSILON, tambourine: -TIME_EPSILON };
 
   for (let measure = 0; measure < numDrumMeasures; measure++) {
     for (let beat = 0; beat < beatsPerMeasure; beat++) {
-      const currentTimeForDrumsThisBeat = startOffset + (measure * measureDurationSeconds) + (beat * secondsPerBeat);
-      const baseVelDrum = 0.6 + (params.targetArousal * 0.15);
+      const beatStartTime = startOffset + (measure * measureDurationSeconds) + (beat * secondsPerBeat);
+      const baseVelDrum = 0.55 + (targetArousal * 0.2);
+      const humanizeAmount = 0.01;
 
       // Kick
-      let addKick = false;
+      let addKick = false; let kickTime = beatStartTime;
       if (isKidsMode) { addKick = beat === 0;
-      } else if (genreLower.includes("electronic")) { addKick = true; // Four on the floor
-      } else if (genreLower.includes("funk") || genreLower.includes("soul")) { addKick = beat === 0 || (beat === 2 && Math.random() < 0.7) || (Math.random() < params.rhythmicDensity * 0.4);
-      } else { addKick = beat === 0 || beat === 2; // Default Rock/Pop
+      } else if (genreLower.includes("electronic") || genreLower.includes("house") || genreLower.includes("techno")) { addKick = true;
+      } else if (genreLower.includes("funk") || genreLower.includes("soul")) { addKick = (beat === 0) || (beat === 2 && Math.random() < 0.6) || (Math.random() < rhythmicDensity * 0.35);
+          if(addKick && beat > 0) kickTime = beatStartTime + (Math.random() < 0.5 ? -secondsPerBeat*0.25 : secondsPerBeat*0.25) * (Math.random()*0.5); // Syncopation
+      } else { addKick = beat === 0 || beat === 2;
       }
       if (addKick) {
-        let time = currentTimeForDrumsThisBeat + (Math.random()-0.5)*0.01; // Humanize
-        if (time <= lastKickTimeD) time = lastKickTimeD + TIME_EPSILON;
-        drumEventsToSchedule.push({ synth: 'kick', time, duration: "8n", velocity: Math.min(0.9, baseVelDrum + 0.15), pitch: "C2" });
-        lastKickTimeD = time;
-        overallMaxTime = Math.max(overallMaxTime, time + Tone.Time("8n").toSeconds());
+        let time = applyHumanization(kickTime, humanizeAmount);
+        if (time <= lastDrumTimes.kick) time = lastDrumTimes.kick + TIME_EPSILON;
+        drumEventsToSchedule.push({ synth: 'kick', time, duration: "8n", velocity: Math.min(0.95, baseVelDrum + 0.2), pitch: "C2" });
+        lastDrumTimes.kick = time;
       }
 
       // Snare
-      let addSnare = false;
+      let addSnare = false; let snareTime = beatStartTime;
       if (isKidsMode) { addSnare = activeSynthConfigs.tambourine ? false : beat === 2;
-      } else if (genreLower.includes("electronic") || genreLower.includes("rock") || genreLower.includes("pop") || genreLower.includes("funk") || genreLower.includes("soul")) { addSnare = beat === 1 || beat === 3;
-      } else if (genreLower.includes("jazz")) { addSnare = (beat === 1 || beat === 3) && Math.random() < 0.3; // Light snare
-      }
+      } else if (genreLower.includes("electronic") || genreLower.includes("rock") || genreLower.includes("pop") || genreLower.includes("funk") || genreLower.includes("soul") || genreLower.includes("country")) { addSnare = beat === 1 || beat === 3;
+      } else if (genreLower.includes("jazz")) { addSnare = (beat === 1 || beat === 3) && Math.random() < 0.25; 
+      } else if (genreLower.includes("reggae")) { addSnare = beat === 2; }
       if (addSnare) {
-        let time = currentTimeForDrumsThisBeat + (Math.random()-0.5)*0.015;
-        if (time <= lastSnareTimeD) time = lastSnareTimeD + TIME_EPSILON;
-        drumEventsToSchedule.push({ synth: 'snare', time, duration: "16n", velocity: Math.min(0.85, baseVelDrum + 0.05), pitch: "D2" });
-        lastSnareTimeD = time;
-        overallMaxTime = Math.max(overallMaxTime, time + Tone.Time("16n").toSeconds());
+        let time = applyHumanization(snareTime, humanizeAmount * 1.2);
+        if (time <= lastDrumTimes.snare) time = lastDrumTimes.snare + TIME_EPSILON;
+        drumEventsToSchedule.push({ synth: 'snare', time, duration: "16n", velocity: Math.min(0.9, baseVelDrum + 0.1), pitch: "D2" });
+        lastDrumTimes.snare = time;
       }
       
-      // Tambourine for Kids mode if specified
-      if (isKidsMode && activeSynthConfigs.tambourine && (beat === 1 || beat ===3)) {
-         let time = currentTimeForDrumsThisBeat + (Math.random()-0.5)*0.01;
-         if (time <= lastTambourineTimeD) time = lastTambourineTimeD + TIME_EPSILON;
-         drumEventsToSchedule.push({synth: 'tambourine', time, duration: "8n", velocity: Math.min(0.7, baseVelDrum - 0.1)});
-         lastTambourineTimeD = time;
-         overallMaxTime = Math.max(overallMaxTime, time + Tone.Time("8n").toSeconds());
+      // Tambourine for Kids
+      if (isKidsMode && activeSynthConfigs.tambourine && (beat === 1 || beat === 3)) {
+         let time = applyHumanization(beatStartTime, humanizeAmount);
+         if (time <= lastDrumTimes.tambourine) time = lastDrumTimes.tambourine + TIME_EPSILON;
+         drumEventsToSchedule.push({synth: 'tambourine', time, duration: "8n", velocity: Math.min(0.7, baseVelDrum - 0.05)});
+         lastDrumTimes.tambourine = time;
       }
 
-
-      // Hi-Hat
-      let hiHatSubdivisions = 0;
-      if (isKidsMode) { hiHatSubdivisions = params.rhythmicDensity > 0.3 ? 2 : 0; // Quarters or nothing for kids
-      } else if (genreLower.includes("jazz")) { hiHatSubdivisions = 3; // Swing: Q, E, E
-      } else if (genreLower.includes("funk") || genreLower.includes("soul") || (genreLower.includes("electronic") && params.rhythmicDensity > 0.6)) { hiHatSubdivisions = 4; // 16ths
-      } else if (params.rhythmicDensity > 0.2) { hiHatSubdivisions = 2; // 8ths
+      // Hi-Hat / Ride
+      let hiHatSubdivisions = 0; const useRide = activeSynthConfigs.hiHat.frequency > 450; // crude check if it's ride-like
+      if (isKidsMode) { hiHatSubdivisions = rhythmicDensity > 0.3 ? 1 : 0; // Quarters
+      } else if (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.3)) { hiHatSubdivisions = 3; // Swing: Q, E, E
+      } else if (genreLower.includes("funk") || genreLower.includes("soul") || (genreLower.includes("electronic") && rhythmicDensity > 0.55)) { hiHatSubdivisions = 4; // 16ths
+      } else if (rhythmicDensity > 0.15) { hiHatSubdivisions = 2; // 8ths
       }
       
       if (hiHatSubdivisions > 0) {
         const hiHatNoteDuration = hiHatSubdivisions === 1 ? "4n" : hiHatSubdivisions === 2 ? "8n" : hiHatSubdivisions === 3 ? "8t" : "16n";
         for (let subBeat = 0; subBeat < hiHatSubdivisions; subBeat++) {
-          let time = currentTimeForDrumsThisBeat + (subBeat * (secondsPerBeat / hiHatSubdivisions)) + (Math.random()-0.5)*0.005;
-          if (time <= lastHiHatTimeD) time = lastHiHatTimeD + TIME_EPSILON;
-          
-          let hiHatPitch = activeSynthConfigs.hiHat.frequency || 400;
-          if (genreLower.includes("jazz")) hiHatPitch = 600 + Math.random()*100; // Ride-like for jazz
+          let time = applyHumanization(beatStartTime + (subBeat * (secondsPerBeat / hiHatSubdivisions)), humanizeAmount * 0.5);
+           if (Tone.Transport.swing > 0 && hiHatSubdivisions === 2 && subBeat === 1) time += Tone.Transport.swing * (secondsPerBeat/2) * 0.5; // Manual swing for 8ths
+           if (Tone.Transport.swing > 0 && hiHatSubdivisions === 3 && subBeat > 0) time += Tone.Transport.swing * (secondsPerBeat/3) * (subBeat === 1 ? 0.33 : 0.66) * 0.5;
 
-          drumEventsToSchedule.push({ synth: 'hiHat', time, duration: hiHatNoteDuration, velocity: Math.min(0.65, (baseVelDrum * 0.6) + (Math.random() * 0.1) - (subBeat % 2 === 1 ? 0.05:0) ), pitch: hiHatPitch });
-          lastHiHatTimeD = time;
-          overallMaxTime = Math.max(overallMaxTime, time + Tone.Time(hiHatNoteDuration).toSeconds());
+
+          if (time <= lastDrumTimes.hiHat) time = lastDrumTimes.hiHat + TIME_EPSILON;
+          
+          const hiHatPitch = activeSynthConfigs.hiHat.frequency || 400;
+          const hiHatVelocity = Math.min(0.6, (baseVelDrum * 0.5) + (Math.random() * 0.1) - (subBeat % 2 === 1 && hiHatSubdivisions > 1 ? 0.05:0) );
+
+          // Add occasional open hi-hat for non-jazz/classical
+          if (!isKidsMode && !genreLower.includes("jazz") && !genreLower.includes("classical") && hiHatSubdivisions >= 2 && subBeat === hiHatSubdivisions -1 && Math.random() < 0.15) {
+              // Slightly different config for open hi-hat (longer decay)
+              drumEventsToSchedule.push({ synth: 'hiHat', time, duration: "8n", velocity: hiHatVelocity + 0.1, pitch: hiHatPitch + 100 });
+          } else {
+              drumEventsToSchedule.push({ synth: 'hiHat', time, duration: hiHatNoteDuration, velocity: hiHatVelocity, pitch: hiHatPitch });
+          }
+          lastDrumTimes.hiHat = time;
         }
       }
     }
+    // Simple fill at the end of 4 measures for some genres
+    if (!isKidsMode && (measure + 1) % 4 === 0 && measure < numDrumMeasures -1 && rhythmicDensity > 0.5 && (genreLower.includes("rock") || genreLower.includes("pop") || genreLower.includes("funk"))){
+        const fillStartTime = startOffset + ((measure + 1) * measureDurationSeconds) - secondsPerBeat; // Last beat
+        for(let f=0; f<4; f++){
+            let time = applyHumanization(fillStartTime + f * (secondsPerBeat/4), humanizeAmount*0.8);
+            if (time <= lastDrumTimes.snare) time = lastDrumTimes.snare + TIME_EPSILON;
+            drumEventsToSchedule.push({synth: 'snare', time, duration: "16n", velocity: Math.min(0.85, baseVelDrum + 0.15 + Math.random()*0.05), pitch: "D2"});
+            lastDrumTimes.snare = time;
+        }
+    }
   }
   drumEventsToSchedule.forEach(ev => { overallMaxTime = Math.max(overallMaxTime, ev.time + Tone.Time(ev.duration).toSeconds()); });
-  console.log(`${logPrefix} Generated ${drumEventsToSchedule.length} drum events. Final overallMaxTime: ${overallMaxTime.toFixed(2)}`);
+  console.log(`${logPrefix} Generated ${drumEventsToSchedule.length} drum events.`);
 
-  const renderDuration = Math.max(overallMaxTime + 2.5, MIN_EFFECTIVE_DURATION_SECONDS); // Add 2.5s tail
+  // --- Final Render Duration & Offline Context ---
+  const renderDuration = Math.max(overallMaxTime + 3.0, MIN_EFFECTIVE_DURATION_SECONDS); // Add 3s tail
   console.log(`${logPrefix} Calculated renderDuration: ${renderDuration.toFixed(2)}s.`);
 
   try {
@@ -747,19 +807,19 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
           offlineContext.transport.swingSubdivision = Tone.Transport.swingSubdivision;
       }
 
-      const reverb = new Tone.Reverb(isKidsMode ? 0.5 : 1.0).toDestination(); 
-      reverb.wet.value = isKidsMode ? 0.15 : 0.25;
-      await reverb.ready;
-      console.log(`${logPrefix}_OFFLINE] Reverb created and ready. Wet: ${reverb.wet.value}`);
+      const masterReverb = new Tone.Reverb(isKidsMode ? 0.6 : 1.5).toDestination(); 
+      masterReverb.wet.value = isKidsMode ? 0.12 : 0.22;
+      await masterReverb.ready;
+      console.log(`${logPrefix}_OFFLINE] Master Reverb created. Wet: ${masterReverb.wet.value}`);
 
-      const melodySynth = createSynth(activeSynthConfigs.melody, offlineContext).connect(reverb);
-      const bassSynth = createSynth(activeSynthConfigs.bass, offlineContext).toDestination(); // Bass usually dry
-      const chordSynth = createSynth(activeSynthConfigs.chords, offlineContext).connect(reverb);
+      const melodySynth = createSynth(activeSynthConfigs.melody, offlineContext).connect(masterReverb);
+      const bassSynth = createSynth(activeSynthConfigs.bass, offlineContext).toDestination();
+      const chordSynth = createSynth(activeSynthConfigs.chords, offlineContext).connect(masterReverb);
       let arpeggioSynth;
       if (arpeggioNotesToSchedule.length > 0 && activeSynthConfigs.arpeggio) {
-        arpeggioSynth = createSynth(activeSynthConfigs.arpeggio, offlineContext).connect(reverb);
+        arpeggioSynth = createSynth(activeSynthConfigs.arpeggio, offlineContext).connect(masterReverb);
       }
-      console.log(`${logPrefix}_OFFLINE] Melody, Bass, Chord, Arp Synths created and connected.`);
+      console.log(`${logPrefix}_OFFLINE] Melodic/Harmonic Synths created.`);
 
       melodyNotesToSchedule.forEach((ev) => melodySynth.triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity));
       bassNotesToSchedule.forEach((ev) => bassSynth.triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity));
@@ -776,29 +836,18 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       if (activeSynthConfigs.tambourine) {
         tambourineSynth = new Tone.NoiseSynth(activeSynthConfigs.tambourine).toDestination();
       }
-      console.log(`${logPrefix}_OFFLINE] Drum synths created and connected to offlineContext.destination.`);
+      console.log(`${logPrefix}_OFFLINE] Drum synths created.`);
       
-      lastKickTimeD = -TIME_EPSILON; lastSnareTimeD = -TIME_EPSILON; lastHiHatTimeD = -TIME_EPSILON; lastTambourineTimeD = -TIME_EPSILON;
       drumEventsToSchedule.forEach(ev => {
         const { synth, time, duration, velocity, pitch } = ev;
-        let correctedTime = time; // Humanization already applied if any
-        
         if (synth === 'kick') {
-          if (correctedTime <= lastKickTimeD) correctedTime = lastKickTimeD + TIME_EPSILON;
-          kickSynth.triggerAttackRelease(pitch as string || "C2", duration, correctedTime, velocity);
-          lastKickTimeD = correctedTime;
+          kickSynth.triggerAttackRelease(pitch as string || "C2", duration, time, velocity);
         } else if (synth === 'snare') {
-          if (correctedTime <= lastSnareTimeD) correctedTime = lastSnareTimeD + TIME_EPSILON;
-          snareSynth.triggerAttackRelease(duration, correctedTime, velocity);
-          lastSnareTimeD = correctedTime;
+          snareSynth.triggerAttackRelease(duration, time, velocity);
         } else if (synth === 'hiHat') {
-          if (correctedTime <= lastHiHatTimeD) correctedTime = lastHiHatTimeD + TIME_EPSILON;
-          hiHatSynth.triggerAttackRelease(pitch as string | number, duration, correctedTime, velocity);
-          lastHiHatTimeD = correctedTime;
+          hiHatSynth.triggerAttackRelease(pitch as string | number, duration, time, velocity);
         } else if (synth === 'tambourine' && tambourineSynth) {
-            if (correctedTime <= lastTambourineTimeD) correctedTime = lastTambourineTimeD + TIME_EPSILON;
-            tambourineSynth.triggerAttackRelease(duration, correctedTime, velocity);
-            lastTambourineTimeD = correctedTime;
+            tambourineSynth.triggerAttackRelease(duration, time, velocity);
         }
       });
       console.log(`${logPrefix}_OFFLINE] All events scheduled for offline rendering.`);
@@ -829,4 +878,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-
