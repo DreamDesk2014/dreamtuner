@@ -350,7 +350,7 @@ const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instr
     let synthInstance: Tone.Instrument;
     if (config.synthType === Tone.PolySynth) {
         const subSynthType = config.subType || Tone.Synth;
-        synthInstance = new Tone.PolySynth(subSynthType) as Tone.PolySynth;
+        synthInstance = new Tone.PolySynth({synth: subSynthType});
         if(config.options) (synthInstance as Tone.PolySynth).set(config.options);
     } else {
         synthInstance = new config.synthType(config.options) as Tone.Instrument;
@@ -696,12 +696,12 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   const drumEventsToSchedule: { synth: 'kick' | 'snare' | 'hiHat' | 'tambourine', time: number, duration: string, velocity: number, pitch?: string | number }[] = [];
   const numDrumMeasures = numChordCycles * progressionDegrees.length;
   let lastDrumTimes = { kick: -TIME_EPSILON, snare: -TIME_EPSILON, hiHat: -TIME_EPSILON, tambourine: -TIME_EPSILON };
-  const humanizeAmount = 0.01; // Standard humanization factor for drum timing
+  const humanizeAmount = 0.01; 
 
   for (let measure = 0; measure < numDrumMeasures; measure++) {
+    const baseVelDrum = 0.55 + (targetArousal * 0.2); // Moved declaration here
     for (let beat = 0; beat < beatsPerMeasure; beat++) {
       const beatStartTime = startOffset + (measure * measureDurationSeconds) + (beat * secondsPerBeat);
-      const baseVelDrum = 0.55 + (targetArousal * 0.2);
       
       let addKick = false; let kickTime = beatStartTime;
       if (isKidsMode) { addKick = beat === 0;
@@ -871,3 +871,4 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
