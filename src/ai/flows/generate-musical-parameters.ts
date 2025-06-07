@@ -178,10 +178,10 @@ const prompt = ai.definePrompt({
   {{/if}}
 
   {{#if genre}}
-  **Your Role:** You are an expert musicologist and creative producer. Your goal is to deeply understand the core essence of the user's input, then fuse it with the defining characteristics of the selected genre to create a rich, authentic, and inspiring musical concept.
-  **Guiding Principle:** The user's original input (text/image/video) determines the *emotional core* of the music. The selected genre ('{{{genre}}}') determines the *stylistic execution*.
+    **Your Role:** You are an expert musicologist and creative producer. Your goal is to deeply understand the core essence of the user's input, then fuse it with the defining characteristics of the selected genre to create a rich, authentic, and inspiring musical concept.
+    **Guiding Principle:** The user's original input (text/image/video) determines the *emotional core* of the music. The selected genre ('{{{genre}}}') determines the *stylistic execution*.
 
-  Please ensure the generated musical parameters are stylistically appropriate for '{{{genre}}}', while still reflecting the core essence of the primary input.
+    Please ensure the generated musical parameters are stylistically appropriate for '{{{genre}}}', while still reflecting the core essence of the primary input.
 
     {{#eq genre "Rock"}}
       For Rock:
@@ -234,8 +234,8 @@ const prompt = ai.definePrompt({
     {{else}}
       {{! Fallback for other genres }}
       For the genre '{{{genre}}}', your task is to first briefly define its key musical characteristics in 1-2 sentences (e.g., typical instruments, tempo range, rhythmic feel, common mood). Then, generate all the musical parameters below based on your own definition. This ensures your output is internally consistent with your understanding of the genre.
-    {{/if}}
-  {{/if}}
+    {{/eq}} {{! This closes the last #eq genre block and the chain of #eq...#else eq...#else }}
+  {{/if}} {{! This closes the main #if genre block }}
 
 
   {{#if userEnergy}}
@@ -259,7 +259,7 @@ const prompt = ai.definePrompt({
   - targetArousal: A numerical value between -1.0 (low energy, calm) and 1.0 (high energy, intense). {{#if userEnergy}}This MUST primarily reflect the userEnergy value if provided.{{else}}Derive this from the input content's perceived energy level and genre considerations.{{/if}}
   - generatedIdea (max 45 words): Describe a complete musical vision using a structure like: **[Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax].**
     Example: "A gentle piano intro leads into a steady acoustic drum beat and warm bassline, supporting a heartfelt vocal melody that builds to an uplifting, string-backed chorus."
-{{/if}}
+{{/if}} {{! This closes the main standard mode {{else}} block (which is the counterpart to {{#if isKidsMode}} )}}
 
 Your response MUST be a JSON object that strictly adheres to the output schema. Do not include any introductory or explanatory text, or markdown formatting, outside of the JSON structure itself.
 `
