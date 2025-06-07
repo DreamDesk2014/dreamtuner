@@ -6,11 +6,11 @@ import { audioBufferToWav } from "./audioBufferToWav";
 
 // Constants
 const SAFE_OSC_TYPE = 'triangle' as const;
-const MIN_EFFECTIVE_DURATION_SECONDS = 5.0; // Increased slightly
-const TIME_EPSILON = 0.00001; // Small offset to ensure unique times
+const MIN_EFFECTIVE_DURATION_SECONDS = 5.0; 
+const TIME_EPSILON = 0.00001; 
 const DEFAULT_MIDI_NOTE = 60; // C4
 
-// --- Note and Scale Utilities (Adapted from midiService for internal use) ---
+// --- Note and Scale Utilities ---
 const PITCH_CLASSES: { [key: string]: number } = {
     'C': 0, 'B#': 0, 'BS': 0, 'C#': 1, 'DB': 1, 'CS': 1, 'D': 2, 'D#': 3, 'EB': 3, 'DS': 3,
     'E': 4, 'FB': 4, 'F': 5, 'E#': 5, 'ES': 5, 'F#': 6, 'GB': 6, 'FS': 6, 'G': 7,
@@ -23,7 +23,7 @@ function robustNoteToMidi(noteNameWithOctave: string): number {
     const match = noteNameWithOctave.match(/([A-G])([#bSsxBF]*)(-?[0-9]+)/i);
     if (!match) {
         const simpleMatch = noteNameWithOctave.match(/([A-G])([#bSsxBF]*)/i);
-        if (simpleMatch) return robustNoteToMidi(noteNameWithOctave + '4'); // Default to octave 4
+        if (simpleMatch) return robustNoteToMidi(noteNameWithOctave + '4'); 
         return DEFAULT_MIDI_NOTE;
     }
     let pitchClassName = match[1].toUpperCase();
@@ -68,9 +68,9 @@ function midiToNoteName(midiNumber: number): string {
     return NOTES_ARRAY[noteIndex] + octave;
 }
 
-const STANDARD_MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]; // Ionian
-const STANDARD_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; // Natural Minor (Aeolian)
-const BLUES_SCALE_INTERVALS = [0, 3, 5, 6, 7, 10]; // Minor Blues
+const STANDARD_MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11]; 
+const STANDARD_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10]; 
+const BLUES_SCALE_INTERVALS = [0, 3, 5, 6, 7, 10]; 
 const MAJOR_PENTATONIC_INTERVALS = [0, 2, 4, 7, 9];
 const MINOR_PENTATONIC_INTERVALS = [0, 3, 5, 7, 10];
 const DORIAN_INTERVALS = [0, 2, 3, 5, 7, 9, 10];
@@ -81,7 +81,7 @@ function getScaleNoteNames(keySignature: string, mode: string, startOctave: numb
     const baseKeyForScale = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
     const rootMidiBase = robustNoteToMidi(baseKeyForScale + '0') % 12;
     const genreLower = typeof genre === 'string' ? genre.toLowerCase() : ""; 
-    const isKids = mode.toLowerCase().includes('kids');
+    const isKids = typeof mode === 'string' ? mode.toLowerCase().includes('kids') : false;
 
     let intervals: number[];
     if (isKids) {
@@ -89,11 +89,11 @@ function getScaleNoteNames(keySignature: string, mode: string, startOctave: numb
     } else if (genreLower.includes('blues')) {
         intervals = BLUES_SCALE_INTERVALS;
     } else if (genreLower.includes('jazz')) {
-        intervals = mode.toLowerCase().includes('minor') ? DORIAN_INTERVALS : (harmonicComplexity > 0.6 ? MIXOLYDIAN_INTERVALS : STANDARD_MAJOR_INTERVALS);
+        intervals = (typeof mode === 'string' ? mode.toLowerCase().includes('minor') : false) ? DORIAN_INTERVALS : (harmonicComplexity > 0.6 ? MIXOLYDIAN_INTERVALS : STANDARD_MAJOR_INTERVALS);
     } else if ((genreLower.includes('folk') || genreLower.includes('country'))) {
-        intervals = mode.toLowerCase().includes('minor') ? MINOR_PENTATONIC_INTERVALS : MAJOR_PENTATONIC_INTERVALS;
+        intervals = (typeof mode === 'string' ? mode.toLowerCase().includes('minor') : false) ? MINOR_PENTATONIC_INTERVALS : MAJOR_PENTATONIC_INTERVALS;
     } else {
-        intervals = mode.toLowerCase().includes('minor') ? (harmonicComplexity > 0.6 ? HARMONIC_MINOR_INTERVALS : STANDARD_MINOR_INTERVALS) : STANDARD_MAJOR_INTERVALS;
+        intervals = (typeof mode === 'string' ? mode.toLowerCase().includes('minor') : false) ? (harmonicComplexity > 0.6 ? HARMONIC_MINOR_INTERVALS : STANDARD_MINOR_INTERVALS) : STANDARD_MAJOR_INTERVALS;
     }
 
     return intervals.map(interval => {
@@ -135,7 +135,7 @@ function getChordNotesForKey(keySignature: string, mode: string, degree: number,
     ];
 
     let qualityDefinition;
-    const isMinorKeyOverall = mode.toLowerCase().includes('minor');
+    const isMinorKeyOverall = typeof mode === 'string' ? mode.toLowerCase().includes('minor') : false;
     const currentDegreeIndex = (degree - 1 + 7) % 7;
 
     if (isMinorKeyOverall) {
@@ -397,7 +397,7 @@ function applyHumanization(time: number, intensity: number = 0.01): number {
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
   const logPrefix = "[WAV_GEN_DYNAMIC_V3]"; 
-  console.log(`${logPrefix} Starting dynamic synthesis for: ${params.generatedIdea.substring(0, 30)}...`);
+  console.log(`${logPrefix} Starting dynamic synthesis for: ${params.generatedIdea ? params.generatedIdea.substring(0, 30) : "Untitled"}...`);
 
   if (typeof Tone === 'undefined' || !Tone.context) {
     console.error(`${logPrefix}_ERROR] Tone.js or Tone.context is not available. Aborting.`);
@@ -855,5 +855,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-
-    
