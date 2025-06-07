@@ -80,7 +80,7 @@ const HARMONIC_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 11];
 function getScaleNoteNames(keySignature: string, mode: string, startOctave: number = 4, genre?: string, harmonicComplexity: number = 0.3): string[] {
     const baseKeyForScale = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
     const rootMidiBase = robustNoteToMidi(baseKeyForScale + '0') % 12;
-    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : "";
+    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : ""; // Robust type check
     const isKids = mode.toLowerCase().includes('kids');
 
     let intervals: number[];
@@ -106,7 +106,7 @@ function getScaleNoteNames(keySignature: string, mode: string, startOctave: numb
 
 function getChordNotesForKey(keySignature: string, mode: string, degree: number, octave: number = 3, addSeventh: boolean = false, harmonicComplexity: number = 0.3, genre?: string): string[] {
     const rootNoteName = keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || keySignature.toUpperCase();
-    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : ""; // Ensure genreLower is always a string
+    const genreLower = typeof genre === 'string' ? genre.toLowerCase() : ""; // Robust type check
     
     // Get scale based on key, mode, and octave for chord roots
     const fullScaleForChordRoots = getScaleNoteNames(rootNoteName, mode.replace('kids', ''), octave, genreLower, harmonicComplexity);
@@ -181,8 +181,9 @@ const getSynthConfigurations = (
   harmonicComplexity: number = 0.3,
   rhythmicDensity: number = 0.5,
 ): any => {
-  const genreLower = typeof genreInput === 'string' ? genreInput.toLowerCase() : "";
-  const hintsLower = instrumentHints.map(h => h.toLowerCase());
+  const genreLower = typeof genreInput === 'string' ? genreInput.toLowerCase() : ""; // Robust type check
+  const hintsLower = instrumentHints.map(h => typeof h === 'string' ? h.toLowerCase() : "");
+
 
   const baseConfigs = {
     // Melody / Lead Synths
@@ -429,10 +430,10 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   }
   
   Tone.Transport.stop(true); Tone.Transport.cancel(0);
-  Tone.Destination.volume.value = -3; // Overall mix level
+  Tone.Destination.volume.value = 0; // Overall mix level, increased from -3
   Tone.Transport.bpm.value = params.tempoBpm || 120;
   
-  const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
+  const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : ""; // Robust type check
   const isKidsMode = params.originalInput.mode === 'kids';
   const { harmonicComplexity, rhythmicDensity, targetArousal, targetValence } = params;
 
