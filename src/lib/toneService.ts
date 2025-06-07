@@ -390,7 +390,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   const progressionDegreesInput = params.originalInput.mode === 'kids' ? [1, 4, 5, 1] :
                                 (genreLower.includes("blues") ? [1,1,4,1,5,4,1,1] :
                                 (genreLower.includes("jazz") ? [2,5,1,6] : 
-                                 [1, 5, 6, 4]));
+                                 [1, 5, 6, 4])); 
   const numChordCycles = isKidsMode ? 2 : (genreLower.includes("ambient") ? 3 : (genreLower.includes("blues") ? 1 : 4));
   const totalChordProgressionSeconds = numChordCycles * progressionDegreesInput.length * measureDurationSeconds;
 
@@ -862,3 +862,4 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
