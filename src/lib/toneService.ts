@@ -191,7 +191,7 @@ const getSynthConfigurations = (
         volume: -9,
         effects: [{type: Tone.Chorus, frequency: 0.9, delayTime: 3.5, depth: 0.06, feedback: 0.03, wet: 0.1}],
         filterType: 'lowpass' as const, filterFrequency: 5000, filterRolloff: -12 as const,
-        filterEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.01, release: 0.5, baseFrequency: 300, octaves: 3}
+        filterEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.01, release: 1.2, baseFrequency: 300, octaves: 3} // Release matched
     },
     synthLeadElectronic: {
         synthType: Tone.Synth,
@@ -212,7 +212,7 @@ const getSynthConfigurations = (
         volume: -18,
         effects: [{type: Tone.Chorus, frequency: 1.1, delayTime: 3.0, depth: 0.25, wet: 0.15}],
         filterType: 'lowpass' as const, filterFrequency: 4500, filterRolloff: -12 as const,
-        filterEnvelope: { attack: 0.01, decay: 0.4, sustain: 0.01, release: 0.8, baseFrequency: 250, octaves: 3}
+        filterEnvelope: { attack: 0.01, decay: 0.4, sustain: 0.01, release: 1.8, baseFrequency: 250, octaves: 3} // Release matched
     },
     warmPadChords: {
         synthType: Tone.PolySynth, subType: Tone.AMSynth,
@@ -240,12 +240,12 @@ const getSynthConfigurations = (
     jazzUprightBass: { synthType: Tone.FMSynth, options: { harmonicity: 0.8, modulationIndex: 1.5, envelope: { attack: 0.03, decay: 0.7, sustain: 0.1, release: 0.9 }, oscillator:{type:"sine" as const, partials: [1, 0.1, 0.02]}}, volume: -10},
     funkSlapBass: { synthType: Tone.Synth, options: { oscillator: {type: "sawtooth" as const}, envelope: {attack: 0.005, decay: 0.15, sustain: 0.01, release: 0.2}, filter: {type: "lowpass", Q: 3, rolloff: -24, frequency: 800}, filterEnvelope: {attack:0.005, decay:0.05, sustain:0, release:0.1, baseFrequency:200, octaves:2.5} }, volume: -8 },
 
-    kidsToyPiano: { synthType: Tone.FMSynth, options: { harmonicity: 4.0, modulationIndex: 7, oscillator: {type: "triangle" as const}, envelope: {attack: 0.008, decay: 0.25, sustain: 0.1, release: 0.2}}, volume: -10},
-    kidsXylophone: { synthType: Tone.MetalSynth, options: { harmonicity: 2.0, modulationIndex: 1.0, octaves: 0.2, envelope: {attack:0.002, decay:0.3, release:0.3}}, volume: -13},
+    kidsToyPiano: { synthType: Tone.FMSynth, options: { harmonicity: 4.0, modulationIndex: 7, oscillator: {type: "triangle" as const}, envelope: {attack: 0.008, decay: 0.25, sustain: 0.4, release: 0.4}}, volume: -10}, // Increased sustain/release
+    kidsXylophone: { synthType: Tone.MetalSynth, options: { harmonicity: 2.0, modulationIndex: 1.0, octaves: 0.2, envelope: {attack:0.002, decay:0.3, release:0.5}}, volume: -13}, // Increased release
     kidsUkuleleBass: { synthType: Tone.PluckSynth, options: {attackNoise: 0.5, dampening: 1800, resonance: 0.55}, volume: -12},
     kidsSimplePad: {
         synthType: Tone.PolySynth, subType: Tone.Synth,
-        options: {oscillator: {type: "triangle" as const}, envelope: {attack: 0.3, decay:0.6, sustain:0.4, release:0.9}}, volume: -20,
+        options: {oscillator: {type: "triangle" as const}, envelope: {attack: 0.3, decay:0.6, sustain:0.7, release:1.2}}, volume: -20, // Increased sustain/release
         effects: [
              {type: Tone.LFO, frequency: 0.15, min: 300, max: 900, targetParam:"filterFrequency", autostart:true },
              {type: Tone.Filter, type: "lowpass" as const, frequency: 600, rolloff: -12 as const, Q: 0.6 }
