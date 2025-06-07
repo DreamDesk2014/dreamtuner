@@ -83,8 +83,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const audioStreamRef = useRef<MediaStream | null>(null);
 
   // State for 6 Senses removed
-  // const [sightDescription, setSightDescription] = useState('');
-  // ... and so on for other senses
 
   useEffect(() => {
     setIsClientMounted(true);
@@ -279,6 +277,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     if (isListening) {
       stopListening();
     } else {
+      setText(''); // Explicitly clear the text area content
       resetTranscript(); 
       startListening();
     }
@@ -481,7 +480,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         mode: 'standard',
         userEnergy: mapSliderToFloat(energySlider),
         userPositivity: mapSliderToFloat(positivitySlider),
-        // 6 Senses fields removed from finalAppInput
       };
       onSubmit(finalAppInput); 
     } else {
@@ -529,8 +527,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     resetTranscript();
     if (isListening) stopListening();
     resetAllMediaInputs();
-    // Reset 6 Senses fields
-    // setSightDescription(''); ... etc.
   };
 
   const resetEnergySlider = () => setEnergySlider(50);
@@ -766,8 +762,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         </div>
       )}
       
-      {/* 6 Senses Accordion UI Removed */}
-
       <Separator className="my-6 bg-slate-700" />
 
       <div>
