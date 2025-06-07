@@ -45,7 +45,7 @@ const GenerateMusicalParametersOutputSchema = z.object({
   mode: z.string().describe('The mode of the music (major or minor).'),
   tempoBpm: z.number().describe('The tempo of the music in BPM.'),
   moodTags: z.array(z.string()).describe('Tags describing the mood of the music.'),
-  instrumentHints: z.array(z.string()).describe('Instrument suggestions for the music, including descriptive adjectives (e.g., "Electric Guitar (Distorted Lead)", "Synth Pad (Warm, Evolving)").'),
+  instrumentHints: z.array(z.string()).describe('Instrument suggestions for the music, including descriptive adjectives (e.g., "Electric Guitar (Distorted Lead)", "Synth Pad (Warm, Evolving)", "Piano (Acoustic, Bright)").'),
   rhythmicDensity: z
     .number()
     .describe('A value between 0 and 1 representing the rhythmic density.'),
@@ -58,7 +58,7 @@ const GenerateMusicalParametersOutputSchema = z.object({
   targetArousal: z
     .number()
     .describe("A value between -1 and 1 representing the arousal of the music. If the user provided a 'userEnergy' value, this should directly reflect it."),
-  generatedIdea: z.string().describe('A structured description of the musical piece, following a specific format based on mode. (Max 20 words for Kids Mode, Max 45 words for Standard Mode).'),
+  generatedIdea: z.string().describe('A structured description of the musical piece, following a specific format based on mode. (Max 20 words for Kids Mode, Max 45 words for Standard Mode). Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax].'),
 });
 export type GenerateMusicalParametersOutput = z.infer<
   typeof GenerateMusicalParametersOutputSchema
@@ -116,7 +116,7 @@ const prompt = ai.definePrompt({
   - harmonicComplexity: Keep very low (0.0 to 0.3).
   - targetValence: Should be positive (0.5 to 1.0).
   - targetArousal: Can be low to mid (-0.5 to 0.5).
-  - generatedIdea (max 20 words): A brief, fun, and imaginative textual description inspired by the drawing (if valid){{#if voiceDescription}} and/or the voice hint{{/if}}{{#if drawingSoundSequence}} and accompanying sounds{{/if}}. If only a voice hint is present, the idea should be based solely on that {{#if drawingSoundSequence}}and the sounds{{/if}}. If only sounds, base it on the sounds.
+  - generatedIdea (max 20 words): A brief, fun, and imaginative textual description inspired by the drawing (if valid){{#if voiceDescription}} and/or the voice hint{{/if}}{{#if drawingSoundSequence}} and accompanying sounds{{/if}}. If only a voice hint is present, the idea should be based solely on that {{#if drawingSoundSequence}}and the sounds{{/if}}. If only sounds, base it on the sounds. Structure: [Core Concept/Theme] + [Simple Action/Feeling] + [Key Instrument/Sound].
 
   {{#if genre}}
   The user has also selected a musical genre: '{{{genre}}}'.
@@ -236,15 +236,14 @@ const prompt = ai.definePrompt({
       - Avoid: Avoid overly "pop" song structures unless it's for a specific type of montage. Avoid typical rock/electronic drum machine beats unless for a hybrid score. The focus is often on orchestral color and emotional development.
       - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax]. Example: "An epic orchestral score opening with somber strings, building with powerful brass and timpani to a dramatic, emotionally charged climax."
     {{else}}
-      {{! Fallback for other genres }}
+      {{! Fallback for other genres - user provided a genre not in the above list }}
       For the genre '{{{genre}}}', your task is to first briefly define its key musical characteristics in 1-2 sentences (e.g., typical instruments, tempo range, rhythmic feel, common mood). Then, generate all the musical parameters below based on your own definition. This ensures your output is internally consistent with your understanding of the genre.
       - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax]. Describe a musical vision.
     {{/if}}
-  {{else}} {{! No genre selected by user }}
+  {{else}} {{! No genre selected by user in Standard Mode }}
     {{! Generate parameters without specific genre guidance, relying on input type and content }}
     - generatedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments] + [Emotional Arc/Climax]. Describe a musical vision based on the input content.
   {{/if}}
-
 
   {{#if userEnergy}}
   The user has explicitly set a target energy level (arousal) of approximately {{{userEnergy}}} (on a scale of -1.0 to 1.0).
@@ -301,6 +300,8 @@ const generateMusicalParametersFlow = ai.defineFlow(
     return output!;
   }
 );
+    
+
     
 
     
