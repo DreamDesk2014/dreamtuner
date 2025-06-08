@@ -7,6 +7,7 @@ import { audioBufferToWav } from "./audioBufferToWav";
 // Constants
 const SAFE_OSC_TYPE = 'triangle' as const;
 const MIN_EFFECTIVE_DURATION_SECONDS = 5.0;
+const MAX_WAV_RENDER_DURATION_SECONDS = 15.0; // New constant for WAV cap
 const TIME_EPSILON = 0.00001;
 const DEFAULT_MIDI_NOTE = 60; // C4
 
@@ -919,8 +920,10 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   drumEventsToSchedule.forEach(ev => { overallMaxTime = Math.max(overallMaxTime, ev.time + Tone.Time(ev.duration).toSeconds()); });
   console.log(`${logPrefix} Generated ${drumEventsToSchedule.length} drum events.`);
 
-  const renderDuration = Math.max(overallMaxTime + 3.0, MIN_EFFECTIVE_DURATION_SECONDS);
-  console.log(`${logPrefix} Calculated renderDuration: ${renderDuration.toFixed(2)}s.`);
+  const calculatedRenderDuration = Math.max(MIN_EFFECTIVE_DURATION_SECONDS, overallMaxTime + 3.0);
+  const renderDuration = Math.min(calculatedRenderDuration, MAX_WAV_RENDER_DURATION_SECONDS);
+  console.log(`${logPrefix} Calculated renderDuration: ${calculatedRenderDuration.toFixed(2)}s. Capped renderDuration: ${renderDuration.toFixed(2)}s.`);
+
 
   try {
     const audioBuffer = await Tone.Offline(async (offlineContext) => {
