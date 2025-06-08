@@ -1,7 +1,7 @@
 
 'use client'; // This service might be called from client components
 
-import { db } from './firebase'; // Your Firebase initialization
+import { db } from './firebase'; // Your Firebase initialization file path
 import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 interface EventData {
@@ -81,5 +81,86 @@ export async function saveContactSubmission(data: Omit<ContactSubmissionData, 't
   } catch (error) {
     console.error("Error saving contact submission: ", error);
     throw error; // Re-throw to be caught by the caller
+  }
+}
+
+import { getDocs, doc, getDoc, query, where } from 'firebase/firestore';
+import { InstrumentConfigFirebase } from '../types'; // Assuming types is in ../types
+
+const INSTRUMENT_COLLECTION = 'instrumentConfigs';
+
+/**
+ * Fetches a specific instrument configuration by its document ID.
+ * @param instrumentId The Firestore document ID of the instrument config.
+ * @returns The InstrumentConfigFirebase object or null if not found.
+ */
+export async function getInstrumentConfig(instrumentId: string): Promise<InstrumentConfigFirebase | null> {
+  if (!db) {
+    console.error("Firestore is not initialized. Cannot fetch instrument config.");
+    return null;
+  }
+
+  try {
+    const docRef = doc(db, INSTRUMENT_COLLECTION, instrumentId);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      return docSnap.data() as InstrumentConfigFirebase;
+    } else {
+      console.log(`No instrument config found with ID: ${instrumentId}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`Error fetching instrument config with ID ${instrumentId}: `, error);
+    return null;
+  }
+}
+
+/**
+ * Fetches instrument configurations that have a specific tag.
+ * @param tag The tag to filter by.
+ * @returns An array of InstrumentConfigFirebase objects or an empty array if none found.
+ */
+export async function getInstrumentConfigsByTag(tag: string): Promise<InstrumentConfigFirebase[]> {
+  if (!db) {
+    console.error("Firestore is not initialized. Cannot fetch instrument configs by tag.");
+    return [];
+  }
+
+  try {
+    const q = query(collection(db, INSTRUMENT_COLLECTION), where("tags", "array-contains", tag));
+    const querySnapshot = await getDocs(q);
+
+    const configs: InstrumentConfigFirebase[] = [];
+    querySnapshot.forEach((doc) => {
+      configs.push(doc.data() as InstrumentConfigFirebase);
+    });
+    return configs;
+  } catch (error) {
+    console.error(`Error fetching instrument configs by tag "${tag}": `, error);
+    return [];
+  }
+}
+
+/**
+ * Fetches all instrument configurations from the collection.
+ * @returns An array of all InstrumentConfigFirebase objects or an empty array if none found.
+ */
+export async function getAllInstrumentConfigs(): Promise<InstrumentConfigFirebase[]> {
+  if (!db) {
+    console.error("Firestore is not initialized. Cannot fetch all instrument configs.");
+    return [];
+  }
+
+  try {
+    const querySnapshot = await getDocs(collection(db, INSTRUMENT_COLLECTION));
+    const configs: InstrumentConfigFirebase[] = [];
+    querySnapshot.forEach((doc) => {
+      configs.push(doc.data() as InstrumentConfigFirebase);
+    });
+    return configs;
+  } catch (error) {
+    console.error("Error fetching all instrument configs: ", error);
+    return [];
   }
 }

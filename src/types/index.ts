@@ -76,6 +76,44 @@ export interface RenderKidsDrawingInput extends Omit<RenderKidsDrawingInputOrigi
   drawingDataUri?: string;
   drawingSoundSequence?: string;
 }
+
+export interface InstrumentConfigFirebase {
+  synthType: 'AMSynth' | 'DuoSynth' | 'FMSynth' | 'MonoSynth' | 'NoiseSynth' | 'PluckSynth' | 'Synth' | 'PolySynth'; // Tone.js synth type
+  options: any; // This can be refined later to specific synth options
+  volume?: number; // Volume adjustment
+  effects?: Array<EffectConfig>; // Array of effect configurations
+  filter?: FilterConfig; // Filter settings
+  tags: string[]; // Tags for categorization (e.g., "melody", "bass", "pad", "piano")
+}
+
+export interface EffectConfig {
+  type: 'Chorus' | 'Reverb' | 'Delay' | 'Distortion' | 'FeedbackDelay' | 'Phaser' | 'AutoFilter' | 'AutoWah' | 'Compressor' | 'EQ3' | string; // Common effect types, can be extended
+  options: any; // This can be refined later to specific effect options
+}
+
+export interface ChorusEffectOptions {
+  frequency?: number; // The frequency of the LFO.
+  delayTime?: number; // The amount of delay in milliseconds.
+  depth?: number; // The depth of the effect.
+  feedback?: number; // Amount of feedback from the output back into the input of the chorus.
+  spread?: number; // Stereo spread of the chorus.
+}
+
+export interface ReverbEffectOptions {
+  decay?: number; // The amount of time the reverb will sustain.
+  predelay?: number; // The time before the first reflection occurs.
+}
+
+// Add interfaces for other effect options as you need them
+
+export interface FilterConfig {
+  type: 'lowpass' | 'highpass' | 'bandpass' | 'allpass' | 'notch' | 'peaking' | 'lowshelf' | 'highshelf'; // Filter type
+  frequency?: number; // The cutoff frequency of the filter.
+  Q?: number; // The quality factor of the filter.
+  gain?: number; // The gain of the filter (for peaking and shelf filters).
+  rolloff?: -12 | -24 | -48 | -96; // The rolloff of the filter.
+}
+
 export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}
 
 export interface RenderStandardInputArtInput extends StandardArtInputOriginal {}
