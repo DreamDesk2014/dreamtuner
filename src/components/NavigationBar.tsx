@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { InfoIcon, Sun, Moon } from 'lucide-react';
+import { InfoIcon, Sun, Moon, Heart } from 'lucide-react'; // Added Heart icon
 import { Separator } from '@/components/ui/separator';
 import { logEvent, getSessionId, saveContactSubmission } from '@/lib/firestoreService';
 
@@ -155,6 +155,20 @@ export const NavigationBar: React.FC = () => {
               <p>
                 DreamTuner is a free app and currently in Beta. This means we are actively developing and improving the experience. As we refine the music generation process, you may find that the quality of MIDI playback is basic at times or that some features don't work perfectly yet. We appreciate your understanding and feedback as we grow!
               </p>
+            </div>
+
+            <Separator className="my-4 bg-border" />
+
+            <div>
+              <h3 className="text-lg font-semibold text-primary mb-2">Support DreamTuner</h3>
+              <p className="text-xs text-muted-foreground/80 mb-3">
+                If you enjoy DreamTuner and would like to support its continued development, you can make a small contribution. Every little bit helps keep the music going!
+              </p>
+              <Button asChild variant="outline" className="w-full border-green-500 text-green-500 hover:bg-green-500/10 hover:text-green-400">
+                <a href="https://buy.stripe.com/bJedR92dm0gVatB4yBaAw02" target="_blank" rel="noopener noreferrer">
+                  <Heart className="mr-2 h-4 w-4" /> $1 Contribution To Keep DreamTuner Going!
+                </a>
+              </Button>
             </div>
 
             <Separator className="my-4 bg-border" />
