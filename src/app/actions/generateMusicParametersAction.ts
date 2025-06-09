@@ -52,6 +52,10 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
       ...aiResult,
       originalInput: input, 
       selectedGenre: input.genre,
+      // Explicitly include new melodic fields, even if undefined initially from AI
+      melodicContour: aiResult.melodicContour,
+      melodicPhrasing: aiResult.melodicPhrasing,
+      melodicEmphasis: aiResult.melodicEmphasis,
     };
     return resultForClient;
 

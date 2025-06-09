@@ -44,6 +44,9 @@ export type AppInput = BaseAppInput & (
 export interface MusicParameters extends AIOutput {
   originalInput: AppInput;
   selectedGenre?: string;
+  melodicContour?: string;
+  melodicPhrasing?: string;
+  melodicEmphasis?: string;
 }
 
 export interface FlowInput extends FlowInputTypeOriginal {
@@ -66,6 +69,9 @@ export interface GeminiMusicParamsResponse {
   targetValence: number;
   targetArousal: number;
   generatedIdea: string;
+  melodicContour?: string;
+  melodicPhrasing?: string;
+  melodicEmphasis?: string;
 }
 
 export interface NewIdeaResponse {
