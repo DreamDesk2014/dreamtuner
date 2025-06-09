@@ -37,11 +37,23 @@ export const MAX_IMAGE_FILE_SIZE_MB = MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024);
 export const MUSIC_GENRES = [
   "Pop", "Rock", "Jazz", "Electronic", "Ambient",
   "Classical", "Folk", "Cinematic", "Hip Hop", "Blues",
-  "Reggae", "Country", "Metal", "Funk", "Soul" // "AI" Genre removed
+  "Reggae", "Country", "Metal", "Funk", "Soul"
 ].sort();
 
 export const SOUND_LOADING_TIMEOUT_MS = 40000;
 export const SOUNDFONT_URL = 'https://storage.googleapis.com/magentadata/js/soundfonts/sgm_plus/';
 
-export const TARGET_TOTAL_MIDI_SECONDS = 35; 
-export const MIN_SONG_BODY_SECONDS_FOR_CALC = 10;
+// Song Structure and Duration Constants
+export const DEFAULT_BPM = 120;
+export const BEATS_PER_MEASURE = 4;
+export const TARGET_SONG_BODY_SECONDS = 28; // Target duration for the main musical content
+export const OUTRO_MEASURES = 2; // Number of measures for a simple outro
+export const REVERB_TAIL_SECONDS = 2.5; // Extra time for reverb/effects to fade out in WAV
+export const MIN_EFFECTIVE_DURATION_SECONDS = 15.0; // Minimum WAV render duration
+
+// Calculated Max WAV Render Duration
+// This will be dynamically calculated if BPM changes, but for a constant:
+const typicalMeasureSeconds = BEATS_PER_MEASURE * (60 / DEFAULT_BPM);
+const typicalOutroSeconds = OUTRO_MEASURES * typicalMeasureSeconds;
+export const MAX_WAV_RENDER_DURATION_SECONDS = TARGET_SONG_BODY_SECONDS + typicalOutroSeconds + REVERB_TAIL_SECONDS; // e.g., 28 + (2*2) + 2.5 = 34.5s @120BPM
+
