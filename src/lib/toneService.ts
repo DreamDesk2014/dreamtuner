@@ -47,7 +47,7 @@ function applyHumanization(time: number, intensity: number = 0.008): number { //
 
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  const logPrefix = "[WAV_GEN_V0.9.3_SamplerFix_Catch]";
+  const logPrefix = "[WAV_GEN_V0.9.4_SamplerBufferCheck]";
   console.log(`${logPrefix} Starting synthesis for: ${params.generatedIdea ? params.generatedIdea.substring(0, 30) : "Untitled"}...`);
 
   const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
@@ -59,7 +59,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
   const startOffset = 0.1;
   const currentBpm = (params.tempoBpm && params.tempoBpm > 0) ? params.tempoBpm : 120;
-  // Tone.Transport.bpm.value = currentBpm; // Set in Offline context
   const secondsPerBeat = 60 / currentBpm;
   const measureDurationSeconds = BEATS_PER_MEASURE * secondsPerBeat;
   let overallMaxTime = startOffset;
@@ -682,33 +681,55 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         let noteToPlay = ev.note;
         const isMelodySampler = melodySynth instanceof Tone.Sampler;
 
-        if (isMelodySampler && availableMelodySamplerNotes && availableMelodySamplerNotes.length > 0) {
-          if (!availableMelodySamplerNotes.includes(noteToPlay)) {
-            const targetMidi = robustNoteToMidi(noteToPlay);
-            let closestNote = availableMelodySamplerNotes[0];
-            let minDistance = Infinity;
-            for (const availableNote of availableMelodySamplerNotes) {
-              const distance = Math.abs(robustNoteToMidi(availableNote) - targetMidi);
-              if (distance < minDistance) {
-                minDistance = distance;
-                closestNote = availableNote;
+        if (isMelodySampler) {
+          const samplerInstance = melodySynth as any; // Using 'any' to access _buffers
+          let noteBufferIsReady = false;
+          let finalNoteToPlayForSampler = noteToPlay;
+
+          if (availableMelodySamplerNotes && availableMelodySamplerNotes.length > 0) {
+            if (!availableMelodySamplerNotes.includes(noteToPlay)) {
+              const targetMidi = robustNoteToMidi(noteToPlay);
+              let closestNoteInSampler = availableMelodySamplerNotes[0];
+              let minDistance = Infinity;
+              for (const availableNoteKey of availableMelodySamplerNotes) {
+                const distance = Math.abs(robustNoteToMidi(availableNoteKey) - targetMidi);
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  closestNoteInSampler = availableNoteKey;
+                }
               }
+              if (finalNoteToPlayForSampler !== closestNoteInSampler) {
+                // console.warn(`${logPrefix}_OFFLINE_INFO] Melody note ${noteToPlay} not directly in sampler. Remapping to closest: ${closestNoteInSampler}. Original event note: ${ev.note}`);
+              }
+              finalNoteToPlayForSampler = closestNoteInSampler;
             }
-            console.warn(`${logPrefix}_OFFLINE_WARN] Melody note ${ev.note} not in sampler's directly mapped notes (${availableMelodySamplerNotes.join(', ')}). Playing closest: ${closestNote}`);
-            noteToPlay = closestNote;
           }
+          
+          // Check internal buffer readiness for the finalNoteToPlayForSampler
+          const noteToneBuffer = samplerInstance._buffers?.get(finalNoteToPlayForSampler);
+          if (noteToneBuffer && noteToneBuffer.loaded) {
+            noteBufferIsReady = true;
+          } else {
+             console.warn(`${logPrefix}_OFFLINE_WARN] Melody sampler's buffer for note ${finalNoteToPlayForSampler} (original event note: ${ev.note}) is not loaded or key not found in _buffers. Skipping. Buffer found: ${!!noteToneBuffer}, Buffer loaded: ${noteToneBuffer?.loaded}`);
+          }
+
+          if (!noteBufferIsReady) {
+            return; // Skip this note if its specific buffer isn't ready
+          }
+          noteToPlay = finalNoteToPlayForSampler; // Use the remapped and validated note
         }
+
 
         if (typeof noteToPlay !== 'string' || noteToPlay.trim() === '') {
             console.warn(`${logPrefix}_OFFLINE_WARN] Skipping melody note due to invalid/empty noteToPlay value. Original ev.note: ${ev.note}, Processed noteToPlay: ${noteToPlay}, Time: ${ev.time}`);
-            return; // Skip this iteration of forEach
+            return;
         }
 
         try {
             (melodySynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
             if (melodyFilterEnv && ev.filterAttack) melodyFilterEnv.triggerAttackRelease(ev.duration, ev.time);
         } catch (e) {
-            console.error(`${logPrefix}_OFFLINE_ERROR] Failed to triggerAttackRelease for melody note: ${noteToPlay} (original: ${ev.note}) at time ${ev.time}. Is sampler: ${isMelodySampler}. Error:`, e);
+            console.error(`${logPrefix}_OFFLINE_ERROR] Failed to triggerAttackRelease for melody note: ${noteToPlay} (original: ${ev.note}) at time ${ev.time}. Is sampler: ${isMelodySampler}, Sampler loaded: ${isMelodySampler ? (melodySynth as any).loaded : 'N/A'}. Error:`, e);
         }
       });
       bassNotesToSchedule.forEach((ev) => {
@@ -719,37 +740,59 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         (chordSynth as any).triggerAttackRelease(ev.notes, ev.duration, ev.time, ev.velocity);
         if (chordFilterEnv && ev.filterAttack) chordFilterEnv.triggerAttackRelease(ev.duration, ev.time);
       });
+
       if (arpeggioSynth && arpInstrumentSetupResult) {
         arpeggioNotesToSchedule.forEach((ev) => {
             let noteToPlay = ev.note;
             const isArpSampler = arpeggioSynth instanceof Tone.Sampler;
-            if (isArpSampler && availableArpSamplerNotes && availableArpSamplerNotes.length > 0) {
+
+            if (isArpSampler) {
+              const samplerInstance = arpeggioSynth as any; // Using 'any' to access _buffers
+              let noteBufferIsReady = false;
+              let finalNoteToPlayForSampler = noteToPlay;
+
+              if (availableArpSamplerNotes && availableArpSamplerNotes.length > 0) {
                 if (!availableArpSamplerNotes.includes(noteToPlay)) {
-                    const targetMidi = robustNoteToMidi(noteToPlay);
-                    let closestNote = availableArpSamplerNotes[0];
-                    let minDistance = Infinity;
-                    for (const availableNote of availableArpSamplerNotes) {
-                        const distance = Math.abs(robustNoteToMidi(availableNote) - targetMidi);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            closestNote = availableNote;
-                        }
+                  const targetMidi = robustNoteToMidi(noteToPlay);
+                  let closestNoteInSampler = availableArpSamplerNotes[0];
+                  let minDistance = Infinity;
+                  for (const availableNoteKey of availableArpSamplerNotes) {
+                    const distance = Math.abs(robustNoteToMidi(availableNoteKey) - targetMidi);
+                    if (distance < minDistance) {
+                      minDistance = distance;
+                      closestNoteInSampler = availableNoteKey;
                     }
-                    console.warn(`${logPrefix}_OFFLINE_WARN] Arp note ${ev.note} not in sampler's directly mapped notes. Playing closest: ${closestNote}`);
-                    noteToPlay = closestNote;
+                  }
+                  if (finalNoteToPlayForSampler !== closestNoteInSampler) {
+                     // console.warn(`${logPrefix}_OFFLINE_INFO] Arpeggio note ${noteToPlay} not directly in sampler. Remapping to closest: ${closestNoteInSampler}. Original event note: ${ev.note}`);
+                  }
+                  finalNoteToPlayForSampler = closestNoteInSampler;
                 }
+              }
+
+              const noteToneBuffer = samplerInstance._buffers?.get(finalNoteToPlayForSampler);
+              if (noteToneBuffer && noteToneBuffer.loaded) {
+                noteBufferIsReady = true;
+              } else {
+                console.warn(`${logPrefix}_OFFLINE_WARN] Arpeggio sampler's buffer for note ${finalNoteToPlayForSampler} (original event note: ${ev.note}) is not loaded or key not found in _buffers. Skipping. Buffer found: ${!!noteToneBuffer}, Buffer loaded: ${noteToneBuffer?.loaded}`);
+              }
+
+              if (!noteBufferIsReady) {
+                return; 
+              }
+              noteToPlay = finalNoteToPlayForSampler;
             }
 
             if (typeof noteToPlay !== 'string' || noteToPlay.trim() === '') {
                 console.warn(`${logPrefix}_OFFLINE_WARN] Skipping arpeggio note due to invalid/empty noteToPlay value. Original ev.note: ${ev.note}, Processed noteToPlay: ${noteToPlay}, Time: ${ev.time}`);
-                return; // Skip this iteration of forEach
+                return;
             }
 
             try {
                 (arpeggioSynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
                  if (arpeggioFilterEnv && ev.filterAttack) arpeggioFilterEnv.triggerAttackRelease(ev.duration, ev.time);
             } catch (e) {
-                console.error(`${logPrefix}_OFFLINE_ERROR] Failed to triggerAttackRelease for arpeggio note: ${noteToPlay} (original: ${ev.note}) at time ${ev.time}. Is sampler: ${isArpSampler}. Error:`, e);
+                console.error(`${logPrefix}_OFFLINE_ERROR] Failed to triggerAttackRelease for arpeggio note: ${noteToPlay} (original: ${ev.note}) at time ${ev.time}. Is sampler: ${isArpSampler}, Sampler loaded: ${isArpSampler ? (arpeggioSynth as any).loaded : 'N/A'}. Error:`, e);
             }
         });
       }
@@ -804,6 +847,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-
-
-    
