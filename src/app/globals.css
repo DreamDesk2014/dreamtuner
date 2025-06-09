@@ -14,19 +14,19 @@ body {
     --card-foreground: 220 13% 20%; /* Dark Gray for card text */
     --popover: 0 0% 100%; /* White for popover backgrounds */
     --popover-foreground: 220 13% 20%; /* Dark Gray for popover text */
-    --primary: 199 77% 52%; /* Existing Light Blue #29abe2 */
+    --primary: 199 77% 52%; /* DreamTuner Blue #29abe2 */
     --primary-foreground: 0 0% 7%; /* Very Dark Gray for contrast on primary */
     --secondary: 210 40% 96.1%; /* Very Light Gray for secondary elements */
     --secondary-foreground: 220 13% 20%; /* Dark Gray for text on secondary */
     --muted: 210 40% 93%; /* Light Gray for muted elements */
     --muted-foreground: 215 15% 45%; /* Medium Gray for muted text */
-    --accent: 199 77% 52%; /* Existing Light Blue for accent */
+    --accent: 199 77% 52%; /* DreamTuner Blue for accent */
     --accent-foreground: 0 0% 7%; /* Very Dark Gray for contrast on accent */
     --destructive: 0 70% 50%; /* A vibrant red */
     --destructive-foreground: 0 0% 98%; /* Light Gray for text on destructive */
     --border: 210 30% 87%; /* Light Gray for borders */
     --input: 0 0% 100%; /* White for input background */
-    --ring: 199 77% 52%; /* Existing Light Blue for rings */
+    --ring: 199 77% 52%; /* DreamTuner Blue for rings */
 
     --chart-1: 199 77% 45%;
     --chart-2: 199 77% 38%;
@@ -47,40 +47,40 @@ body {
   }
 
   .dark {
-    --background: 0 0% 7%; /* ResonanceAI: Very Dark Gray #121212 */
-    --foreground: 220 13% 95%; /* ResonanceAI: Galaxy White #f3f4f6 (existing, good) */
-    --card: 215 28% 17%; /* Nebula Gray Dark #1f2937 (existing, good for contrast) */
-    --card-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 (existing) */
-    --popover: 215 28% 17%; /* Nebula Gray Dark #1f2937 (existing) */
-    --popover-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 (existing) */
-    --primary: 270 100% 26%; /* ResonanceAI: Deep indigo (#4B0082) */
-    --primary-foreground: 220 13% 95%; /* ResonanceAI: Galaxy White for contrast on deep indigo */
-    --secondary: 215 20% 26%; /* Nebula Gray Light #374151 (existing) */
-    --secondary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 (existing) */
-    --muted: 215 20% 26%; /* Nebula Gray Light #374151 (existing) */
-    --muted-foreground: 220 10% 70%; /* Lighter Gray #aab0b8 (existing) */
-    --accent: 271 76% 53%; /* ResonanceAI: Electric purple (#8A2BE2) */
-    --accent-foreground: 220 13% 95%; /* ResonanceAI: Galaxy White for contrast on electric purple */
+    --background: 0 0% 7%; /* Very Dark Gray #121212 */
+    --foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
+    --card: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
+    --card-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
+    --popover: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
+    --popover-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
+    --primary: 199 77% 52%; /* DreamTuner Blue #29abe2 */
+    --primary-foreground: 0 0% 7%; /* Very Dark Gray for contrast on primary */
+    --secondary: 215 20% 26%; /* Nebula Gray Light #374151 */
+    --secondary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
+    --muted: 215 20% 26%; /* Nebula Gray Light #374151 */
+    --muted-foreground: 220 10% 70%; /* Lighter Gray #aab0b8 */
+    --accent: 199 77% 52%; /* DreamTuner Blue for accent */
+    --accent-foreground: 0 0% 7%; /* Very Dark Gray for contrast on accent */
     --destructive: 0 70% 50%; 
     --destructive-foreground: 0 0% 98%;
-    --border: 215 20% 26%; /* Nebula Gray Light #374151 (existing) */
-    --input: 215 20% 26%; /* Nebula Gray Light #374151 (existing) */
-    --ring: 271 76% 53%; /* ResonanceAI: Electric purple for rings */
+    --border: 215 20% 26%; /* Nebula Gray Light #374151 */
+    --input: 215 20% 26%; /* Nebula Gray Light #374151 */
+    --ring: 199 77% 52%; /* DreamTuner Blue for rings */
     
-    --chart-1: 270 80% 55%; /* Adjusted for new primary */
-    --chart-2: 271 70% 65%; /* Adjusted for new accent */
-    --chart-3: 220 25% 60%; 
-    --chart-4: 300 50% 60%; 
-    --chart-5: 270 70% 50%;
+    --chart-1: 199 77% 45%; 
+    --chart-2: 199 77% 38%; 
+    --chart-3: 199 60% 60%; 
+    --chart-4: 199 50% 70%; 
+    --chart-5: 199 70% 50%;
 
     --sidebar-background: 215 28% 17%; 
     --sidebar-foreground: 220 13% 95%; 
-    --sidebar-primary: 270 100% 26%; /* ResonanceAI: Deep indigo */
-    --sidebar-primary-foreground: 220 13% 95%; /* Galaxy White */
-    --sidebar-accent: 271 76% 53%; /* ResonanceAI: Electric purple */
-    --sidebar-accent-foreground: 220 13% 95%; /* Galaxy White */
+    --sidebar-primary: 199 77% 52%; /* DreamTuner Blue */
+    --sidebar-primary-foreground: 0 0% 7%; /* Very Dark Gray for contrast */
+    --sidebar-accent: 199 77% 52%; /* DreamTuner Blue */
+    --sidebar-accent-foreground: 0 0% 7%; /* Very Dark Gray for contrast */
     --sidebar-border: 215 20% 26%; 
-    --sidebar-ring: 271 76% 53%; /* ResonanceAI: Electric purple */
+    --sidebar-ring: 199 77% 52%; /* DreamTuner Blue */
   }
 }
 
@@ -100,7 +100,7 @@ body {
   }
 }
 
-/* Custom animations for ResonanceAI */
+/* Custom animations for DreamTuner */
 .animate-pulse-subtle {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

@@ -34,10 +34,10 @@ let currentSessionId: string | null = null;
 export function getSessionId(): string {
   if (typeof window !== 'undefined') { 
     if (!currentSessionId) {
-      currentSessionId = sessionStorage.getItem('resonanceAiSessionId'); // Updated key
+      currentSessionId = sessionStorage.getItem('dreamTunerSessionId'); 
       if (!currentSessionId) {
         currentSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-        sessionStorage.setItem('resonanceAiSessionId', currentSessionId);
+        sessionStorage.setItem('dreamTunerSessionId', currentSessionId);
       }
     }
     return currentSessionId;

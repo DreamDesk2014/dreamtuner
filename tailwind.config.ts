@@ -18,7 +18,7 @@ export default {
     extend: {
       fontFamily: {
         body: ['Inter', 'sans-serif'],
-        headline: ['Inter', 'sans-serif'], // Using Inter for headlines as per ResonanceAI
+        headline: ['Inter', 'sans-serif'], 
         code: ['Source Code Pro', 'monospace'],
       },
       colors: {
@@ -72,11 +72,6 @@ export default {
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))',
         },
-        // ResonanceAI specific theme colors - will be driven by CSS variables from globals.css
-        'resonance-primary': 'hsl(var(--primary))', 
-        'resonance-accent': 'hsl(var(--accent))',
-        'resonance-background': 'hsl(var(--background))',
-        'resonance-foreground': 'hsl(var(--foreground))',
       },
       borderRadius: {
         lg: 'var(--radius)',

@@ -73,7 +73,7 @@ export type GenerateMusicalParametersOutput = z.infer<
   typeof GenerateMusicalParametersOutputSchema
 >;
 
-const DEFAULT_PROMPT_TEMPLATE = `You are ResonanceAI, an AI that translates human expression into musical concepts.
+const DEFAULT_PROMPT_TEMPLATE = `You are DreamTuner, an AI that translates human expression into musical concepts.
 Pay special attention to crafting a distinct and memorable primary melody.
 Based on your analysis of the input, define the 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis' that would best represent its core feeling and style.
 Ensure the 'generatedIdea' and 'instrumentHints' for melodic instruments align with these melodic decisions.

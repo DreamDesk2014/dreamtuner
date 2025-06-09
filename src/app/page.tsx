@@ -25,7 +25,7 @@ import { Download, Share2, Disc3, SlidersHorizontal, Library, Users, Swords } fr
 import { dataURLtoFile } from '@/lib/utils';
 import { logEvent, getSessionId } from '@/lib/firestoreService';
 
-const LOCAL_STORAGE_KEY = 'resonanceAiLastSession'; // Updated key for ResonanceAI
+const LOCAL_STORAGE_KEY = 'dreamTunerLastSession';
 
 interface StoredSessionData {
   musicParams: MusicParameters | null;
@@ -36,7 +36,7 @@ interface StoredSessionData {
   timestamp: number;
 }
 
-export default function ResonanceAIPage() {
+export default function DreamTunerPage() {
   const [musicParams, setMusicParams] = useState<MusicParameters | null>(null);
   const [isLoadingMusic, setIsLoadingMusic] = useState<boolean>(false);
   const [isRegeneratingIdea, setIsRegeneratingIdea] = useState<boolean>(false);
@@ -62,7 +62,7 @@ export default function ResonanceAIPage() {
     setIsClientMounted(true);
     logEvent('user_interactions', { 
       eventName: 'app_loaded', 
-      eventDetails: { userAgent: navigator.userAgent, initialMode: currentMode, appName: "ResonanceAI" },
+      eventDetails: { userAgent: navigator.userAgent, initialMode: currentMode, appName: "DreamTuner" },
       sessionId: getSessionId() 
     }).catch(console.error);
 
@@ -185,7 +185,7 @@ export default function ResonanceAIPage() {
     }).catch(console.error);
 
     try {
-      toast({ title: "ResonanceAI Magic ✨", description: "Generating musical ideas..." });
+      toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas..." });
       const musicResult = await generateMusicParametersAction(input);
       if ('error' in musicResult) {
         setError(musicResult.error);
@@ -308,7 +308,7 @@ export default function ResonanceAIPage() {
 
     const musicStartTime = Date.now();
     try {
-      toast({ title: "ResonanceAI Magic ✨", description: "Generating musical ideas..." });
+      toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas..." });
       const musicResult = await generateMusicParametersAction(musicInput);
       if ('error' in musicResult) {
         musicGenError = musicResult.error;
@@ -511,7 +511,7 @@ export default function ResonanceAIPage() {
     if (standardModeAiArtUrl) {
       const link = document.createElement('a');
       link.href = standardModeAiArtUrl;
-      link.download = 'resonanceai_standard_art.png';
+      link.download = 'dreamtuner_standard_art.png';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -541,7 +541,7 @@ export default function ResonanceAIPage() {
 
     setIsSharingStandardArt(true);
     const filesToShare: File[] = [];
-    let shareText = "Check out what I made with ResonanceAI!";
+    let shareText = "Check out what I made with DreamTuner!";
     
     if (musicParams?.generatedIdea) {
         shareText += `\nMusical Idea: "${musicParams.generatedIdea}"`;
@@ -554,13 +554,13 @@ export default function ResonanceAIPage() {
 
     try {
         if (standardModeAiArtUrl) {
-            const artFile = dataURLtoFile(standardModeAiArtUrl, "resonanceai_standard_art.png");
+            const artFile = dataURLtoFile(standardModeAiArtUrl, "dreamtuner_standard_art.png");
             if (artFile) filesToShare.push(artFile);
             else console.warn("Could not convert art data URL to file for sharing.");
         }
         
         const sharePayload: ShareData = {
-            title: "My ResonanceAI Creation!",
+            title: "My DreamTuner Creation!",
             text: shareText,
         };
         if (filesToShare.length > 0) {
@@ -613,14 +613,14 @@ export default function ResonanceAIPage() {
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight font-headline">
             {currentMode === 'kids' ? (
               <>
-                <span style={{ color: 'hsl(var(--primary))' }}>Resonance</span>
-                <span style={{ color: 'hsl(var(--accent))' }}>AI</span>
+                <span style={{ color: 'hsl(var(--primary))' }}>Dream</span>
+                <span style={{ color: 'hsl(var(--accent))' }}>Tuner</span>
                 <span className="text-primary"> Kids!</span>
               </>
             ) : (
               <>
-                <span style={{ color: 'hsl(var(--primary))' }}>Resonance</span>
-                <span style={{ color: 'hsl(var(--accent))' }}>AI</span>
+                <span style={{ color: 'hsl(var(--primary))' }}>Dream</span>
+                <span style={{ color: 'hsl(var(--accent))' }}>Tuner</span>
               </>
             )}
           </h1>
@@ -669,7 +669,7 @@ export default function ResonanceAIPage() {
                   Battle Of The AIs! - Who's the Better Musician?
                 </CardTitle>
                 <CardDescription className="text-muted-foreground">
-                  Witness AI models go head-to-head in ResonanceAI, composing music based on the same prompts. You be the judge!
+                  Witness AI models go head-to-head in DreamTuner, composing music based on the same prompts. You be the judge!
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-6 text-center space-y-6">
@@ -726,7 +726,7 @@ export default function ResonanceAIPage() {
                   Your Personal Music Library
                 </CardTitle>
                 <CardDescription className="text-muted-foreground">
-                  Save, organize, and revisit your unique ResonanceAI creations.
+                  Save, organize, and revisit your unique DreamTuner creations.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-6 text-center space-y-6">
@@ -750,7 +750,7 @@ export default function ResonanceAIPage() {
                     <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4">
                         <Image
                             src="https://placehold.co/150x150.png"
-                            alt="ResonanceAI Placeholder Album Art"
+                            alt="DreamTuner Placeholder Album Art"
                             data-ai-hint="abstract album cover"
                             width={150}
                             height={150}
@@ -758,7 +758,7 @@ export default function ResonanceAIPage() {
                         />
                         <div className="space-y-1 text-sm flex-grow">
                             <p><strong className="text-foreground">Album:</strong> Indigo Echoes Vol. 1</p>
-                            <p><strong className="text-foreground">Artist:</strong> ResonanceAI User</p>
+                            <p><strong className="text-foreground">Artist:</strong> DreamTuner User</p>
                             <p><strong className="text-foreground">Tracks:</strong> 5 (Saved Creations)</p>
                             <p className="text-muted-foreground italic">"A collection of vibrant soundscapes from deep space."</p>
                             <Button variant="outline" size="sm" className="mt-2 border-border text-foreground" disabled>View Album (Placeholder)</Button>
@@ -774,7 +774,7 @@ export default function ResonanceAIPage() {
           <div className="mt-10 text-center">
             <LoadingSpinner />
             <p className="mt-4 text-lg text-accent animate-pulse-subtle">
-              {currentMode === 'standard' ? 'Resonating your input... (Art will follow)' : 'Resonating music for your creation... (AI art will follow!)'}
+              {currentMode === 'standard' ? 'Tuning your input... (Art will follow)' : 'Tuning music for your creation... (AI art will follow!)'}
             </p>
           </div>
         )}
@@ -797,12 +797,12 @@ export default function ResonanceAIPage() {
         {currentMode !== 'comingSoon' && showWelcome && !isLoadingOverall && !error && !musicParams && !aiKidsArtUrl && !standardModeAiArtUrl && (
           <Card className="mt-10 text-center p-6 bg-card rounded-lg border-border">
             <CardHeader>
-              <CardTitle className="text-2xl font-semibold text-primary mb-3 font-headline">Welcome to ResonanceAI</CardTitle>
+              <CardTitle className="text-2xl font-semibold text-primary mb-3 font-headline">Welcome to DreamTuner</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
                 {currentMode === 'standard'
-                  ? "Enter text (or speak!), upload an image, or specify a video/audio concept. Select a genre, and ResonanceAI will unveil its musical soul and an AI artistic impression."
+                  ? "Enter text (or speak!), upload an image, or specify a video/audio concept. Select a genre, and DreamTuner will unveil its musical soul and an AI artistic impression."
                   : "Sketch on the canvas (hear notes as you pick colors!), record a voice hint, or do both! Select a genre if you like, and click 'Tune My Creation!' to see and hear the magic!"
                 }
               </p>
