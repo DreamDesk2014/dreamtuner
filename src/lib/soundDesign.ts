@@ -1,7 +1,7 @@
 
 'use client';
 import * as Tone from 'tone';
-import type { FirebaseSampleInstrument } from '@/types';
+import type { FirebaseSampleInstrument, InstrumentOutput } from '@/types';
 import { getFirebaseSampleInstrumentById } from './firestoreService';
 
 // Constants
@@ -293,11 +293,6 @@ export const getSynthConfigurations = (
   };
 };
 
-export type InstrumentOutput = {
-    instrument: Tone.Sampler | Tone.Instrument;
-    outputNodeToConnect: Tone.ToneAudioNode;
-    filterEnv?: Tone.FrequencyEnvelope;
-};
 
 export const createSynth = async (
     config: any,
@@ -306,6 +301,8 @@ export const createSynth = async (
 ): Promise<InstrumentOutput> => {
     const currentContext = audioContext || Tone.getContext();
     const logPrefix = currentContext.name === "Offline" ? "[soundDesign_Offline]" : "[soundDesign_Global]";
+    let urlsForSampler: { [note: string]: string } | undefined;
+
 
     if (config && config.isSampler && config.samplerName) {
         const samplerId = config.samplerName;
@@ -318,11 +315,10 @@ export const createSynth = async (
                 throw new Error(`Sampler document not found or not enabled for ${samplerId}`);
             }
 
-            let urlsForSampler: { [note: string]: string } | undefined;
             if (typeof sampleInstrumentData.samples === 'string' && sampleInstrumentData.samples.trim() !== '') {
                 urlsForSampler = { [sampleInstrumentData.pitch || "C4"]: sampleInstrumentData.samples };
             } else if (typeof sampleInstrumentData.samples === 'object' && Object.keys(sampleInstrumentData.samples).length > 0) {
-                urlsForSampler = sampleInstrumentData.samples;
+                urlsForSampler = sampleInstrumentData.samples as { [note: string]: string };
             }
 
             if (!urlsForSampler) {
@@ -342,8 +338,12 @@ export const createSynth = async (
             sampler.volume.value = sampleInstrumentData.volume !== undefined ? sampleInstrumentData.volume : (config.volume !== undefined ? config.volume : DEFAULT_FALLBACK_SYNTH_VOLUME);
 
             await sampler.loaded;
-            console.log(`${logPrefix} Sampler ${samplerId} loaded successfully for ${instrumentHintName}.`);
-            return { instrument: sampler, outputNodeToConnect: sampler };
+            console.log(`${logPrefix} Sampler ${samplerId} loaded successfully for ${instrumentHintName}. Available notes: ${Object.keys(urlsForSampler || {}).join(', ')}`);
+            return {
+                instrument: sampler,
+                outputNodeToConnect: sampler,
+                availableNotes: Object.keys(urlsForSampler)
+            };
 
         } catch (error) {
             console.error(`${logPrefix} Error loading or creating sampler ${samplerId} for ${instrumentHintName}:`, error);
@@ -351,7 +351,7 @@ export const createSynth = async (
             const fallbackOptions = { oscillator: { type: SAFE_OSC_TYPE as any }, context: currentContext };
             const fallbackInstrument = new Tone.FMSynth(fallbackOptions);
             fallbackInstrument.volume.value = config.volume !== undefined ? config.volume : DEFAULT_FALLBACK_SYNTH_VOLUME;
-            return { instrument: fallbackInstrument, outputNodeToConnect: fallbackInstrument };
+            return { instrument: fallbackInstrument, outputNodeToConnect: fallbackInstrument, availableNotes: undefined };
         }
     }
 
@@ -360,7 +360,7 @@ export const createSynth = async (
         const defaultOptions = { oscillator: { type: SAFE_OSC_TYPE as any }, context: currentContext };
         const instrument = new Tone.FMSynth(defaultOptions);
         instrument.volume.value = DEFAULT_FALLBACK_SYNTH_VOLUME;
-        return { instrument, outputNodeToConnect: instrument };
+        return { instrument, outputNodeToConnect: instrument, availableNotes: undefined };
     }
 
     let instrument: Tone.Instrument;
@@ -452,7 +452,7 @@ export const createSynth = async (
             }
         }
     }
-    return { instrument, outputNodeToConnect: currentOutputNode, filterEnv };
+    return { instrument, outputNodeToConnect: currentOutputNode, filterEnv, availableNotes: undefined };
 };
 
     

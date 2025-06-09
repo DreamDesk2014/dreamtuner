@@ -47,7 +47,7 @@ function applyHumanization(time: number, intensity: number = 0.008): number { //
 
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  const logPrefix = "[WAV_GEN_V0.9_ToneTimeFix]";
+  const logPrefix = "[WAV_GEN_V0.9.1_SamplerFix]";
   console.log(`${logPrefix} Starting synthesis for: ${params.generatedIdea ? params.generatedIdea.substring(0, 30) : "Untitled"}...`);
 
   const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
@@ -86,13 +86,13 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   let melodyRiffBuffer: { noteMidi: number, duration: string, velocityMod: number }[] = [];
   const RIFF_LENGTH = (melodicPhrasing === 'short_motifs') ? 2 : 3;
   let riffPlaybackCooldown = 0;
+  let noteDurationNotation: string = "4n"; // Initialize with a safe default
 
   if (scaleNoteNames.length > 0) {
       let currentMelodyScaleIndex = Math.floor(Math.random() * scaleNoteNames.length);
       if(scaleNoteNames[currentMelodyScaleIndex]) lastMelodyNoteMidi = robustNoteToMidi(scaleNoteNames[currentMelodyScaleIndex]);
 
       while (melodyCurrentTime < totalChordProgressionSeconds - TIME_EPSILON) {
-          let noteDurationNotation: string = "4n"; // Initialize with a safe default
           const arousalFactor = (targetArousal + 1) / 2; // 0 to 1
 
           // Note Duration based on Melodic Phrasing and Rhythmic Density
@@ -263,7 +263,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     for (let i=0; i < progressionDegreesInput.length; i++) {
         const degree = progressionDegreesInput[i];
         const currentMeasureStartTimeForCycle = startOffset + (cycle * progressionDegreesInput.length * measureDurationSeconds) + (i * measureDurationSeconds);
-        // if (currentMeasureStartTimeForCycle >= totalChordProgressionSeconds - TIME_EPSILON) break; // This break should be inside the inner loop for `beat` or `p` later
 
         const chordNotesForBass = getChordNotesForKeyFromTheory(params.keySignature, params.mode, degree, bassOctave, harmonicComplexity > 0.5, params.selectedGenre, harmonicComplexity);
         const rootNote = chordNotesForBass[0] || midiToNoteName(DEFAULT_MIDI_NOTE + (bassOctave -4)*12);
@@ -349,7 +348,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                 overallMaxTime = Math.max(overallMaxTime, time + secondsPerBeat);
             }
         }
-    if (currentMeasureStartTimeForCycle + measureDurationSeconds >= totalChordProgressionSeconds - TIME_EPSILON && cycle === numChordCycles -1 && i === progressionDegreesInput.length -1) break;
     }
   }
   console.log(`${logPrefix} Generated ${bassNotesToSchedule.length} bass notes.`);
@@ -413,7 +411,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             overallMaxTime = Math.max(overallMaxTime, time + measureDurationSeconds);
           }
       }
-       if (currentMeasureStartTimeForCycle + measureDurationSeconds >= totalChordProgressionSeconds - TIME_EPSILON && cycle === numChordCycles -1 && i === progressionDegreesInput.length -1) break;
     }
   }
   console.log(`${logPrefix} Generated ${chordEventsToSchedule.length} chord events.`);
@@ -661,7 +658,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       }
       console.log(`${logPrefix}_OFFLINE] All melodic/harmonic instruments created in offline context.`);
 
-      const { instrument: melodySynth, outputNodeToConnect: melodyOutput, filterEnv: melodyFilterEnv } = melodyInstrumentSetup;
+      const { instrument: melodySynth, outputNodeToConnect: melodyOutput, filterEnv: melodyFilterEnv, availableNotes: availableMelodySamplerNotes } = melodyInstrumentSetup;
       melodyOutput.connect(masterReverb);
 
       const { instrument: bassSynth, outputNodeToConnect: bassOutput, filterEnv: bassFilterEnv } = bassInstrumentSetup;
@@ -672,16 +669,35 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
       let arpeggioSynth: Tone.Sampler | Tone.Instrument | undefined;
       let arpeggioFilterEnv: Tone.FrequencyEnvelope | undefined;
+      let availableArpSamplerNotes: string[] | undefined;
       if (arpInstrumentSetupResult) {
         arpeggioSynth = arpInstrumentSetupResult.instrument;
         arpeggioFilterEnv = arpInstrumentSetupResult.filterEnv;
+        availableArpSamplerNotes = arpInstrumentSetupResult.availableNotes;
         arpInstrumentSetupResult.outputNodeToConnect.connect(masterReverb);
       }
       console.log(`${logPrefix}_OFFLINE] Melodic/Harmonic Synths/Samplers connected.`);
 
 
       melodyNotesToSchedule.forEach((ev) => {
-        (melodySynth as any).triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity);
+        let noteToPlay = ev.note;
+        if (activeSynthConfigs.melody.isSampler && availableMelodySamplerNotes && availableMelodySamplerNotes.length > 0) {
+          if (!availableMelodySamplerNotes.includes(noteToPlay)) {
+            const targetMidi = robustNoteToMidi(noteToPlay);
+            let closestNote = availableMelodySamplerNotes[0];
+            let minDistance = Infinity;
+            for (const availableNote of availableMelodySamplerNotes) {
+              const distance = Math.abs(robustNoteToMidi(availableNote) - targetMidi);
+              if (distance < minDistance) {
+                minDistance = distance;
+                closestNote = availableNote;
+              }
+            }
+            console.warn(`${logPrefix}_OFFLINE_WARN] Melody note ${ev.note} not in sampler's directly mapped notes (${availableMelodySamplerNotes.join(', ')}). Playing closest: ${closestNote}`);
+            noteToPlay = closestNote;
+          }
+        }
+        (melodySynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
         if (melodyFilterEnv && ev.filterAttack) melodyFilterEnv.triggerAttackRelease(ev.duration, ev.time);
       });
       bassNotesToSchedule.forEach((ev) => {
@@ -694,7 +710,24 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       });
       if (arpeggioSynth && arpInstrumentSetupResult) {
         arpeggioNotesToSchedule.forEach((ev) => {
-            (arpeggioSynth as any).triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity);
+            let noteToPlay = ev.note;
+            if (activeSynthConfigs.arpeggio.isSampler && availableArpSamplerNotes && availableArpSamplerNotes.length > 0) {
+                if (!availableArpSamplerNotes.includes(noteToPlay)) {
+                    const targetMidi = robustNoteToMidi(noteToPlay);
+                    let closestNote = availableArpSamplerNotes[0];
+                    let minDistance = Infinity;
+                    for (const availableNote of availableArpSamplerNotes) {
+                        const distance = Math.abs(robustNoteToMidi(availableNote) - targetMidi);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            closestNote = availableNote;
+                        }
+                    }
+                    console.warn(`${logPrefix}_OFFLINE_WARN] Arp note ${ev.note} not in sampler's directly mapped notes. Playing closest: ${closestNote}`);
+                    noteToPlay = closestNote;
+                }
+            }
+            (arpeggioSynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
              if (arpeggioFilterEnv && ev.filterAttack) arpeggioFilterEnv.triggerAttackRelease(ev.duration, ev.time);
         });
       }

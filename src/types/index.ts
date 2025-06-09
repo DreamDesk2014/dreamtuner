@@ -205,4 +205,10 @@ export interface MasterMusicParameterSet {
   updatedAt?: any; // Firestore Timestamp
 }
 
+export type InstrumentOutput = {
+    instrument: Tone.Sampler | Tone.Instrument;
+    outputNodeToConnect: Tone.ToneAudioNode;
+    filterEnv?: Tone.FrequencyEnvelope;
+    availableNotes?: string[]; // For samplers, the keys of the samples map
+};
     
