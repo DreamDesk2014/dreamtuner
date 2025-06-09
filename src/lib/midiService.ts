@@ -6,21 +6,21 @@ import { TARGET_TOTAL_MIDI_SECONDS, MIN_SONG_BODY_SECONDS_FOR_CALC } from '@/lib
 import {
     robustNoteToMidi,
     midiToNoteName,
-    getScaleNoteNames as getScaleNoteNamesFromTheory, // Renamed to avoid conflict if a local one was intended
-    getChordNotesForKey as getChordNotesForKeyFromTheory, // Renamed
-    // Other specific scales if needed, or rely on getScaleNoteNamesFromTheory's mode parameter
+    getScaleNoteNames as getScaleNoteNamesFromTheory,
+    getChordNotesForKey as getChordNotesForKeyFromTheory,
     MAJOR_PENTATONIC_INTERVALS,
     MINOR_PENTATONIC_INTERVALS,
     BLUES_SCALE_INTERVALS,
     DORIAN_SCALE_INTERVALS,
     MIXOLYDIAN_SCALE_INTERVALS,
-    HARMONIC_MINOR_INTERVALS, // Added for consistency if getScaleNoteNamesFromTheory uses it
+    HARMONIC_MINOR_INTERVALS,
     STANDARD_MAJOR_INTERVALS,
     STANDARD_MINOR_INTERVALS,
+    DEFAULT_MIDI_NOTE
 } from './musicTheory';
 
 
-const DEFAULT_MIDI_NOTE = 60; // C4 (already in musicTheory, but useful here as fallback ref)
+// const DEFAULT_MIDI_NOTE = 60; // C4 (already in musicTheory, but useful here as fallback ref)
 
 function isValidMidiNumber(num: number): boolean {
     return typeof num === 'number' && !isNaN(num) && num >= 0 && num <= 127;
@@ -254,6 +254,7 @@ export const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMod
             mapping.melody = 0; // Acoustic Grand Piano
             if (genreLower?.includes("jazz") || !genreLower || genreLower?.includes("pop") || genreLower?.includes("classical") || genreLower?.includes("cinematic")) {
                 mapping.chordsPad = 0;
+                mapping.arpeggioSynth = 0; // Use piano for arps if piano is hinted strongly
             }
         }
         else if (/flute/i.test(hLower)) mapping.melody = 73;
@@ -274,8 +275,8 @@ export const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMod
         else if (/trumpet|brass/i.test(hLower) && !/section/i.test(hLower)) mapping.melody = 56;
         else if (/sax|saxophone/i.test(hLower)) mapping.melody = 65; // Alto Sax (could also be Tenor 66, Soprano 64)
         else if (/bell|celesta|glockenspiel|music box/i.test(hLower)) { mapping.melody = 9; mapping.arpeggioSynth = 14; } // Celesta, Glockenspiel
-        else if (/bright synth|synth lead/i.test(hLower)) mapping.melody = 80; // Synth Lead 1 (Square)
-        else if (/warm lead|soft lead/i.test(hLower)) mapping.melody = 81; // Synth Lead 2 (Sawtooth)
+        else if (/bright synth|synth lead/i.test(hLower)) { mapping.melody = 80; mapping.arpeggioSynth = 80; } // Synth Lead 1 (Square)
+        else if (/warm lead|soft lead/i.test(hLower)) { mapping.melody = 81; mapping.arpeggioSynth = 81; } // Synth Lead 2 (Sawtooth)
         else if (/organ/i.test(hLower) && !genreLower?.includes("blues") && !genreLower?.includes("funk")) mapping.melody = 19; // Church Organ
 
         // Bass hints
@@ -291,12 +292,21 @@ export const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMod
         else if (/synth pad|ambient pad|warm pad/i.test(hLower)) mapping.chordsPad = 89; // Synth Pad 2 (warm)
         else if (/dark pad|sweep pad/i.test(hLower)) mapping.chordsPad = 96; // Pad 8 (sweep)
         else if (/organ/i.test(hLower) && (genreLower?.includes("blues") || genreLower?.includes("funk") || genreLower?.includes("reggae"))) mapping.chordsPad = 19; // Church Organ
-        else if (/electric piano/i.test(hLower) && (genreLower?.includes("jazz") || genreLower?.includes("soul") || genreLower?.includes("funk"))) mapping.chordsPad = 4; // Electric Piano 1 (usually Rhodes-like)
+        else if (/electric piano/i.test(hLower) && (genreLower?.includes("jazz") || genreLower?.includes("soul") || genreLower?.includes("funk"))) {
+            mapping.chordsPad = 4; // Electric Piano 1 (usually Rhodes-like)
+            mapping.arpeggioSynth = 4; // Use EP for arps too
+        }
         else if (/choir|voice|aahs/i.test(hLower)) mapping.chordsPad = 52;
         else if (/brass section/i.test(hLower)) mapping.chordsPad = 61;
 
         // Arpeggio hints
-        if (/arp|arpeggio|pluck|sequence/i.test(hLower)) mapping.arpeggioSynth = 99; // FX Crystal like
+        if (/arp|arpeggio|sequence/i.test(hLower) && !/bell|celesta|glockenspiel|music box|pluck/i.test(hLower)) { // Avoid overriding specific pluck/bell above
+             mapping.arpeggioSynth = 81; // Default to a Saw lead for general arp hint
+        }
+        else if (/pluck/i.test(hLower) && !/bell|celesta|glockenspiel|music box/i.test(hLower)) {
+            mapping.arpeggioSynth = 7; // Harpsichord as a generic pluck, or use existing melody if it's pluck-like
+            if (mapping.melody === 24 || mapping.melody === 25) mapping.arpeggioSynth = mapping.melody;
+        }
         else if (/fx|sound effect/i.test(hLower)) mapping.arpeggioSynth = 102; // FX Echoes
     });
     return mapping;
@@ -395,7 +405,7 @@ export function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[], 
 
 export const generateMidiFile = (params: MusicParameters): string => {
     const isKidsMode = params.originalInput.mode === 'kids';
-    const { targetValence, targetArousal, harmonicComplexity, rhythmicDensity } = params;
+    const { targetValence, targetArousal, harmonicComplexity, rhythmicDensity, instrumentHints = [] } = params;
     const genreLower = params.selectedGenre?.toLowerCase();
 
     const melodyTrack = new MidiWriter.Track();
@@ -410,7 +420,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     arpeggioTrack.setTempo(params.tempoBpm);
     drumTrack.setTempo(params.tempoBpm);
 
-    const instruments = mapInstrumentHintToGM(params.instrumentHints, params.selectedGenre, isKidsMode, params.generatedIdea);
+    const instruments = mapInstrumentHintToGM(instrumentHints, params.selectedGenre, isKidsMode, params.generatedIdea);
     melodyTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.melody }));
     bassTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.bass }));
     chordsPadTrack.addEvent(new MidiWriter.ProgramChangeEvent({ instrument: instruments.chordsPad }));
@@ -430,9 +440,9 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const secondsPerBaseProgression = measuresInBaseProgression * secondsPerMeasure;
 
     const outroDurationMeasures = 2;
-    const outroDurationSeconds = outroDurationMeasures * secondsPerMeasure;
+    // const outroDurationSeconds = outroDurationMeasures * secondsPerMeasure; // Not directly used for MIDI ticks calculation
 
-    let targetSongBodySeconds = TARGET_TOTAL_MIDI_SECONDS - outroDurationSeconds;
+    let targetSongBodySeconds = TARGET_TOTAL_MIDI_SECONDS - (outroDurationMeasures * secondsPerMeasure);
     targetSongBodySeconds = Math.max(targetSongBodySeconds, Math.max(MIN_SONG_BODY_SECONDS_FOR_CALC, secondsPerBaseProgression));
 
     let numProgressionCycles = Math.max(1, Math.round(targetSongBodySeconds / secondsPerBaseProgression));
@@ -626,6 +636,11 @@ export const generateMidiFile = (params: MusicParameters): string => {
     });
 
     let arpeggioTrackHasEvents = false;
+    const hintsLower = instrumentHints.map(h => typeof h === 'string' ? h.toLowerCase() : "");
+    const isArpFriendlyInstrument = hintsLower.some(hint =>
+      /piano|synth lead|electric piano|pluck|bell|celesta|glockenspiel|music box|bright synth|warm lead|soft lead|arp/i.test(hint)
+    );
+
     progression.forEach((chordDef, measureIndex) => {
         if (!chordDef) { console.warn(`Undefined chordDef at measureIndex ${measureIndex} in arpeggioTrack. Skipping.`); return; }
         if (!Array.isArray(chordDef.notes)) { console.warn(`chordDef.notes is not an array at measureIndex ${measureIndex} in arpeggioTrack. Defaulting. ChordDef:`, chordDef); chordDef.notes = []; }
@@ -635,19 +650,34 @@ export const generateMidiFile = (params: MusicParameters): string => {
 
         if(arpNotesMidi.length === 0) return;
 
-        const numArpNotesPerBeat = isKidsMode ? (harmonicComplexity > 0.2 ? 1: 0) : (harmonicComplexity > 0.7 ? 2 : (harmonicComplexity > 0.4 ? 1 : 0));
+        let numArpNotesPerBeat = 0;
+        if (isArpFriendlyInstrument || genreLower?.includes('pop') || genreLower?.includes('electronic') || genreLower?.includes('ambient')) {
+            numArpNotesPerBeat = isKidsMode ? (harmonicComplexity > 0.2 ? 1: 0) : (harmonicComplexity > 0.6 ? 2 : (harmonicComplexity > 0.3 ? 1 : 0));
+             if (isArpFriendlyInstrument && !isKidsMode) numArpNotesPerBeat = rhythmicDensity > 0.5 ? 2 : 1; // Make arps more active for these instruments
+        }
 
-        if (numArpNotesPerBeat > 0 && (genreLower?.includes('pop') || genreLower?.includes('electronic') || genreLower?.includes('ambient') || isKidsMode)) {
+
+        if (numArpNotesPerBeat > 0) {
             arpeggioTrackHasEvents = true;
+            const arpPatterns = [
+                [0, 1, 2, 1], // Up-down
+                [0, 2, 1, 3 % arpNotesMidi.length], // Wider jumps
+                [0, 1, 2, 3 % arpNotesMidi.length], // Ascending
+                [3 % arpNotesMidi.length, 2, 1, 0], // Descending
+            ];
+            const selectedArpPattern = arpPatterns[Math.floor(Math.random() * arpPatterns.length)];
+            const arpDuration = numArpNotesPerBeat === 2 ? '16' : '8';
+
             for (let beat = 0; beat < beatsPerMeasure; beat++) {
                 for (let subBeat = 0; subBeat < numArpNotesPerBeat; subBeat++) {
-                    const pitchMidi = arpNotesMidi[(beat * numArpNotesPerBeat + subBeat) % arpNotesMidi.length];
+                    const pitchMidi = arpNotesMidi[selectedArpPattern[(beat * numArpNotesPerBeat + subBeat) % selectedArpPattern.length] % arpNotesMidi.length];
                      if (!isValidMidiNumber(pitchMidi)) continue;
                     const arpVelocity = calculateDynamicVelocity('arpeggio', targetValence, targetArousal, isKidsMode);
                     arpeggioTrack.addEvent(new MidiWriter.NoteEvent({
                         pitch: [pitchMidi],
-                        duration: numArpNotesPerBeat === 2 ? '16' : (isKidsMode && numArpNotesPerBeat === 1 ? '4' : '8'),
-                        velocity: arpVelocity
+                        duration: arpDuration,
+                        velocity: arpVelocity,
+                        tick: (measureIndex * beatsPerMeasure + beat) * getTPQN() + subBeat * (getTPQN() / numArpNotesPerBeat) // Calculate tick precisely
                     }));
                 }
             }
@@ -659,7 +689,8 @@ export const generateMidiFile = (params: MusicParameters): string => {
              arpeggioTrack.addEvent(new MidiWriter.NoteEvent({
                 pitch: [pitchMidi],
                 duration: chordDef.measureDuration || '1',
-                velocity: arpVelocity
+                velocity: arpVelocity,
+                tick: measureIndex * beatsPerMeasure * getTPQN()
             }));
         }
     });
@@ -685,7 +716,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
 
         let useShakerForKids = false; let useTambourineForKids = false;
         if(isKidsMode){
-            (params.instrumentHints || []).forEach(hint => {
+            (instrumentHints || []).forEach(hint => {
                 if(hint.toLowerCase().includes("shaker")) useShakerForKids = true;
                 if(hint.toLowerCase().includes("tambourine")) useTambourineForKids = true;
             });
@@ -856,7 +887,9 @@ export const generateMidiFile = (params: MusicParameters): string => {
     // Outro
     const tonicKeyName = params.keySignature.match(/([A-G][#bSsxBF]*)/i)?.[0]?.toUpperCase() || params.keySignature.toUpperCase();
     const finalModeIsMinor = params.mode.toLowerCase().includes('minor');
-    const finalNoteDuration = '1';
+    const finalNoteDuration = '1'; // Whole note for MIDI ticks
+    const finalTick = progression.length * beatsPerMeasure * TPQN;
+
 
     const finalPadOctave = isKidsMode ? 3 : (genreLower?.includes('jazz') ? 3 : 2);
     const finalTonicChordForPadDef = getChordProgressionWithDetails(tonicKeyName, finalModeIsMinor ? 'minor' : 'major', 1, finalPadOctave, 0.1, params.selectedGenre, isKidsMode)[0];
@@ -866,7 +899,8 @@ export const generateMidiFile = (params: MusicParameters): string => {
         chordsPadTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: finalTonicChordForPadDef.notes,
             duration: finalNoteDuration,
-            velocity: finalPadVelocity
+            velocity: finalPadVelocity,
+            tick: finalTick
         }));
     }
 
@@ -877,7 +911,8 @@ export const generateMidiFile = (params: MusicParameters): string => {
         melodyTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: [finalMelodyNoteMidi],
             duration: finalNoteDuration,
-            velocity: finalMelodyVelocity
+            velocity: finalMelodyVelocity,
+            tick: finalTick
         }));
     }
 
@@ -888,7 +923,8 @@ export const generateMidiFile = (params: MusicParameters): string => {
         bassTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: [finalBassNoteMidi],
             duration: finalNoteDuration,
-            velocity: finalBassVelocity
+            velocity: finalBassVelocity,
+            tick: finalTick
         }));
     }
 
@@ -898,7 +934,8 @@ export const generateMidiFile = (params: MusicParameters): string => {
             pitch: [crashCymbal],
             duration: finalNoteDuration,
             velocity: finalDrumVelocity,
-            channel: 10
+            channel: 10,
+            tick: finalTick
         }));
     }
 
@@ -922,3 +959,4 @@ export const generateMidiFile = (params: MusicParameters): string => {
         return fallbackWriter.dataUri();
     }
 };
+

@@ -118,3 +118,39 @@ export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}
 
 export interface RenderStandardInputArtInput extends StandardArtInputOriginal {}
 export interface RenderedStandardArtResponse extends StandardArtOutput {}
+
+// Defines the structure for storing sample instrument data in Firebase
+export interface FirebaseSampleInstrument {
+  id: string; // Unique ID for the instrument
+  name: string; // User-friendly name (e.g., "Grand Piano", "808 Kick")
+  category: string; // e.g., "Piano", "Drum", "Synth", "Guitar", "Strings"
+  description?: string; // Optional description
+  tags?: string[]; // For filtering (e.g., "acoustic", "electronic", "percussive", "sustained")
+  
+  // Multi-sample mapping: maps MIDI note numbers (as strings or numbers) to sample URLs
+  // Or could be a single URL if it's a simple one-shot or pitched by the sampler
+  samples: {
+    [noteNumber: string]: string; // e.g., { "60": "/samples/piano_c4.wav", "62": "/samples/piano_d4.wav" }
+  } | string; // A single URL for simpler instruments
+
+  baseUrl?: string; // Optional base URL if samples are relative paths
+
+  // Playback parameters that Tone.Sampler might use
+  attack?: number; // Default attack time in seconds
+  release?: number; // Default release time in seconds
+  volume?: number; // Default volume adjustment in dB
+  loop?: boolean | { start: number; end: number; }; // Loop points if applicable
+  pitch?: string | number; // Base pitch if the sample is a single file to be pitched (e.g. "C4")
+  
+  // Optional: velocity layers
+  // velocityLayers?: { 
+  //   [velocityRangeEnd: number]: { 
+  //     [noteNumber: string]: string; 
+  //   } | string; 
+  // };
+
+  // Metadata
+  createdAt: any; // Firestore Timestamp
+  updatedAt: any; // Firestore Timestamp
+}
+

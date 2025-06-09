@@ -59,7 +59,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
   const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
   const isKidsMode = params.originalInput.mode === 'kids';
-  const { harmonicComplexity = 0.3, rhythmicDensity = 0.5, targetArousal = 0, targetValence = 0 } = params;
+  const { harmonicComplexity = 0.3, rhythmicDensity = 0.5, targetArousal = 0, targetValence = 0, instrumentHints = [] } = params;
 
   if (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.4)) {
     Tone.Transport.swing = 0.20;
@@ -70,7 +70,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   console.log(`${logPrefix} Transport BPM: ${Tone.Transport.bpm.value}, Swing: ${Tone.Transport.swing}`);
 
   // Use consolidated synth configurations
-  const activeSynthConfigs = getSynthConfigurationsFromSoundDesign(params.instrumentHints, params.selectedGenre, isKidsMode, harmonicComplexity, rhythmicDensity);
+  const activeSynthConfigs = getSynthConfigurationsFromSoundDesign(instrumentHints, params.selectedGenre, isKidsMode, harmonicComplexity, rhythmicDensity);
 
   const startOffset = 0.1; // Small delay before music starts
   const secondsPerBeat = 60 / (Tone.Transport.bpm.value);
@@ -354,28 +354,42 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   const arpeggioOctave = isKidsMode ? 4 : (harmonicComplexity > 0.3 ? 4 : 3);
   let lastArpEventTime = -TIME_EPSILON;
 
-  const playArp = !isKidsMode || (isKidsMode && harmonicComplexity > 0.1 && rhythmicDensity > 0.05);
-  if (playArp && (genreLower.includes("electronic") || genreLower.includes("pop") || genreLower.includes("ambient") || genreLower.includes("classical") || isKidsMode || harmonicComplexity > 0.4)) {
+  // Enhanced conditions for playing arpeggios based on instrument hints
+  const hintsLower = instrumentHints.map(h => typeof h === 'string' ? h.toLowerCase() : "");
+  const isArpFriendlyInstrument = hintsLower.some(hint =>
+    /piano|synth lead|electric piano|pluck|bell|celesta|glockenspiel|music box|bright synth|warm lead|soft lead|arp/i.test(hint)
+  );
+
+  const playArp = (!isKidsMode && isArpFriendlyInstrument) ||
+                  (isKidsMode && harmonicComplexity > 0.1 && rhythmicDensity > 0.05 && isArpFriendlyInstrument) ||
+                  (!isKidsMode && (genreLower.includes("electronic") || genreLower.includes("pop") || genreLower.includes("ambient") || genreLower.includes("classical") || harmonicComplexity > 0.4));
+
+  if (playArp) {
     chordEventsToSchedule.forEach(chordEvent => {
-        // Use consolidated music theory functions
         const currentChordNotesForArp = chordEvent.notes.map(n => midiToNoteName(robustNoteToMidi(n.replace(/[0-9]+$/, String(arpeggioOctave)))));
         if (currentChordNotesForArp.length > 0) {
-            const arpPattern = [0, 1, 2, 1]; // Simple arp: Root, 3rd, 5th, 3rd
-            if (genreLower.includes("classical")) arpPattern.push(0, 2, 1, 2); // Longer for classical
+            // More varied arpeggio patterns
+            const arpPatterns = [
+                [0, 1, 2, 1], // Up-down
+                [0, 2, 1, 3 % currentChordNotesForArp.length], // Wider jumps
+                [0, 1, 2, 3 % currentChordNotesForArp.length], // Ascending
+                [3 % currentChordNotesForArp.length, 2, 1, 0], // Descending
+            ];
+            const selectedArpPattern = arpPatterns[Math.floor(Math.random() * arpPatterns.length)];
 
-            const arpNoteDurationNotation = (rhythmicDensity > 0.4 || genreLower.includes("electronic")) ? "16n" : "8n";
+            const arpNoteDurationNotation = (rhythmicDensity > 0.4 || genreLower.includes("electronic") || isArpFriendlyInstrument) ? "16n" : "8n";
             const arpNoteDurationSeconds = Tone.Time(arpNoteDurationNotation).toSeconds();
             const notesPerBeatForArp = arpNoteDurationNotation === "16n" ? 4 : 2;
-            const beatsToArpeggiate = isKidsMode ? (rhythmicDensity > 0.1 ? 1:0) : (rhythmicDensity > 0.2 && harmonicComplexity > 0.2 ? (genreLower.includes("ambient") ? beatsPerMeasure : 2) : (harmonicComplexity > 0.5 ? 1 : 0));
+            let beatsToArpeggiate = isKidsMode ? (rhythmicDensity > 0.1 ? 1:0) : (rhythmicDensity > 0.2 && harmonicComplexity > 0.2 ? (genreLower.includes("ambient") ? beatsPerMeasure : (isArpFriendlyInstrument ? beatsPerMeasure : 2)) : (harmonicComplexity > 0.5 ? 1 : 0));
+            if (isArpFriendlyInstrument && !isKidsMode) beatsToArpeggiate = beatsPerMeasure; // Full measure arp for piano/synth lead etc.
 
 
             for (let beat = 0; beat < beatsToArpeggiate; beat++) {
                 for (let i = 0; i < notesPerBeatForArp; i++) {
                     let time = applyHumanization(chordEvent.time + (beat * secondsPerBeat) + (i * arpNoteDurationSeconds), 0.003);
-                     // Ensure arp note doesn't extend beyond chord duration significantly
                      if (time < chordEvent.time + Tone.Time(chordEvent.duration).toSeconds() - TIME_EPSILON * 2) {
                         if (time <= lastArpEventTime) time = lastArpEventTime + TIME_EPSILON;
-                        const noteIndexInChord = arpPattern[i % arpPattern.length] % currentChordNotesForArp.length;
+                        const noteIndexInChord = selectedArpPattern[i % selectedArpPattern.length] % currentChordNotesForArp.length;
                         arpeggioNotesToSchedule.push({ time, note: currentChordNotesForArp[noteIndexInChord], duration: arpNoteDurationNotation, velocity: Math.min(0.45, 0.15 + (targetArousal * 0.10) + Math.random() * 0.03), filterAttack: i % 2 === 0 });
                         lastArpEventTime = time;
                         overallMaxTime = Math.max(overallMaxTime, time + arpNoteDurationSeconds);
@@ -601,3 +615,4 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
