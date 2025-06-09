@@ -1,8 +1,4 @@
 
-// GEMINI_MODEL_NAME is defined in src/ai/genkit.ts and used by the flows.
-// This constant is not used for API calls if using pre-defined flows.
-// export const GEMINI_MODEL_NAME = 'googleai/gemini-2.0-flash';
-
 export const VALENCE_AROUSAL_DESCRIPTIONS: Record<string, string> = {
   high_arousal_positive_valence: "Energetic & Joyful (e.g., excited, elated)",
   mid_arousal_positive_valence: "Pleasant & Engaged (e.g., happy, cheerful)",
@@ -16,31 +12,31 @@ export const VALENCE_AROUSAL_DESCRIPTIONS: Record<string, string> = {
 };
 
 export function getValenceArousalDescription(valence: number, arousal: number): string {
-  if (valence > 0.3) { // Positive Valence
+  if (valence > 0.3) { 
     if (arousal > 0.3) return VALENCE_AROUSAL_DESCRIPTIONS.high_arousal_positive_valence;
     if (arousal < -0.3) return VALENCE_AROUSAL_DESCRIPTIONS.low_arousal_positive_valence;
     return VALENCE_AROUSAL_DESCRIPTIONS.mid_arousal_positive_valence;
-  } else if (valence < -0.3) { // Negative Valence
+  } else if (valence < -0.3) { 
     if (arousal > 0.3) return VALENCE_AROUSAL_DESCRIPTIONS.high_arousal_negative_valence;
     if (arousal < -0.3) return VALENCE_AROUSAL_DESCRIPTIONS.low_arousal_negative_valence;
     return VALENCE_AROUSAL_DESCRIPTIONS.mid_arousal_negative_valence;
-  } else { // Neutral Valence
+  } else { 
     if (arousal > 0.3) return VALENCE_AROUSAL_DESCRIPTIONS.high_arousal_neutral_valence;
     if (arousal < -0.3) return VALENCE_AROUSAL_DESCRIPTIONS.low_arousal_neutral_valence;
     return VALENCE_AROUSAL_DESCRIPTIONS.mid_arousal_neutral_valence;
   }
 }
 
-export const MAX_IMAGE_FILE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB
+export const MAX_IMAGE_FILE_SIZE_BYTES = 4 * 1024 * 1024; 
 export const MAX_IMAGE_FILE_SIZE_MB = MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024);
 
 export const MUSIC_GENRES = [
-  "AI", // Added AI Genre
+  "AI", 
   "Pop", "Rock", "Jazz", "Electronic", "Ambient",
   "Classical", "Folk", "Cinematic", "Hip Hop", "Blues",
   "Reggae", "Country", "Metal", "Funk", "Soul"
 ].sort((a, b) => {
-  if (a === "AI") return -1; // Always put "AI" first after sorting the rest
+  if (a === "AI") return -1; 
   if (b === "AI") return 1;
   return a.localeCompare(b);
 });
@@ -49,17 +45,13 @@ export const MUSIC_GENRES = [
 export const SOUND_LOADING_TIMEOUT_MS = 40000;
 export const SOUNDFONT_URL = 'https://storage.googleapis.com/magentadata/js/soundfonts/sgm_plus/';
 
-// Song Structure and Duration Constants
 export const DEFAULT_BPM = 120;
 export const BEATS_PER_MEASURE = 4;
-export const TARGET_SONG_BODY_SECONDS = 28; // Target duration for the main musical content
-export const OUTRO_MEASURES = 2; // Number of measures for a simple outro
-export const REVERB_TAIL_SECONDS = 2.5; // Extra time for reverb/effects to fade out in WAV
-export const MIN_EFFECTIVE_DURATION_SECONDS = 15.0; // Minimum WAV render duration
+export const TARGET_SONG_BODY_SECONDS = 28; 
+export const OUTRO_MEASURES = 2; 
+export const REVERB_TAIL_SECONDS = 2.5; 
+export const MIN_EFFECTIVE_DURATION_SECONDS = 15.0; 
 
-// Calculated Max WAV Render Duration
-// This will be dynamically calculated if BPM changes, but for a constant:
 const typicalMeasureSeconds = BEATS_PER_MEASURE * (60 / DEFAULT_BPM);
 const typicalOutroSeconds = OUTRO_MEASURES * typicalMeasureSeconds;
-export const MAX_WAV_RENDER_DURATION_SECONDS = TARGET_SONG_BODY_SECONDS + typicalOutroSeconds + REVERB_TAIL_SECONDS; // e.g., 28 + (2*2) + 2.5 = 34.5s @120BPM
-
+export const MAX_WAV_RENDER_DURATION_SECONDS = TARGET_SONG_BODY_SECONDS + typicalOutroSeconds + REVERB_TAIL_SECONDS;

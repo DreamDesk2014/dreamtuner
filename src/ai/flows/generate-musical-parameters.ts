@@ -40,7 +40,7 @@ const GenerateMusicalParametersInputSchema = z.object({
   userPositivity: z.number().min(-1).max(1).optional().describe("Optional user-defined positivity level for the music (-1.0 negative to 1.0 positive). If provided, this should strongly influence targetValence."),
   promptVariationKey: z.string().optional().describe("Key for a specific prompt variation to use from Firestore."),
   masterParameterSetId: z.string().optional().describe("ID of a MasterMusicParameterSet to use from Firestore for guidance."),
-  masterParameterContext: z.any().optional().describe("Pre-fetched master parameter context to inject into the prompt."), // For Handlebars, keep as z.any() or a loose object
+  masterParameterContext: z.any().optional().describe("Pre-fetched master parameter context to inject into the prompt."), 
 });
 export type GenerateMusicalParametersInput = z.infer<
   typeof GenerateMusicalParametersInputSchema
@@ -73,8 +73,7 @@ export type GenerateMusicalParametersOutput = z.infer<
   typeof GenerateMusicalParametersOutputSchema
 >;
 
-// Default prompt template (fallback if dynamic prompt loading fails or no specific prompt is found)
-const DEFAULT_PROMPT_TEMPLATE = `You are DreamTuner, an AI that translates human expression into musical concepts.
+const DEFAULT_PROMPT_TEMPLATE = `You are ResonanceAI, an AI that translates human expression into musical concepts.
 Pay special attention to crafting a distinct and memorable primary melody.
 Based on your analysis of the input, define the 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis' that would best represent its core feeling and style.
 Ensure the 'generatedIdea' and 'instrumentHints' for melodic instruments align with these melodic decisions.
@@ -246,14 +245,9 @@ Strive for a result that reflects both the user's specific input and this guidin
   {{/if}}
 
   {{#if genre}}
-    **Your Role:** You are an expert musicologist and creative producer. Your goal is to deeply understand the core essence of the user's input, then fuse it with the defining characteristics of the selected genre (or your own AI vision if genre is 'AI') to create a rich, authentic, and inspiring musical concept.
-    **Guiding Principle:** The user's original input determines the *emotional core* and initial melodic direction. The selected genre ('{{{genre}}}') or your AI interpretation determines the *stylistic execution and refinement of the melody*.
-
-    Please ensure the generated musical parameters, including 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis', are stylistically appropriate for '{{{genre}}}' (or your unique AI vision), while still reflecting the core essence of the primary input.
-
     {{#if isGenreAI}}
-      **Your Role as AI Musical Visionary (AI Genre):**
-      You have been granted **complete creative freedom** for the "AI" genre. Your primary task is to **explore musically** based on the user's input.
+      **Your Role as AI Musical Visionary (AI Genre Selected):**
+      You have been granted **complete creative freedom**. Your primary task is to **explore musically** based on the user's input.
       Deeply interpret the core essence, emotions, and implied narrative of:
       {{#if isInputImageWithData}}the provided image.{{/if}}
       {{#if isInputAudioWithData}}the provided audio recording.{{/if}}
@@ -282,74 +276,82 @@ Strive for a result that reflects both the user's specific input and this guidin
       - melodicEmphasis
 
       Strive for something novel, evocative, and musically coherent.
-    {{else if isGenreRock}}
-      For Rock:
-      - Key Signature: Often major or minor, can have bluesy inflections.
-      - Mode: Major or Minor.
-      - TempoBpm: Typically 110-170 BPM.
-      - MoodTags: Suggest ["energetic", "driving", "powerful", "anthem", "gritty", "rebellious"].
-      - InstrumentHints: Suggest ["Electric Guitar (Distorted Lead, Riffy Melody)", "Electric Guitar (Rhythm, Power Chords)", "Bass Guitar (Rock, Solid Foundation)", "Drum Kit (Powerful Rock Beat, Accented Snare)"]. Emphasize melodic role.
-      - RhythmicDensity: 0.6 to 0.85.
-      - HarmonicComplexity: 0.3 to 0.6.
-      - TargetValence: -0.3 to 0.7.
-      - TargetArousal: 0.5 to 0.9.
-      - MelodicContour: 'riff-based', 'ascending' for anthems, or 'stable' with power.
-      - MelodicPhrasing: 'short_motifs', 'call_and_response' (e.g., guitar and vocals).
-      - MelodicEmphasis: 'foreground' for lead guitar or vocals.
-      - Avoid: Do not use instruments like classical flute or harp. Avoid overly complex, highly syncopated jazz rhythms, or weak, thin drum sounds. The feeling should be powerful and direct.
-      - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their character/contour] + [Emotional Arc/Climax].
-    {{else if isGenreJazz}}
-      For Jazz (e.g., Swing, Bebop, Cool Jazz):
-      - Key Signature: Can be complex, often utilizing modes beyond simple major/minor.
-      - Mode: Major, Minor, or Modal (e.g., Dorian, Mixolydian).
-      - TempoBpm: Highly variable. Cool Jazz (80-130 BPM), Swing (120-200 BPM), Bebop (200+ BPM).
-      - MoodTags: Suggest ["improvisational", "swinging", "sophisticated", "smooth", "bluesy", "intricate"].
-      - InstrumentHints: Suggest ["Piano (Jazz Voicings, Comping/Solo Melody)", "Upright Bass (Walking, Acoustic)", "Drum Kit (Jazz - Swing Feel, Brushes, Ride Cymbal)", "Saxophone (Expressive Solo Melody, Tenor/Alto)", "Trumpet (Warm, Solo Melody)"]. Emphasize melodic role.
-      - RhythmicDensity: 0.4 to 0.7.
-      - HarmonicComplexity: 0.6 to 0.9.
-      - TargetValence: -0.5 to 0.6.
-      - TargetArousal: 0.1 to 0.7.
-      - MelodicContour: 'improvisational', 'wavy', 'arching'.
-      - MelodicPhrasing: 'syncopated_phrases', 'long_flowing', 'call_and_response' between instruments.
-      - MelodicEmphasis: Often 'interwoven' or 'foreground' for soloists.
-      - Avoid: Avoid rigid, straight 4/4 rock drum beats or simple power-chord harmonies. The feel should be fluid, interactive, and harmonically rich, not stiff.
-      - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their improvisational style/phrasing] + [Emotional Arc/Climax].
-    {{else if isGenreElectronic}}
-      For Electronic (e.g., House, Synthpop, Techno):
-      - Key Signature: Often minor or major, can be modal.
-      - Mode: Major or Minor, sometimes Dorian or Mixolydian.
-      - TempoBpm: House/Synthpop (115-135 BPM), Techno (125-150 BPM).
-      - MoodTags: Suggest ["rhythmic", "danceable", "futuristic", "pulsating", "groovy", "atmospheric"].
-      - InstrumentHints: Suggest ["Synth Lead (Bright, Plucky, Catchy Melody/Riff)", "Synth Bass (Driving, Sub, FM/Analog-style)", "Synth Pad (Atmospheric, Evolving Background)", "Drum Machine (e.g., 808/909-style Kick, Snare/Clap, Crisp Hi-Hats)", "Arpeggiator (Sequenced, Rhythmic Melody)"]. Emphasize melodic role.
-      - RhythmicDensity: 0.7 to 0.9.
-      - HarmonicComplexity: 0.2 to 0.6.
-      - TargetValence: 0.2 to 0.8.
-      - TargetArousal: 0.6 to 0.9.
-      - MelodicContour: 'riff-based', 'stable' with variations, or 'ascending' for builds.
-      - MelodicPhrasing: 'short_motifs', 'repetitive_phrases_with_evolution'.
-      - MelodicEmphasis: 'foreground' for main synth lead/hook, or 'interwoven' for arpeggios.
-      - Avoid: Avoid traditional acoustic instruments like violins or acoustic guitars unless explicitly requested or fitting a subgenre (e.g., some forms of IDM). Avoid overly complex, non-repetitive melodic structures for dance-focused subgenres.
-      - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their hook/pattern] + [Emotional Arc/Climax].
-    {{else if isGenreCinematic}}
-      For Cinematic (e.g., Film Score, Orchestral):
-      - Key Signature: Highly variable, can be major, minor, atonal, or modal.
-      - Mode: Major, Minor, or other modes depending on the desired emotion.
-      - TempoBpm: Extremely variable.
-      - MoodTags: Suggest ["epic", "emotional", "suspenseful", "sweeping", "dramatic", "atmospheric", "tense"].
-      - InstrumentHints: Suggest ["String Section (Lush, Soaring Melodies/Background)", "Brass Section (Powerful Horns, Thematic Melody)", "Orchestral Percussion (Timpani, Cymbals)", "Piano (Melodic Theme, Chordal)", "Woodwinds (Flute, Clarinet, Oboe for color/melody)"]. Emphasize melodic role.
-      - RhythmicDensity: 0.3 to 0.8.
-      - HarmonicComplexity: 0.4 to 0.8.
-      - TargetValence: Highly variable (-0.9 to 0.9).
-      - TargetArousal: Highly variable (-0.9 to 0.9).
-      - MelodicContour: 'arching', 'ascending' for tension/triumph, 'descending' for sorrow, 'stable' for underscore.
-      - MelodicPhrasing: 'long_flowing' for themes, 'short_motifs' for suspense.
-      - MelodicEmphasis: Often 'foreground' for main themes, 'background' for atmospheric textures.
-      - Avoid: Avoid overly "pop" song structures unless it's for a specific type of montage. Avoid typical rock/electronic drum machine beats unless for a hybrid score. The focus is often on orchestral color and emotional development.
-      - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their thematic contour/phrasing] + [Emotional Arc/Climax].
+
     {{else}}
-      {{! Fallback for other genres - user provided a genre not in the above list }}
-      For the genre '{{{genre}}}', your task is to first briefly define its key musical characteristics in 1-2 sentences (e.g., typical instruments, tempo range, rhythmic feel, common mood, typical melodic style). Then, generate all the musical parameters below, including 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis', based on your own definition. This ensures your output is internally consistent with your understanding of the genre.
-      - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their melodic character] + [Emotional Arc/Climax]. Describe a musical vision.
+      **Your Role:** You are an expert musicologist and creative producer. Your goal is to deeply understand the core essence of the user's input, then fuse it with the defining characteristics of the selected genre ('{{{genre}}}') to create a rich, authentic, and inspiring musical concept.
+      **Guiding Principle:** The user's original input determines the *emotional core* and initial melodic direction. The selected genre ('{{{genre}}}') determines the *stylistic execution and refinement of the melody*.
+
+      Please ensure the generated musical parameters, including 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis', are stylistically appropriate for '{{{genre}}}', while still reflecting the core essence of the primary input.
+    
+      {{#if isGenreRock}}
+        For Rock:
+        - Key Signature: Often major or minor, can have bluesy inflections.
+        - Mode: Major or Minor.
+        - TempoBpm: Typically 110-170 BPM.
+        - MoodTags: Suggest ["energetic", "driving", "powerful", "anthem", "gritty", "rebellious"].
+        - InstrumentHints: Suggest ["Electric Guitar (Distorted Lead, Riffy Melody)", "Electric Guitar (Rhythm, Power Chords)", "Bass Guitar (Rock, Solid Foundation)", "Drum Kit (Powerful Rock Beat, Accented Snare)"]. Emphasize melodic role.
+        - RhythmicDensity: 0.6 to 0.85.
+        - HarmonicComplexity: 0.3 to 0.6.
+        - TargetValence: -0.3 to 0.7.
+        - TargetArousal: 0.5 to 0.9.
+        - MelodicContour: 'riff-based', 'ascending' for anthems, or 'stable' with power.
+        - MelodicPhrasing: 'short_motifs', 'call_and_response' (e.g., guitar and vocals).
+        - MelodicEmphasis: 'foreground' for lead guitar or vocals.
+        - Avoid: Do not use instruments like classical flute or harp. Avoid overly complex, highly syncopated jazz rhythms, or weak, thin drum sounds. The feeling should be powerful and direct.
+        - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their character/contour] + [Emotional Arc/Climax].
+      {{else if isGenreJazz}}
+        For Jazz (e.g., Swing, Bebop, Cool Jazz):
+        - Key Signature: Can be complex, often utilizing modes beyond simple major/minor.
+        - Mode: Major, Minor, or Modal (e.g., Dorian, Mixolydian).
+        - TempoBpm: Highly variable. Cool Jazz (80-130 BPM), Swing (120-200 BPM), Bebop (200+ BPM).
+        - MoodTags: Suggest ["improvisational", "swinging", "sophisticated", "smooth", "bluesy", "intricate"].
+        - InstrumentHints: Suggest ["Piano (Jazz Voicings, Comping/Solo Melody)", "Upright Bass (Walking, Acoustic)", "Drum Kit (Jazz - Swing Feel, Brushes, Ride Cymbal)", "Saxophone (Expressive Solo Melody, Tenor/Alto)", "Trumpet (Warm, Solo Melody)"]. Emphasize melodic role.
+        - RhythmicDensity: 0.4 to 0.7.
+        - HarmonicComplexity: 0.6 to 0.9.
+        - TargetValence: -0.5 to 0.6.
+        - TargetArousal: 0.1 to 0.7.
+        - MelodicContour: 'improvisational', 'wavy', 'arching'.
+        - MelodicPhrasing: 'syncopated_phrases', 'long_flowing', 'call_and_response' between instruments.
+        - MelodicEmphasis: Often 'interwoven' or 'foreground' for soloists.
+        - Avoid: Avoid rigid, straight 4/4 rock drum beats or simple power-chord harmonies. The feel should be fluid, interactive, and harmonically rich, not stiff.
+        - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their improvisational style/phrasing] + [Emotional Arc/Climax].
+      {{else if isGenreElectronic}}
+        For Electronic (e.g., House, Synthpop, Techno):
+        - Key Signature: Often minor or major, can be modal.
+        - Mode: Major or Minor, sometimes Dorian or Mixolydian.
+        - TempoBpm: House/Synthpop (115-135 BPM), Techno (125-150 BPM).
+        - MoodTags: Suggest ["rhythmic", "danceable", "futuristic", "pulsating", "groovy", "atmospheric"].
+        - InstrumentHints: Suggest ["Synth Lead (Bright, Plucky, Catchy Melody/Riff)", "Synth Bass (Driving, Sub, FM/Analog-style)", "Synth Pad (Atmospheric, Evolving Background)", "Drum Machine (e.g., 808/909-style Kick, Snare/Clap, Crisp Hi-Hats)", "Arpeggiator (Sequenced, Rhythmic Melody)"]. Emphasize melodic role.
+        - RhythmicDensity: 0.7 to 0.9.
+        - HarmonicComplexity: 0.2 to 0.6.
+        - TargetValence: 0.2 to 0.8.
+        - TargetArousal: 0.6 to 0.9.
+        - MelodicContour: 'riff-based', 'stable' with variations, or 'ascending' for builds.
+        - MelodicPhrasing: 'short_motifs', 'repetitive_phrases_with_evolution'.
+        - MelodicEmphasis: 'foreground' for main synth lead/hook, or 'interwoven' for arpeggios.
+        - Avoid: Avoid traditional acoustic instruments like violins or acoustic guitars unless explicitly requested or fitting a subgenre (e.g., some forms of IDM). Avoid overly complex, non-repetitive melodic structures for dance-focused subgenres.
+        - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their hook/pattern] + [Emotional Arc/Climax].
+      {{else if isGenreCinematic}}
+        For Cinematic (e.g., Film Score, Orchestral):
+        - Key Signature: Highly variable, can be major, minor, atonal, or modal.
+        - Mode: Major, Minor, or other modes depending on the desired emotion.
+        - TempoBpm: Extremely variable.
+        - MoodTags: Suggest ["epic", "emotional", "suspenseful", "sweeping", "dramatic", "atmospheric", "tense"].
+        - InstrumentHints: Suggest ["String Section (Lush, Soaring Melodies/Background)", "Brass Section (Powerful Horns, Thematic Melody)", "Orchestral Percussion (Timpani, Cymbals)", "Piano (Melodic Theme, Chordal)", "Woodwinds (Flute, Clarinet, Oboe for color/melody)"]. Emphasize melodic role.
+        - RhythmicDensity: 0.3 to 0.8.
+        - HarmonicComplexity: 0.4 to 0.8.
+        - TargetValence: Highly variable (-0.9 to 0.9).
+        - TargetArousal: Highly variable (-0.9 to 0.9).
+        - MelodicContour: 'arching', 'ascending' for tension/triumph, 'descending' for sorrow, 'stable' for underscore.
+        - MelodicPhrasing: 'long_flowing' for themes, 'short_motifs' for suspense.
+        - MelodicEmphasis: Often 'foreground' for main themes, 'background' for atmospheric textures.
+        - Avoid: Avoid overly "pop" song structures unless it's for a specific type of montage. Avoid typical rock/electronic drum machine beats unless for a hybrid score. The focus is often on orchestral color and emotional development.
+        - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their thematic contour/phrasing] + [Emotional Arc/Climax].
+      {{else}}
+        {{! Fallback for other genres - user provided a genre not in the above list }}
+        For the genre '{{{genre}}}', your task is to first briefly define its key musical characteristics in 1-2 sentences (e.g., typical instruments, tempo range, rhythmic feel, common mood, typical melodic style). Then, generate all the musical parameters below, including 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis', based on your own definition. This ensures your output is internally consistent with your understanding of the genre.
+        - GeneratedIdea (max 45 words): Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their melodic character] + [Emotional Arc/Climax]. Describe a musical vision.
+      {{/if}}
     {{/if}}
   {{else}} {{! No genre selected by user in Standard Mode }}
     {{! Generate parameters without specific genre guidance, relying on input type and content }}
@@ -408,7 +410,7 @@ const generateMusicalParametersFlow = ai.defineFlow(
     const promptCriteria = {
         genre: input.genre,
         mode: input.mode,
-        inputType: input.type as AppInputType, // Cast because FlowInputTypeOriginal 'type' is enum, AppInput 'type' is literal union
+        inputType: input.type as AppInputType, 
         variationKey: input.promptVariationKey,
     };
     const dynamicPrompt: AIPrompt | null = await getAIPrompt(promptCriteria);
@@ -425,7 +427,6 @@ const generateMusicalParametersFlow = ai.defineFlow(
     const masterParamSet: MasterMusicParameterSet | null = await getMasterMusicParameterSet({
         setId: input.masterParameterSetId,
         genre: input.genre,
-        // mood: input.moodTags?.[0] // Could add logic to derive primary mood if needed
     });
 
     if (masterParamSet) {
@@ -457,13 +458,13 @@ const generateMusicalParametersFlow = ai.defineFlow(
       isGenreJazz: genreLower === 'jazz',
       isGenreElectronic: genreLower === 'electronic',
       isGenreCinematic: genreLower === 'cinematic',
-      masterParameterContext: masterParameterContext, // Pass the fetched master parameters
+      masterParameterContext: masterParameterContext, 
     };
 
     const anDefinedPrompt = ai.definePrompt({
-      name: `dynamicPrompt_${fetchedPromptName?.replace(/\s+/g, '_') || 'default'}`, // Make prompt name more dynamic for tracing
+      name: `dynamicPrompt_${fetchedPromptName?.replace(/\s+/g, '_') || 'default'}`, 
       model: 'googleai/gemini-1.5-flash-latest',
-      input: {schema: GenerateMusicalParametersInputSchema}, // Schema remains static for now
+      input: {schema: GenerateMusicalParametersInputSchema}, 
       output: {schema: GenerateMusicalParametersOutputSchema},
       prompt: promptTemplateToUse,
     });
@@ -478,5 +479,3 @@ const generateMusicalParametersFlow = ai.defineFlow(
     return output;
   }
 );
-
-    

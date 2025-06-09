@@ -18,7 +18,7 @@ export default {
     extend: {
       fontFamily: {
         body: ['Inter', 'sans-serif'],
-        headline: ['Inter', 'sans-serif'],
+        headline: ['Inter', 'sans-serif'], // Using Inter for headlines as per ResonanceAI
         code: ['Source Code Pro', 'monospace'],
       },
       colors: {
@@ -72,15 +72,11 @@ export default {
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))',
         },
-        // Custom colors from user proposal
-        'cosmic-purple': '#29abe2', // Was Deep Indigo/Deep Dark Blue, now New Light Blue
-        'stardust-blue': '#29abe2', // Was Electric Purple/Deep Dark Blue, now New Light Blue
-        'nebula-dark': '#121212', // Very Dark Gray (Background)
-        'nebula-gray': {
-          DEFAULT: '#1f2937', // Nebula Gray Dark (Card)
-          light: '#374151', // Nebula Gray Light (Muted/Input/Border)
-        },
-        'galaxy-white': '#f3f4f6', // Galaxy White (Foreground)
+        // ResonanceAI specific theme colors - will be driven by CSS variables from globals.css
+        'resonance-primary': 'hsl(var(--primary))', 
+        'resonance-accent': 'hsl(var(--accent))',
+        'resonance-background': 'hsl(var(--background))',
+        'resonance-foreground': 'hsl(var(--foreground))',
       },
       borderRadius: {
         lg: 'var(--radius)',

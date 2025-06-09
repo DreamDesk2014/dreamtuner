@@ -3,7 +3,7 @@
 import * as Tone from 'tone';
 import type { FirebaseSampleInstrument, InstrumentOutput } from '@/types';
 import { getFirebaseSampleInstrumentById } from './firestoreService';
-import { robustNoteToMidi, midiToNoteName } from './musicTheory'; // Ensure these are imported
+import { robustNoteToMidi, midiToNoteName } from './musicTheory'; 
 
 // Constants
 const SAFE_OSC_TYPE = 'triangle' as const;
@@ -183,8 +183,7 @@ export const getSynthConfigurations = (
     hiHatConf = {...baseConfigs.kidsHiHat};
     if (hintsLower.some(h => h.includes("tambourine") || h.includes("shaker"))) useTambourine = true;
 
-  } else { // Standard Mode Genre/Hint Logic (only if not already a sampler)
-    // Apply genre defaults only if the corresponding part is not already set to be a sampler
+  } else { 
     if (!melodyConf.isSampler && !bassConf.isSampler && !chordsConf.isSampler && !arpConf.isSampler) {
         if (genreLower.includes("electronic") || genreLower.includes("synthwave") || genreLower.includes("techno") || genreLower.includes("house")) {
           melodyConf = { ...baseConfigs.synthLeadElectronic };
@@ -232,7 +231,7 @@ export const getSynthConfigurations = (
             snareConf = { ...baseConfigs.snare, volume: -10, instrumentHintName: "funkSnare" };
             hiHatConf = { ...baseConfigs.hiHat, volume: -17, instrumentHintName: "funkHiHat" };
         } else if (genreLower.includes("classical") || genreLower.includes("cinematic") || genreLower.includes("orchestral")) {
-            melodyConf = { ...baseConfigs.pianoMelody, volume: -8, instrumentHintName: "classicalPianoMelodySynth" }; // Default synth piano
+            melodyConf = { ...baseConfigs.pianoMelody, volume: -8, instrumentHintName: "classicalPianoMelodySynth" }; 
             bassConf = { ...baseConfigs.defaultBass, options: {...baseConfigs.defaultBass.options, oscillator:{type:"sine" as const}}, volume: -14, instrumentHintName: "classicalBass" };
             chordsConf = { ...baseConfigs.stringEnsembleChords, instrumentHintName: "classicalStringChords" };
             arpConf = { ...baseConfigs.customPluckySynth, volume: -20, instrumentHintName: "classicalPluckArp" };
@@ -242,7 +241,7 @@ export const getSynthConfigurations = (
 
 
     hintsLower.forEach(hint => {
-      if (!melodyConf.isSampler) { // Only apply synth hint if melody isn't already a sampler
+      if (!melodyConf.isSampler) { 
         if (hint.includes('electric piano') || hint.includes('rhodes')) melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, options: {...baseConfigs.electricPianoChords.options}, volume: -11, instrumentHintName: "hintElectricPianoMelody"};
         else if (hint.includes('flute') || hint.includes('recorder')) melodyConf = {...baseConfigs.customFluteSynth, instrumentHintName: "hintFluteSound"};
         else if ((hint.includes('pluck') || hint.includes('bell-like') || hint.includes('kalimba')) && !(hint.includes('piano') || hint.includes('bell') || hint.includes('celesta') || hint.includes('glockenspiel') || hint.includes('music box'))) melodyConf = { ...baseConfigs.customPluckySynth, instrumentHintName: "hintPluckyMelody" };
@@ -250,14 +249,14 @@ export const getSynthConfigurations = (
         else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) melodyConf = {...baseConfigs.acousticGuitarLead, instrumentHintName: "hintAcousticGuitarLead"};
         else if (hint.includes('guitar') && (hint.includes('rock') || hint.includes('electric') || hint.includes('distort'))) melodyConf = {...baseConfigs.rockGuitarLead, instrumentHintName: "hintRockGuitarLead"};
       }
-      if (!chordsConf.isSampler) { // Only apply synth hint if chords aren't already a sampler
+      if (!chordsConf.isSampler) { 
         if (hint.includes('pad') || hint.includes('warm pad') || hint.includes('synth pad')) chordsConf = { ...baseConfigs.warmPadChords, instrumentHintName: "hintWarmPadChords" };
         else if (hint.includes('strings') || hint.includes('orchestra') || hint.includes('ensemble')) chordsConf = {...baseConfigs.stringEnsembleChords, instrumentHintName: "hintStringChords"};
         else if (hint.includes('electric piano') || hint.includes('rhodes')) chordsConf = { ...baseConfigs.electricPianoChords, volume: -18, instrumentHintName: "hintElectricPianoChords" };
         else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) chordsConf = {synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarLead.options}, volume: -16, instrumentHintName: "hintAcousticGuitarChords"};
         else if (hint.includes('guitar') && (hint.includes('rock') || hint.includes('electric') || hint.includes('distort'))) chordsConf = {...baseConfigs.rockGuitarLead, synthType: Tone.PolySynth, subType: Tone.Synth, options: {...baseConfigs.rockGuitarLead.options, envelope: {...baseConfigs.rockGuitarLead.options.envelope, attack:0.005, decay:0.5, sustain:0.01, release:0.3}}, volume: -16, instrumentHintName: "hintRockGuitarChords"};
       }
-      if (!arpConf.isSampler) { // Only apply synth hint if arp isn't already a sampler
+      if (!arpConf.isSampler) { 
         if (hint.includes('arp') || hint.includes('sequence') || hint.includes('arpeggio')) {
           if (hint.includes('pluck') || hint.includes('bell-like')) arpConf = { ...baseConfigs.customPluckySynth, volume: (baseConfigs.customPluckySynth.volume || -15) -3, instrumentHintName: "hintPluckyArpFromArpHint" };
           else if (!melodyConf.isSampler && (melodyConf.instrumentHintName?.includes('SynthLead') || melodyConf.instrumentHintName?.includes('Electronic'))) arpConf = { ...baseConfigs.synthArpElectronic, instrumentHintName: "hintSynthArpFromArpHint" };
@@ -265,7 +264,7 @@ export const getSynthConfigurations = (
         } else if (hint.includes('flute') || hint.includes('recorder')) arpConf = {...baseConfigs.customFluteSynth, volume: (baseConfigs.customFluteSynth.volume || -12) - 4, instrumentHintName: "hintFluteArp"};
         else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) arpConf = {...baseConfigs.acousticGuitarLead, volume: -18, instrumentHintName: "hintAcousticGuitarArp"};
       }
-      // Bass hints (always synth for now, so no isSampler check needed for bassConf itself)
+      
       if (hint.includes('sub bass') || (hint.includes("bass") && genreLower.includes("electronic"))) bassConf = {...baseConfigs.subBassElectronic, instrumentHintName: "hintSubBassElectronic"};
       else if (hint.includes('upright bass') || (hint.includes("bass") && genreLower.includes("jazz"))) bassConf = {...baseConfigs.jazzUprightBass, instrumentHintName: "hintJazzUprightBass"};
       else if (hint.includes('picked bass') || (hint.includes("bass") && (genreLower.includes("rock") || genreLower.includes("metal")))) bassConf = {...baseConfigs.rockBassPicked, instrumentHintName: "hintRockBassPicked"};
@@ -306,7 +305,7 @@ export const createSynth = async (
             if (typeof sampleInstrumentData.samples === 'string' && sampleInstrumentData.samples.trim() !== '') {
                 const basePitch = sampleInstrumentData.pitch || "C4";
                 let normalizedPitchKey = basePitch.toString();
-                if (typeof normalizedPitchKey === 'string' && isNaN(parseInt(normalizedPitchKey))) {
+                if (typeof normalizedPitchKey === 'string' && /[A-G]/i.test(normalizedPitchKey) && isNaN(parseInt(normalizedPitchKey))) {
                     try {
                         const midiValue = robustNoteToMidi(normalizedPitchKey);
                         normalizedPitchKey = midiToNoteName(midiValue);
@@ -318,20 +317,15 @@ export const createSynth = async (
             } else if (typeof sampleInstrumentData.samples === 'object' && Object.keys(sampleInstrumentData.samples).length > 0) {
                 urlsForSampler = {};
                 for (const [key, url] of Object.entries(sampleInstrumentData.samples as { [note: string]: string })) {
-                    let normalizedKey = key;
-                    // Check if the key looks like a note name (contains A-G) and is not purely numeric
+                    let normalizedKey = key; 
                     if (typeof key === 'string' && /[A-G]/i.test(key) && isNaN(parseInt(key))) {
                         try {
                             const midiValue = robustNoteToMidi(key);
-                            normalizedKey = midiToNoteName(midiValue); // e.g., "Gs1" -> "G#1"
+                            normalizedKey = midiToNoteName(midiValue); 
                         } catch (e) {
-                            // This catch should ideally not be hit if robustNoteToMidi is sound for note-like strings
                             console.warn(`${logPrefix} Normalization of pitch-like key "${key}" for sampler ${samplerId} failed. Using original key. Details: ${(e as Error).message}`);
-                            // normalizedKey remains original `key`
                         }
                     }
-                    // Else, key is numeric (e.g., "60") or an arbitrary string (e.g., "kick"). Use as is.
-                    // Tone.Sampler handles numeric keys and arbitrary string keys for non-pitched samples.
                     urlsForSampler[normalizedKey] = url;
                 }
             }
@@ -390,7 +384,6 @@ export const createSynth = async (
             ? config.subType as typeof Tone.Synth
             : Tone.Synth;
         instrument = new Tone.PolySynth({ synth: subSynthConstructor, options: polyOptions.options, context: currentContext });
-        // Apply top-level options like envelope directly if not part of polyOptions.options
         if(polyOptions.envelope) instrument.set({envelope: polyOptions.envelope});
 
     } else if (typeof config.synthType === 'function' && Tone[config.synthType.name as keyof typeof Tone]) {
@@ -470,4 +463,3 @@ export const createSynth = async (
     }
     return { instrument, outputNodeToConnect: currentOutputNode, filterEnv, availableNotes: undefined };
 };
-

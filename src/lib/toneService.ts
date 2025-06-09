@@ -41,13 +41,13 @@ function weightedRandom(items: (string | number)[], weights: number[]): string |
     return validItems.length > 0 ? validItems[validItems.length - 1] : (items[items.length - 1] || "4n");
 }
 
-function applyHumanization(time: number, intensity: number = 0.008): number { // Slightly reduced default intensity
+function applyHumanization(time: number, intensity: number = 0.008): number { 
     return time + (Math.random() * 2 - 1) * intensity;
 }
 
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  const logPrefix = "[WAV_GEN_V0.9.5_MasterVol]";
+  const logPrefix = "[WAV_GEN_V0.9.6_SamplerChecks]";
   console.log(`${logPrefix} Starting synthesis for: ${params.generatedIdea ? params.generatedIdea.substring(0, 30) : "Untitled"}...`);
 
   const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
@@ -464,7 +464,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   console.log(`${logPrefix} Generated ${arpeggioNotesToSchedule.length} arpeggio notes.`);
 
   const drumEventsToSchedule: { synth: 'kick' | 'snare' | 'hiHat' | 'tambourine', time: number, duration: string, velocity: number, pitch?: string | number }[] = [];
-  const numTotalMeasures = numChordCycles * progressionDegreesInput.length; // Total measures for the body
+  const numTotalMeasures = numChordCycles * progressionDegreesInput.length; 
   const humanizeDrumsIntensity = 0.004;
   let lastDrumTimes = { kick: -TIME_EPSILON, snare: -TIME_EPSILON, hiHat: -TIME_EPSILON, tambourine: -TIME_EPSILON };
 
@@ -634,7 +634,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     const audioBuffer = await Tone.Offline(async (offlineContext: Tone.OfflineContext) => {
       console.log(`${logPrefix}_OFFLINE] Inside Tone.Offline. SR: ${offlineContext.sampleRate}, Target BPM: ${currentBpm}`);
       offlineContext.transport.bpm.value = currentBpm;
-      offlineContext.destination.volume.value = -6; // Set master offline volume
+      offlineContext.destination.volume.value = -6; 
       console.log(`${logPrefix}_OFFLINE] Master destination volume set to -6dB.`);
 
       if (!isKidsMode && (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.4))) {
@@ -706,10 +706,10 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
           
           const noteToneBuffer = samplerInstance._buffers?.get(finalNoteToPlayForSampler);
           if (!noteToneBuffer || !noteToneBuffer.loaded) {
-             console.warn(`${logPrefix}_OFFLINE_WARN] Melody sampler's buffer for note ${finalNoteToPlayForSampler} (original: ${ev.note}) is not loaded. Skipping. Buffer exists: ${!!noteToneBuffer}, Buffer loaded: ${noteToneBuffer?.loaded}`);
+             console.warn(`${logPrefix}_OFFLINE_WARN] Melody sampler's buffer for note ${finalNoteToPlayForSampler} (original: ${ev.note}) is not loaded or buffer object missing. Skipping. Buffer exists: ${!!noteToneBuffer}, Buffer loaded: ${noteToneBuffer?.loaded}`);
              return; 
           }
-          noteToPlay = finalNoteToPlayForSampler;
+          noteToPlay = finalNoteToPlayForSampler; 
         }
 
 
@@ -761,7 +761,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
               const noteToneBuffer = samplerInstance._buffers?.get(finalNoteToPlayForSampler);
               if (!noteToneBuffer || !noteToneBuffer.loaded) {
-                console.warn(`${logPrefix}_OFFLINE_WARN] Arpeggio sampler's buffer for note ${finalNoteToPlayForSampler} (original: ${ev.note}) is not loaded. Skipping. Buffer exists: ${!!noteToneBuffer}, Buffer loaded: ${noteToneBuffer?.loaded}`);
+                console.warn(`${logPrefix}_OFFLINE_WARN] Arpeggio sampler's buffer for note ${finalNoteToPlayForSampler} (original: ${ev.note}) is not loaded or buffer object missing. Skipping. Buffer exists: ${!!noteToneBuffer}, Buffer loaded: ${noteToneBuffer?.loaded}`);
                 return; 
               }
               noteToPlay = finalNoteToPlayForSampler;
@@ -831,4 +831,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-

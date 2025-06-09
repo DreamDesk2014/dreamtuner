@@ -28,7 +28,7 @@ body {
     --input: 0 0% 100%; /* White for input background */
     --ring: 199 77% 52%; /* Existing Light Blue for rings */
 
-    --chart-1: 199 77% 45%; /* Darker versions for light theme */
+    --chart-1: 199 77% 45%;
     --chart-2: 199 77% 38%;
     --chart-3: 220 25% 45%;
     --chart-4: 300 50% 45%;
@@ -36,53 +36,51 @@ body {
 
     --radius: 0.5rem;
 
-    /* Sidebar variables for Light Theme */
-    --sidebar-background: 0 0% 96%; /* Off-white, slightly different from main bg */
-    --sidebar-foreground: 220 13% 20%; /* Dark text */
-    --sidebar-primary: 199 77% 48%; /* Slightly darker primary for sidebar elements */
-    --sidebar-primary-foreground: 0 0% 100%; /* White text on sidebar primary */
+    --sidebar-background: 0 0% 96%; 
+    --sidebar-foreground: 220 13% 20%; 
+    --sidebar-primary: 199 77% 48%; 
+    --sidebar-primary-foreground: 0 0% 100%; 
     --sidebar-accent: 199 77% 48%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 210 30% 85%; /* Light gray border for sidebar */
+    --sidebar-border: 210 30% 85%; 
     --sidebar-ring: 199 77% 52%;
   }
 
   .dark {
-    --background: 0 0% 7%; /* Very Dark Gray #121212 */
-    --foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --card: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
-    --card-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --popover: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
-    --popover-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --primary: 199 77% 52%; /* New Light Blue #29abe2 */
-    --primary-foreground: 0 0% 7%; /* Very Dark Gray for contrast */
-    --secondary: 215 20% 26%; /* Nebula Gray Light #374151 */
-    --secondary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --muted: 215 20% 26%; /* Nebula Gray Light #374151 */
-    --muted-foreground: 220 10% 70%; /* Lighter Gray #aab0b8 */
-    --accent: 199 77% 52%; /* New Light Blue #29abe2 */
-    --accent-foreground: 0 0% 7%; /* Very Dark Gray for contrast */
-    --destructive: 0 70% 50%; /* A vibrant red for dark theme */
+    --background: 0 0% 7%; /* ResonanceAI: Very Dark Gray #121212 */
+    --foreground: 220 13% 95%; /* ResonanceAI: Galaxy White #f3f4f6 (existing, good) */
+    --card: 215 28% 17%; /* Nebula Gray Dark #1f2937 (existing, good for contrast) */
+    --card-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 (existing) */
+    --popover: 215 28% 17%; /* Nebula Gray Dark #1f2937 (existing) */
+    --popover-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 (existing) */
+    --primary: 270 100% 26%; /* ResonanceAI: Deep indigo (#4B0082) */
+    --primary-foreground: 220 13% 95%; /* ResonanceAI: Galaxy White for contrast on deep indigo */
+    --secondary: 215 20% 26%; /* Nebula Gray Light #374151 (existing) */
+    --secondary-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 (existing) */
+    --muted: 215 20% 26%; /* Nebula Gray Light #374151 (existing) */
+    --muted-foreground: 220 10% 70%; /* Lighter Gray #aab0b8 (existing) */
+    --accent: 271 76% 53%; /* ResonanceAI: Electric purple (#8A2BE2) */
+    --accent-foreground: 220 13% 95%; /* ResonanceAI: Galaxy White for contrast on electric purple */
+    --destructive: 0 70% 50%; 
     --destructive-foreground: 0 0% 98%;
-    --border: 215 20% 26%; /* Nebula Gray Light #374151 */
-    --input: 215 20% 26%; /* Nebula Gray Light #374151 */
-    --ring: 199 77% 52%; /* New Light Blue #29abe2 */
+    --border: 215 20% 26%; /* Nebula Gray Light #374151 (existing) */
+    --input: 215 20% 26%; /* Nebula Gray Light #374151 (existing) */
+    --ring: 271 76% 53%; /* ResonanceAI: Electric purple for rings */
     
-    --chart-1: 199 77% 62%; /* Lighter version of new base */
-    --chart-2: 199 77% 72%; /* Even lighter version of new base */
-    --chart-3: 220 25% 60%; /* A lighter blue/gray */
-    --chart-4: 300 50% 60%; /* A magenta/pinkish hue */
-    --chart-5: 199 70% 62%; /* Lighter, slightly less saturated new base */
+    --chart-1: 270 80% 55%; /* Adjusted for new primary */
+    --chart-2: 271 70% 65%; /* Adjusted for new accent */
+    --chart-3: 220 25% 60%; 
+    --chart-4: 300 50% 60%; 
+    --chart-5: 270 70% 50%;
 
-    /* Sidebar variables for Dark Theme (same as before) */
-    --sidebar-background: 215 28% 17%; /* Nebula Gray Dark #1f2937 */
-    --sidebar-foreground: 220 13% 95%; /* Galaxy White #f3f4f6 */
-    --sidebar-primary: 199 77% 52%; /* New Light Blue */
-    --sidebar-primary-foreground: 0 0% 7%; /* Very Dark Gray */
-    --sidebar-accent: 199 77% 52%; /* New Light Blue */
-    --sidebar-accent-foreground: 0 0% 7%; /* Very Dark Gray */
-    --sidebar-border: 215 20% 26%; /* Nebula Gray Light #374151 */
-    --sidebar-ring: 199 77% 52%; /* New Light Blue */
+    --sidebar-background: 215 28% 17%; 
+    --sidebar-foreground: 220 13% 95%; 
+    --sidebar-primary: 270 100% 26%; /* ResonanceAI: Deep indigo */
+    --sidebar-primary-foreground: 220 13% 95%; /* Galaxy White */
+    --sidebar-accent: 271 76% 53%; /* ResonanceAI: Electric purple */
+    --sidebar-accent-foreground: 220 13% 95%; /* Galaxy White */
+    --sidebar-border: 215 20% 26%; 
+    --sidebar-ring: 271 76% 53%; /* ResonanceAI: Electric purple */
   }
 }
 
@@ -102,12 +100,11 @@ body {
   }
 }
 
-/* Custom animations for DreamTuner */
+/* Custom animations for ResonanceAI */
 .animate-pulse-subtle {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Ensure this is applied to components that need it. Already in Tailwind config for JIT. */
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-out forwards;
 }

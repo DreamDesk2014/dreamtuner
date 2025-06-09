@@ -25,7 +25,7 @@ import { Download, Share2, Disc3, SlidersHorizontal, Library, Users, Swords } fr
 import { dataURLtoFile } from '@/lib/utils';
 import { logEvent, getSessionId } from '@/lib/firestoreService';
 
-const LOCAL_STORAGE_KEY = 'dreamTunerLastSession';
+const LOCAL_STORAGE_KEY = 'resonanceAiLastSession'; // Updated key for ResonanceAI
 
 interface StoredSessionData {
   musicParams: MusicParameters | null;
@@ -36,7 +36,7 @@ interface StoredSessionData {
   timestamp: number;
 }
 
-export default function DreamTunerPage() {
+export default function ResonanceAIPage() {
   const [musicParams, setMusicParams] = useState<MusicParameters | null>(null);
   const [isLoadingMusic, setIsLoadingMusic] = useState<boolean>(false);
   const [isRegeneratingIdea, setIsRegeneratingIdea] = useState<boolean>(false);
@@ -62,7 +62,7 @@ export default function DreamTunerPage() {
     setIsClientMounted(true);
     logEvent('user_interactions', { 
       eventName: 'app_loaded', 
-      eventDetails: { userAgent: navigator.userAgent, initialMode: currentMode },
+      eventDetails: { userAgent: navigator.userAgent, initialMode: currentMode, appName: "ResonanceAI" },
       sessionId: getSessionId() 
     }).catch(console.error);
 
@@ -185,7 +185,7 @@ export default function DreamTunerPage() {
     }).catch(console.error);
 
     try {
-      toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas..." });
+      toast({ title: "ResonanceAI Magic ✨", description: "Generating musical ideas..." });
       const musicResult = await generateMusicParametersAction(input);
       if ('error' in musicResult) {
         setError(musicResult.error);
@@ -308,7 +308,7 @@ export default function DreamTunerPage() {
 
     const musicStartTime = Date.now();
     try {
-      toast({ title: "DreamTuner Magic ✨", description: "Generating musical ideas..." });
+      toast({ title: "ResonanceAI Magic ✨", description: "Generating musical ideas..." });
       const musicResult = await generateMusicParametersAction(musicInput);
       if ('error' in musicResult) {
         musicGenError = musicResult.error;
@@ -511,7 +511,7 @@ export default function DreamTunerPage() {
     if (standardModeAiArtUrl) {
       const link = document.createElement('a');
       link.href = standardModeAiArtUrl;
-      link.download = 'dreamtuner_standard_art.png';
+      link.download = 'resonanceai_standard_art.png';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -541,7 +541,7 @@ export default function DreamTunerPage() {
 
     setIsSharingStandardArt(true);
     const filesToShare: File[] = [];
-    let shareText = "Check out what I made with DreamTuner!";
+    let shareText = "Check out what I made with ResonanceAI!";
     
     if (musicParams?.generatedIdea) {
         shareText += `\nMusical Idea: "${musicParams.generatedIdea}"`;
@@ -554,13 +554,13 @@ export default function DreamTunerPage() {
 
     try {
         if (standardModeAiArtUrl) {
-            const artFile = dataURLtoFile(standardModeAiArtUrl, "dreamtuner_standard_art.png");
+            const artFile = dataURLtoFile(standardModeAiArtUrl, "resonanceai_standard_art.png");
             if (artFile) filesToShare.push(artFile);
             else console.warn("Could not convert art data URL to file for sharing.");
         }
         
         const sharePayload: ShareData = {
-            title: "My DreamTuner Creation!",
+            title: "My ResonanceAI Creation!",
             text: shareText,
         };
         if (filesToShare.length > 0) {
@@ -595,7 +595,7 @@ export default function DreamTunerPage() {
   };
 
 
-  let mainSubtitle = "Tune Anything into Music!";
+  let mainSubtitle = "Translates your concepts into musical vibrations.";
   if (currentMode === 'kids') {
     mainSubtitle = "Draw, make sounds, add voice hints! Hear music & see AI art!";
   } else if (currentMode === 'comingSoon') {
@@ -605,7 +605,7 @@ export default function DreamTunerPage() {
   const isLoadingOverall = isLoadingMusic || isRenderingStandardModeAiArt || isRenderingAiKidsArt;
 
   return (
-    <div className="min-h-screen bg-gradient-to-tr from-gradient-blue-dark to-gradient-blue-light/65 text-galaxy-white flex flex-col items-center p-4 sm:p-8 font-body">
+    <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4 sm:p-8 font-body">
       <NavigationBar />
       <header className="w-full max-w-3xl mb-8 text-center">
         <div className="flex items-center justify-center space-x-2 sm:space-x-3 mb-2">
@@ -613,28 +613,28 @@ export default function DreamTunerPage() {
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight font-headline">
             {currentMode === 'kids' ? (
               <>
-                <span style={{ color: 'rgb(41, 171, 226)' }}>Dream</span>
-                <span style={{ color: 'rgb(41, 171, 226)' }}>Tuner</span>
-                <span style={{ color: 'hsl(var(--accent))' }}> Kids!</span>
+                <span style={{ color: 'hsl(var(--primary))' }}>Resonance</span>
+                <span style={{ color: 'hsl(var(--accent))' }}>AI</span>
+                <span className="text-primary"> Kids!</span>
               </>
             ) : (
               <>
-                <span style={{ color: 'rgb(41, 171, 226)' }}>Dream</span>
-                <span style={{ color: 'rgb(41, 171, 226)' }}>Tuner</span>
+                <span style={{ color: 'hsl(var(--primary))' }}>Resonance</span>
+                <span style={{ color: 'hsl(var(--accent))' }}>AI</span>
               </>
             )}
           </h1>
-          <Badge variant="outline" className="border-amber-500 text-amber-400 text-[10px] sm:text-xs font-semibold px-1 py-px sm:px-1.5 sm:py-0.5">BETA</Badge>
+          <Badge variant="outline" className="border-accent text-accent text-[10px] sm:text-xs font-semibold px-1 py-px sm:px-1.5 sm:py-0.5">BETA</Badge>
         </div>
-        <p className="text-md sm:text-lg text-slate-300">{mainSubtitle}</p>
+        <p className="text-md sm:text-lg text-muted-foreground">{mainSubtitle}</p>
       </header>
 
       <main className="w-full max-w-3xl">
         <Tabs value={currentMode} onValueChange={(value) => handleModeChange(value as 'standard' | 'kids' | 'comingSoon')} className="w-full mb-8">
-          <TabsList className="grid w-full grid-cols-3 bg-nebula-gray/80 border border-slate-700">
-            <TabsTrigger value="standard" className="data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">Standard Mode</TabsTrigger>
-            <TabsTrigger value="kids" className="data-[state=active]:bg-accent data-[state=active]:text-accent-foreground">Kids Mode</TabsTrigger>
-            <TabsTrigger value="comingSoon" className="data-[state=active]:bg-slate-600 data-[state=active]:text-primary-foreground">Coming Soon!</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 bg-card border border-border">
+            <TabsTrigger value="standard" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Standard Mode</TabsTrigger>
+            <TabsTrigger value="kids" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Kids Mode</TabsTrigger>
+            <TabsTrigger value="comingSoon" className="data-[state=active]:bg-muted data-[state=active]:text-muted-foreground">Coming Soon!</TabsTrigger>
           </TabsList>
 
           <TabsContent value="standard" className="mt-6">
@@ -662,105 +662,106 @@ export default function DreamTunerPage() {
           </TabsContent>
 
           <TabsContent value="comingSoon" className="mt-6 space-y-8">
-            <Card className="bg-nebula-gray shadow-xl rounded-xl border-slate-700">
+            <Card className="bg-card shadow-xl rounded-xl border-border">
               <CardHeader className="text-center">
-                <CardTitle className="text-2xl font-semibold text-accent mb-2 font-headline">
+                <CardTitle className="text-2xl font-semibold text-primary mb-2 font-headline">
                   <Swords className="inline-block w-7 h-7 mr-2 -mt-1" />
                   Battle Of The AIs! - Who's the Better Musician?
                 </CardTitle>
-                <CardDescription className="text-slate-300">
-                  Witness AI models go head-to-head in DreamTuner, composing music based on the same prompts. You be the judge!
+                <CardDescription className="text-muted-foreground">
+                  Witness AI models go head-to-head in ResonanceAI, composing music based on the same prompts. You be the judge!
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-6 text-center space-y-6">
-                <div className="flex flex-col items-center space-y-4 p-6 bg-nebula-gray/50 rounded-lg border border-dashed border-slate-600">
+                <div className="flex flex-col items-center space-y-4 p-6 bg-background/50 rounded-lg border border-dashed border-border">
                    <Image
                       src="https://placehold.co/300x200.png"
                       alt="AI Battle Concept Art"
                       data-ai-hint="AI robots music"
                       width={300}
                       height={200}
-                      className="rounded-md border border-slate-600 shadow-md object-cover mx-auto"
+                      className="rounded-md border border-border shadow-md object-cover mx-auto"
                     />
-                  <h3 className="text-xl font-semibold text-slate-400">Feature Coming Soon!</h3>
-                  <p className="text-sm text-slate-400 max-w-md">
+                  <h3 className="text-xl font-semibold text-muted-foreground">Feature Coming Soon!</h3>
+                  <p className="text-sm text-muted-foreground max-w-md">
                     Prepare for a musical showdown! Different AI models will:
                   </p>
-                  <ul className="text-xs text-slate-400 list-disc list-inside text-left max-w-sm space-y-1">
+                  <ul className="text-xs text-muted-foreground list-disc list-inside text-left max-w-sm space-y-1">
                     <li>Receive identical creative briefs (text, image, or kid's input).</li>
                     <li>Generate unique musical parameters and ideas.</li>
                     <li>Compete for your vote on creativity, mood-matching, and overall appeal.</li>
                     <li>Learn which AI's style resonates most with different genres and inputs!</li>
                   </ul>
-                  <p className="text-xs text-slate-500 mt-2">The ultimate AI jam session awaits!</p>
+                  <p className="text-xs text-muted-foreground/70 mt-2">The ultimate AI jam session awaits!</p>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="bg-nebula-gray shadow-xl rounded-xl border-slate-700">
+            <Card className="bg-card shadow-xl rounded-xl border-border">
               <CardHeader className="text-center">
-                <CardTitle className="text-xl font-semibold text-accent mb-1 font-headline">
+                <CardTitle className="text-xl font-semibold text-primary mb-1 font-headline">
                   <SlidersHorizontal className="inline-block w-6 h-6 mr-2 -mt-1" />
                   AI-Powered DJ Console (Compact)
                 </CardTitle>
-                <CardDescription className="text-sm text-slate-300">
+                <CardDescription className="text-sm text-muted-foreground">
                   Mix and experiment with your AI-generated compositions.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4 text-center space-y-4">
-                <div className="flex flex-col items-center space-y-3 p-4 bg-nebula-gray/50 rounded-lg border border-dashed border-slate-600">
-                  <Disc3 className="w-16 h-16 text-slate-500 animate-spin [animation-duration:5s]" />
-                  <h3 className="text-lg font-semibold text-slate-400">Feature Coming Soon!</h3>
-                  <p className="text-xs text-slate-400 max-w-md">
+                <div className="flex flex-col items-center space-y-3 p-4 bg-background/50 rounded-lg border border-dashed border-border">
+                  <Disc3 className="w-16 h-16 text-muted-foreground animate-spin [animation-duration:5s]" />
+                  <h3 className="text-lg font-semibold text-muted-foreground">Feature Coming Soon!</h3>
+                  <p className="text-xs text-muted-foreground max-w-md">
                     Load generated MIDI stems. Apply AI effects, tempo/pitch shifts, and explore AI beat-matching.
                   </p>
-                  <p className="text-xs text-slate-500 mt-1">Stay tuned for the drop!</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">Stay tuned for the drop!</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-nebula-gray shadow-xl rounded-xl border-slate-700">
+            <Card className="bg-card shadow-xl rounded-xl border-border">
               <CardHeader className="text-center">
-                <CardTitle className="text-2xl font-semibold text-accent mb-2 font-headline">
+                <CardTitle className="text-2xl font-semibold text-primary mb-2 font-headline">
                   <Library className="inline-block w-7 h-7 mr-2 -mt-1" />
                   Your Personal Music Library
                 </CardTitle>
-                <CardDescription className="text-slate-300">
-                  Save, organize, and revisit your unique DreamTuner creations.
+                <CardDescription className="text-muted-foreground">
+                  Save, organize, and revisit your unique ResonanceAI creations.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-6 text-center space-y-6">
-                <div className="flex flex-col items-center space-y-4 p-6 bg-nebula-gray/50 rounded-lg border border-dashed border-slate-600">
-                  <Users className="w-24 h-24 text-slate-500" />
-                  <h3 className="text-xl font-semibold text-slate-400">Feature Coming Soon!</h3>
-                  <p className="text-sm text-slate-400 max-w-md">
+                <div className="flex flex-col items-center space-y-4 p-6 bg-background/50 rounded-lg border border-dashed border-border">
+                  <Users className="w-24 h-24 text-muted-foreground" />
+                  <h3 className="text-xl font-semibold text-muted-foreground">Feature Coming Soon!</h3>
+                  <p className="text-sm text-muted-foreground max-w-md">
                     Build your collection of AI-generated musical ideas and artworks. Features will include:
                   </p>
-                  <ul className="text-xs text-slate-400 list-disc list-inside text-left max-w-sm space-y-1">
+                  <ul className="text-xs text-muted-foreground list-disc list-inside text-left max-w-sm space-y-1">
                     <li>Saving your favorite generated music parameters and AI art.</li>
                     <li>Customizing album/track titles and descriptions.</li>
                     <li>Generating or uploading custom cover art for your creations.</li>
                     <li>Organizing creations into playlists or albums.</li>
                     <li>Easy sharing of your saved items.</li>
                   </ul>
-                  <p className="text-xs text-slate-500 mt-2">Curate your dreams!</p>
+                  <p className="text-xs text-muted-foreground/70 mt-2">Curate your resonant frequencies!</p>
                 </div>
-                <div className="mt-4 p-4 bg-slate-800/30 rounded-md border border-slate-700">
-                    <h4 className="text-lg font-medium text-accent mb-3">Example Album: "Neon Dreams Vol. 1"</h4>
+                <div className="mt-4 p-4 bg-muted/30 rounded-md border border-border">
+                    <h4 className="text-lg font-medium text-primary mb-3">Example Album: "Indigo Echoes Vol. 1"</h4>
                     <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4">
                         <Image
-                            src="/logo.png"
-                            alt="DreamTuner Logo as Album Art"
+                            src="https://placehold.co/150x150.png"
+                            alt="ResonanceAI Placeholder Album Art"
+                            data-ai-hint="abstract album cover"
                             width={150}
                             height={150}
-                            className="rounded-md border border-slate-600 shadow-md object-cover mx-auto sm:mx-0"
+                            className="rounded-md border border-border shadow-md object-cover mx-auto sm:mx-0"
                         />
                         <div className="space-y-1 text-sm flex-grow">
-                            <p><strong className="text-slate-300">Album:</strong> Neon Dreams Vol. 1</p>
-                            <p><strong className="text-slate-300">Artist:</strong> DreamTuner User</p>
-                            <p><strong className="text-slate-300">Tracks:</strong> 5 (Saved Creations)</p>
-                            <p className="text-slate-400 italic">"A collection of vibrant soundscapes from late-night musings."</p>
-                            <Button variant="outline" size="sm" className="mt-2 border-slate-500 text-slate-300" disabled>View Album (Placeholder)</Button>
+                            <p><strong className="text-foreground">Album:</strong> Indigo Echoes Vol. 1</p>
+                            <p><strong className="text-foreground">Artist:</strong> ResonanceAI User</p>
+                            <p><strong className="text-foreground">Tracks:</strong> 5 (Saved Creations)</p>
+                            <p className="text-muted-foreground italic">"A collection of vibrant soundscapes from deep space."</p>
+                            <Button variant="outline" size="sm" className="mt-2 border-border text-foreground" disabled>View Album (Placeholder)</Button>
                         </div>
                     </div>
                 </div>
@@ -773,7 +774,7 @@ export default function DreamTunerPage() {
           <div className="mt-10 text-center">
             <LoadingSpinner />
             <p className="mt-4 text-lg text-accent animate-pulse-subtle">
-              {currentMode === 'standard' ? 'DreamTuning your input... (Art will follow)' : 'DreamTuning music for your creation... (AI art will follow!)'}
+              {currentMode === 'standard' ? 'Resonating your input... (Art will follow)' : 'Resonating music for your creation... (AI art will follow!)'}
             </p>
           </div>
         )}
@@ -794,14 +795,14 @@ export default function DreamTunerPage() {
         )}
 
         {currentMode !== 'comingSoon' && showWelcome && !isLoadingOverall && !error && !musicParams && !aiKidsArtUrl && !standardModeAiArtUrl && (
-          <Card className="mt-10 text-center p-6 bg-nebula-gray/80 rounded-lg border-slate-700">
+          <Card className="mt-10 text-center p-6 bg-card rounded-lg border-border">
             <CardHeader>
-              <CardTitle className="text-2xl font-semibold text-accent mb-3 font-headline">Welcome to DreamTuner</CardTitle>
+              <CardTitle className="text-2xl font-semibold text-primary mb-3 font-headline">Welcome to ResonanceAI</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-slate-300">
+              <p className="text-muted-foreground">
                 {currentMode === 'standard'
-                  ? "Enter text (or speak!), upload an image, or specify a video/audio concept. Select a genre, and DreamTuner will unveil its musical soul and an AI artistic impression."
+                  ? "Enter text (or speak!), upload an image, or specify a video/audio concept. Select a genre, and ResonanceAI will unveil its musical soul and an AI artistic impression."
                   : "Sketch on the canvas (hear notes as you pick colors!), record a voice hint, or do both! Select a genre if you like, and click 'Tune My Creation!' to see and hear the magic!"
                 }
               </p>
@@ -810,7 +811,7 @@ export default function DreamTunerPage() {
         )}
 
         {currentMode !== 'comingSoon' && musicParams && !isLoadingMusic && (
-          <div className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
+          <div className="mt-10 bg-card shadow-2xl rounded-xl border-border">
             <MusicOutputDisplay
               params={musicParams}
               onRegenerateIdea={handleRegenerateIdea}
@@ -826,7 +827,7 @@ export default function DreamTunerPage() {
           </div>
         )}
         {currentMode === 'standard' && standardModeAiArtUrl && !isRenderingStandardModeAiArt && (
-          <Card className="mt-6 bg-nebula-gray/70 border-slate-600">
+          <Card className="mt-6 bg-card border-border">
             <CardHeader>
               <CardTitle className="text-center text-xl font-semibold text-accent">AI's Artistic Rendition</CardTitle>
             </CardHeader>
@@ -837,7 +838,7 @@ export default function DreamTunerPage() {
                 data-ai-hint="abstract artistic"
                 width={500}
                 height={300}
-                className="rounded-md max-h-80 object-contain border border-slate-500 shadow-lg"
+                className="rounded-md max-h-80 object-contain border border-border shadow-lg"
                 unoptimized
               />
                <div className="flex space-x-2">

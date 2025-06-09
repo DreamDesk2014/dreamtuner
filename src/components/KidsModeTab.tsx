@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { SparklesIcon } from '@/components/icons/SparklesIcon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea"; // For 6 Senses - Removed as feature is reverted
 import { MUSIC_GENRES } from '@/lib/constants';
 import useSpeechRecognition from '@/hooks/useSpeechRecognition';
 import { Mic, MicOff, Image as LucideImage, Download, Share2 } from 'lucide-react';
@@ -19,7 +18,6 @@ import { ErrorMessage } from '@/components/ErrorMessage';
 import { generateMidiFile } from '@/lib/midiService';
 import { dataURLtoFile, cn } from '@/lib/utils';
 import { logEvent, getSessionId } from '@/lib/firestoreService'; 
-// import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"; // Removed
 
 interface KidsModeTabProps {
   onTuneCreation: (
@@ -70,10 +68,6 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
   const [colorsUsedThisSession, setColorsUsedThisSession] = useState<Set<string>>(new Set());
   const [wasClearCanvasUsedThisSession, setWasClearCanvasUsedThisSession] = useState<boolean>(false);
 
-  // State for 6 Senses removed
-  // const [sightDescKids, setSightDescKids] = useState('');
-  // ... and so on for other senses
-
   const resetDrawingToolSummary = () => {
     setColorsUsedThisSession(new Set());
     setWasClearCanvasUsedThisSession(false);
@@ -91,8 +85,6 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
     setLocalError(null);
     setShareKidsError(null);
     resetDrawingToolSummary(); 
-    // Reset 6 senses state
-    // setSightDescKids(''); ... etc.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
@@ -153,7 +145,6 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
             mode: 'kids',
             voiceDescription: hasVoice ? voiceTranscript : undefined,
             drawingSoundSequence: recordedSoundSequence,
-            // 6 Senses fields removed
         };
         renderArtInput = { 
             drawingDataUri: drawingDataURL, 
@@ -171,7 +162,6 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
             mode: 'kids',
             voiceDescription: voiceTranscript,
             drawingSoundSequence: recordedSoundSequence, 
-            // 6 Senses fields removed
         };
         renderArtInput = { 
             originalVoiceHint: voiceTranscript,
@@ -214,7 +204,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
     if (aiKidsArtUrlProp) {
       const link = document.createElement('a');
       link.href = aiKidsArtUrlProp;
-      link.download = 'dreamtuner_ai_rendition.png';
+      link.download = 'resonanceai_ai_rendition.png';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -253,7 +243,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
 
     setIsSharingKidsCreation(true);
     const filesToShareAttempt: (File | null)[] = [];
-    let shareText = "Check out what I made with DreamTuner Kids!";
+    let shareText = "Check out what I made with ResonanceAI Kids!";
     
     logEvent('user_interactions', { 
       eventName: 'kids_share_initiated', 
@@ -263,7 +253,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
 
     try {
       if (aiKidsArtUrlProp) {
-        const artFile = dataURLtoFile(aiKidsArtUrlProp, "dreamtuner_ai_art.png");
+        const artFile = dataURLtoFile(aiKidsArtUrlProp, "resonanceai_ai_art.png");
         filesToShareAttempt.push(artFile);
         if (!artFile) console.warn("Could not convert AI art to a shareable file.");
       }
@@ -271,7 +261,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
       if (currentMusicParamsFromPage) { 
         const midiDataUri = generateMidiFile(currentMusicParamsFromPage); 
         if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
-          let baseFileName = 'dreamtuner_kids_music';
+          let baseFileName = 'resonanceai_kids_music';
           if(currentMusicParamsFromPage.generatedIdea) baseFileName = currentMusicParamsFromPage.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,25);
           const midiFile = dataURLtoFile(midiDataUri, `${baseFileName}.mid`);
           filesToShareAttempt.push(midiFile);
@@ -289,7 +279,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
       }
 
       const shareData: ShareData = {
-        title: "My DreamTuner Kids Creation!",
+        title: "My ResonanceAI Kids Creation!",
         text: shareText,
         files: validFilesToShare,
       };
@@ -348,10 +338,10 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
 
 
   return (
-    <Card className="bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
+    <Card className="bg-card shadow-2xl rounded-xl border-border">
       <CardHeader>
-        <CardTitle className="text-center text-2xl font-semibold text-stardust-blue">Draw Your Music!</CardTitle>
-        <CardDescription className="text-center text-sm text-slate-300">Sketch & hear notes for each color, add a voice hint, or both! Then see what music it makes and how AI sees your creation!</CardDescription>
+        <CardTitle className="text-center text-2xl font-semibold text-primary">Draw Your Music!</CardTitle>
+        <CardDescription className="text-center text-sm text-muted-foreground">Sketch & hear notes for each color, add a voice hint, or both! Then see what music it makes and how AI sees your creation!</CardDescription>
       </CardHeader>
       <CardContent className="p-6 sm:p-10 space-y-6">
         <DrawingCanvas 
@@ -365,7 +355,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
         />
         
         <div className="mt-4 space-y-2">
-          <Label className="block text-md font-medium text-stardust-blue">
+          <Label className="block text-md font-medium text-foreground">
             Add a Voice Hint (Optional):
           </Label>
           {isClientMounted && hasRecognitionSupportKids ? (
@@ -374,7 +364,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
               variant="outline"
               onClick={handleKidsVoiceInputToggle}
               disabled={isLoadingMusicProp || isRenderingArtProp} 
-              className="w-full text-sm border-slate-600 hover:bg-slate-700 flex items-center justify-center"
+              className="w-full text-sm border-border hover:bg-muted flex items-center justify-center"
             >
               {isListeningKids ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
               {isListeningKids ? 'Stop Listening & Save Hint' : 'Record Voice Hint'}
@@ -383,36 +373,34 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
               <p className="text-xs text-muted-foreground text-center">Voice input not supported in this browser.</p>
           ) : null }
           {isListeningKids && (
-            <p className="text-sm text-slate-300 text-center p-2 bg-slate-700/50 rounded-md">
-              Listening: <em className="text-galaxy-white">{kidsInterimTranscript}</em>
+            <p className="text-sm text-muted-foreground text-center p-2 bg-muted/50 rounded-md">
+              Listening: <em className="text-foreground">{kidsInterimTranscript}</em>
             </p>
           )}
           {(!isListeningKids && kidsVoiceTranscript) || (isListeningKids && kidsVoiceTranscript) ? (
-              <p className="text-sm text-slate-300 text-center p-2 bg-slate-700/50 rounded-md">
-              Your hint: <em className="text-galaxy-white">{kidsVoiceTranscript} {isListeningKids && kidsInterimTranscript}</em>
+              <p className="text-sm text-muted-foreground text-center p-2 bg-muted/50 rounded-md">
+              Your hint: <em className="text-foreground">{kidsVoiceTranscript} {isListeningKids && kidsInterimTranscript}</em>
             </p>
           ) : null}
-          {speechErrorKids && <p className="mt-1 text-xs text-red-400 text-center">{speechErrorKids}</p>}
+          {speechErrorKids && <p className="mt-1 text-xs text-destructive text-center">{speechErrorKids}</p>}
         </div>
 
-        {/* 6 Senses UI Accordion Removed */}
-
         <div className="mt-4">
-          <Label htmlFor={genreSelectId + "-kids"} className="block text-lg font-medium text-stardust-blue mb-3">
+          <Label htmlFor={genreSelectId + "-kids"} className="block text-lg font-medium text-foreground mb-3">
             What kind of music style? (Optional):
           </Label>
           <Select value={selectedGenre} onValueChange={onGenreChange} disabled={isLoadingMusicProp || isListeningKids || isRenderingArtProp}>
-            <SelectTrigger id={genreSelectId + "-kids"} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-cosmic-purple focus:border-cosmic-purple transition-colors duration-150 text-galaxy-white">
+            <SelectTrigger id={genreSelectId + "-kids"} className="w-full p-3 bg-input border border-border rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-primary transition-colors duration-150 text-foreground">
               <SelectValue placeholder="Select a genre" />
             </SelectTrigger>
-            <SelectContent className="bg-nebula-gray border-slate-500 text-galaxy-white">
+            <SelectContent className="bg-popover border-border text-popover-foreground">
               {MUSIC_GENRES.map(genre => (
                 <SelectItem 
                   key={genre} 
                   value={genre} 
                   className={cn(
-                    "hover:bg-cosmic-purple/50 focus:bg-cosmic-purple/60",
-                    genre === "AI" && "text-red-500 dark:text-red-400 font-semibold"
+                    "hover:bg-accent/80 focus:bg-accent/90",
+                    genre === "AI" && "text-destructive dark:text-red-400 font-semibold"
                   )}
                 >
                   {genre}
@@ -424,7 +412,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
         <Button
           onClick={handleLocalDrawingSubmit}
           disabled={isTuneMyCreationDisabled}
-          className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-gradient-to-r from-stardust-blue to-green-400 hover:from-sky-500 hover:to-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-nebula-dark focus:ring-stardust-blue disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
+          className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-gradient-to-r from-primary to-green-400 hover:from-primary/90 hover:to-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
           size="lg"
         >
           {isLoadingMusicProp ? (
@@ -452,7 +440,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
         {isRenderingArtProp && !aiKidsArtUrlProp && ( 
           <div className="mt-6 text-center">
             <LoadingSpinner />
-            <p className="mt-2 text-sm text-stardust-blue animate-pulse-subtle">AI is creating your masterpiece...</p>
+            <p className="mt-2 text-sm text-primary animate-pulse-subtle">AI is creating your masterpiece...</p>
           </div>
         )}
         {aiKidsArtErrorProp && (
@@ -461,9 +449,9 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
           </div>
         )}
         {aiKidsArtUrlProp && !isRenderingArtProp && (
-          <Card className="mt-6 bg-nebula-gray/50 border-slate-600">
+          <Card className="mt-6 bg-card/50 border-border">
             <CardHeader>
-              <CardTitle className="text-center text-xl font-semibold text-stardust-blue">AI's Artistic Rendition!</CardTitle>
+              <CardTitle className="text-center text-xl font-semibold text-primary">AI's Artistic Rendition!</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-4">
               <Image 
@@ -472,11 +460,11 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
                 data-ai-hint="illustration drawing kids"
                 width={400} 
                 height={250} 
-                className="rounded-md max-h-64 object-contain border border-slate-500 shadow-lg"
+                className="rounded-md max-h-64 object-contain border border-border shadow-lg"
                 unoptimized 
               />
               <div className="flex space-x-2">
-                <Button onClick={handleDownloadAiArt} variant="outline" className="border-stardust-blue text-stardust-blue hover:bg-stardust-blue/10">
+                <Button onClick={handleDownloadAiArt} variant="outline" className="border-primary text-primary hover:bg-primary/10">
                     <Download className="w-4 h-4 mr-2" />
                     Download Art
                 </Button>
@@ -484,7 +472,7 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
                     {isSharingKidsCreation ? <><svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" fill="currentColor"></path></svg>Sharing...</> : <><Share2 className="w-4 h-4 mr-2" />Share Creation</>}
                 </Button>
               </div>
-               {shareKidsError && <p className="text-red-400 text-xs text-center mt-2">{`Share Error: ${shareKidsError}`}</p>}
+               {shareKidsError && <p className="text-destructive text-xs text-center mt-2">{`Share Error: ${shareKidsError}`}</p>}
             </CardContent>
           </Card>
         )}

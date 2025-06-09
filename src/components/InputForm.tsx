@@ -18,8 +18,6 @@ import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-// Accordion import removed as 6 Senses UI is removed
-// import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const readFileAsDataURL = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -83,8 +81,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
 
-  // State for 6 Senses removed
-
   useEffect(() => {
     setIsClientMounted(true);
   }, []);
@@ -95,7 +91,6 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   const genreSelectId = useId();
   const energySliderId = useId();
   const positivitySliderId = useId();
-  // Ids for 6 Senses inputs removed
 
   const {
     transcript,
@@ -245,7 +240,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     if (context) {
       context.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.9); 
-      const filename = `dreamtuner_photo_${Date.now()}.jpg`;
+      const filename = `resonanceai_photo_${Date.now()}.jpg`;
       const imageFile = dataURLtoFile(dataUrl, filename);
 
       if (imageFile) {
@@ -278,7 +273,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
     if (isListening) {
       stopListening();
     } else {
-      setText(''); // Explicitly clear the text area content
+      setText(''); 
       resetTranscript(); 
       startListening();
     }
@@ -545,10 +540,10 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       <div>
-        <Label className="block text-lg font-medium text-stardust-blue mb-3">
+        <Label className="block text-lg font-medium text-foreground mb-3">
           1. Choose Input Type:
         </Label>
-        <div className="flex flex-wrap gap-2 mb-4 bg-nebula-gray/50 p-1 rounded-lg shadow">
+        <div className="flex flex-wrap gap-2 mb-4 bg-card/50 p-1 rounded-lg shadow">
           {inputOptions.map(opt => (
             <Button
               key={opt.type}
@@ -556,11 +551,11 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               variant={currentStandardInputType === opt.type ? "default" : "ghost"}
               onClick={() => handleInputTypeChange(opt.type)}
               className={`flex-1 p-3 text-sm font-medium flex items-center justify-center transition-all duration-150 min-w-[100px] 
-                ${currentStandardInputType === opt.type ? 'bg-primary text-primary-foreground shadow-md' : 'text-slate-300 hover:bg-nebula-gray'}`}
+                ${currentStandardInputType === opt.type ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:bg-muted'}`}
               aria-pressed={currentStandardInputType === opt.type}
               disabled={isLoading || isProcessingCamera || isRecordingAudio }
             >
-              <opt.icon className={`w-5 h-5 mr-2 ${currentStandardInputType === opt.type ? 'text-primary-foreground' : 'text-stardust-blue'}`} />
+              <opt.icon className={`w-5 h-5 mr-2 ${currentStandardInputType === opt.type ? 'text-primary-foreground' : 'text-primary'}`} />
               {opt.label}
             </Button>
           ))}
@@ -570,7 +565,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       {currentStandardInputType === 'text' && (
         <div>
           <div className="flex justify-between items-center mb-1">
-            <Label htmlFor={textInputId} className="block text-sm font-medium text-stardust-blue">
+            <Label htmlFor={textInputId} className="block text-sm font-medium text-foreground">
               Enter Your Text:
             </Label>
             {isClientMounted && hasRecognitionSupport && (
@@ -580,7 +575,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                 size="sm"
                 onClick={handleVoiceInputToggle}
                 disabled={isLoading || isProcessingCamera || isRecordingAudio }
-                className="text-sm border-slate-600 hover:bg-slate-700"
+                className="text-sm border-border hover:bg-muted"
               >
                 {isListening ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
                 {isListening ? 'Stop' : 'Speak'}
@@ -593,10 +588,10 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
             onChange={(e) => setText(e.target.value)}
             placeholder={isListening ? "Listening..." : "A lonely star in a cold, dark night..."}
             rows={6}
-            className="w-full p-4 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
+            className="w-full p-4 bg-input border border-border rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-primary transition-colors duration-150 placeholder-muted-foreground text-foreground resize-none"
             disabled={isLoading || isListening || isProcessingCamera || isRecordingAudio }
           />
-          {speechError && <p className="mt-1 text-xs text-red-400">{speechError}</p>}
+          {speechError && <p className="mt-1 text-xs text-destructive">{speechError}</p>}
           {isClientMounted && !hasRecognitionSupport && <p className="mt-1 text-xs text-muted-foreground">Voice input not supported in your browser.</p>}
           <p className="mt-2 text-xs text-muted-foreground">
             Describe a scene, a feeling, a poem, or a short story. Or use the microphone!
@@ -613,7 +608,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                       variant="outline"
                       onClick={handleToggleCameraPreview}
                       disabled={isLoading || isProcessingCamera || isRecordingAudio }
-                      className="w-full border-stardust-blue text-stardust-blue hover:bg-stardust-blue/10"
+                      className="w-full border-primary text-primary hover:bg-primary/10"
                   >
                       {showCameraPreview ? <CameraOff className="w-5 h-5 mr-2" /> : <Camera className="w-5 h-5 mr-2" />}
                       {cameraButtonText}
@@ -628,29 +623,29 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                 variant="outline"
                 onClick={handleToggleAudioRecording}
                 disabled={isLoading || isProcessingCamera || showCameraPreview }
-                className={`w-full ${isRecordingAudio ? 'border-red-500 text-red-400 hover:bg-red-500/10' : 'border-green-500 text-green-400 hover:bg-green-500/10'}`}
+                className={`w-full ${isRecordingAudio ? 'border-red-500 text-red-500 hover:bg-red-500/10' : 'border-green-500 text-green-500 hover:bg-green-500/10'}`}
               >
                 {isRecordingAudio ? <StopCircle className="w-5 h-5 mr-2" /> : <AudioLines className="w-5 h-5 mr-2" />}
                 {isRecordingAudio ? 'Stop Recording Audio' : 'Record Live Audio'}
               </Button>
-              {audioError && <p className="mt-1 text-xs text-red-400">{audioError}</p>}
+              {audioError && <p className="mt-1 text-xs text-destructive">{audioError}</p>}
                {hasMicrophonePermission === false && !audioError && <p className="mt-1 text-xs text-muted-foreground">Microphone permission needed.</p>}
             </div>
           )}
 
 
           {showCameraPreview && (
-              <Card className="bg-nebula-gray/70 border-slate-600 p-4">
-                  <video ref={videoRef} className="w-full aspect-video rounded-md bg-slate-800 border border-slate-500" autoPlay muted playsInline />
+              <Card className="bg-card/70 border-border p-4">
+                  <video ref={videoRef} className="w-full aspect-video rounded-md bg-muted border border-border" autoPlay muted playsInline />
                   
                   {hasCameraPermission === null && !cameraError && ( 
-                      <Alert variant="default" className="mt-3 bg-slate-700 border-slate-600 text-slate-300">
+                      <Alert variant="default" className="mt-3 bg-muted border-border text-muted-foreground">
                           <AlertTitle>Camera Access</AlertTitle>
                           <AlertDescription>Requesting camera permission... Please allow access in your browser.</AlertDescription>
                       </Alert>
                   )}
                   {hasCameraPermission === true && !cameraFeedReady && !cameraError && (
-                      <p className="text-sm text-stardust-blue text-center mt-2 animate-pulse">Loading video feed...</p>
+                      <p className="text-sm text-primary text-center mt-2 animate-pulse">Loading video feed...</p>
                   )}
                   {hasCameraPermission === false && cameraError && (
                       <Alert variant="destructive" className="mt-3">
@@ -673,7 +668,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                       <Button
                           type="button"
                           disabled 
-                          className={`w-full mt-3 text-primary-foreground bg-slate-500 opacity-70 cursor-not-allowed`}
+                          className={`w-full mt-3 text-primary-foreground bg-muted opacity-70 cursor-not-allowed`}
                       >
                          Coming Soon! Live Video Recording Feature
                       </Button>
@@ -683,7 +678,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
           {!showCameraPreview && !isRecordingAudio && ( 
             <div>
-                <Label htmlFor={fileInputId} className="block text-sm font-medium text-stardust-blue mb-1">
+                <Label htmlFor={fileInputId} className="block text-sm font-medium text-foreground mb-1">
                 Upload {currentStandardInputType === 'image' ? 'Image' : 'Video/Audio'} File:
                 </Label>
                 <div className="relative">
@@ -703,27 +698,27 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           )}
 
           {fileError && (
-            <p className="mt-2 text-sm text-red-400 flex items-center">
+            <p className="mt-2 text-sm text-destructive flex items-center">
               <XCircleIcon className="w-5 h-5 mr-1"/> {fileError}
             </p>
           )}
 
           {filePreview && !showCameraPreview && ( 
-              <Card className="mt-4 bg-nebula-gray border-slate-600">
+              <Card className="mt-4 bg-card border-border">
               <CardHeader className="p-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-medium text-galaxy-white">{filePreview.name}</CardTitle>
+                    <CardTitle className="text-sm font-medium text-foreground">{filePreview.name}</CardTitle>
                     <p className="text-xs text-muted-foreground">{filePreview.type} - {(filePreview.size / 1024).toFixed(1)} KB</p>
                   </div>
-                  <Button type="button" variant="ghost" size="icon" onClick={resetAllMediaInputs} className="text-red-400 hover:text-red-300" aria-label="Remove file">
+                  <Button type="button" variant="ghost" size="icon" onClick={resetAllMediaInputs} className="text-red-500 hover:text-red-400" aria-label="Remove file">
                       <XCircleIcon className="w-6 h-6"/>
                   </Button>
                 </div>
               </CardHeader>
               {filePreview.url && filePreview.type.startsWith('image/') && (
                 <CardContent className="p-3 pt-0">
-                  <img src={filePreview.url} alt="Preview" data-ai-hint="abstract texture" className="mt-2 rounded-md max-h-40 object-contain border border-slate-700" />
+                  <img src={filePreview.url} alt="Preview" data-ai-hint="abstract texture" className="mt-2 rounded-md max-h-40 object-contain border border-border" />
                 </CardContent>
               )}
               {filePreview.url && filePreview.type.startsWith('audio/') && (
@@ -743,7 +738,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
 
           {!showCameraPreview && (
             <div>
-                <Label htmlFor={additionalContextId} className="block text-sm font-medium text-stardust-blue">
+                <Label htmlFor={additionalContextId} className="block text-sm font-medium text-foreground">
                 Additional Context (Optional):
                 </Label>
                 <Textarea
@@ -752,7 +747,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
                 onChange={(e) => setAdditionalContext(e.target.value)}
                 placeholder={`Describe the ${currentStandardInputType === 'image' ? 'image' : (filePreview?.type.startsWith('audio/') ? 'live audio recording' : 'video/audio concept')} or highlight specific elements...`}
                 rows={3}
-                className="w-full p-3 mt-1 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-150 placeholder-slate-400 text-galaxy-white resize-none"
+                className="w-full p-3 mt-1 bg-input border border-border rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-primary transition-colors duration-150 placeholder-muted-foreground text-foreground resize-none"
                 disabled={isLoading || isProcessingCamera || isRecordingAudio || showCameraPreview }
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -763,21 +758,21 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         </div>
       )}
       
-      <Separator className="my-6 bg-slate-700" />
+      <Separator className="my-6 bg-border" />
 
       <div>
-        <Label className="block text-lg font-medium text-stardust-blue mb-1">
+        <Label className="block text-lg font-medium text-foreground mb-1">
           2. Fine-tune Mood (Optional):
         </Label>
         <p className="text-xs text-muted-foreground mb-4">Override AI's mood detection if you have a specific feeling in mind.</p>
         <div className="space-y-5">
           <div>
             <div className="flex flex-col items-start sm:flex-row sm:justify-between sm:items-center mb-1 gap-1 sm:gap-0">
-              <Label htmlFor={energySliderId} className="text-sm font-medium text-slate-300">
+              <Label htmlFor={energySliderId} className="text-sm font-medium text-foreground">
                 Energy: <span className="text-xs text-muted-foreground">({energySlider !== 50 ? ((energySlider ?? 50)/10 -5).toFixed(1) : "AI Decides"})</span>
               </Label>
               {energySlider !== 50 && (
-                <Button type="button" variant="ghost" size="sm" onClick={resetEnergySlider} className="text-xs h-auto p-1 text-slate-400 hover:text-stardust-blue self-start sm:self-center">
+                <Button type="button" variant="ghost" size="sm" onClick={resetEnergySlider} className="text-xs h-auto p-1 text-muted-foreground hover:text-primary self-start sm:self-center">
                   <RotateCcw className="w-3 h-3 mr-1" /> Reset
                 </Button>
               )}
@@ -788,7 +783,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               step={1}
               value={[energySlider ?? 50]}
               onValueChange={(value) => setEnergySlider(value[0])}
-              className="w-full [&>span>span]:bg-stardust-blue [&>span]:bg-slate-600"
+              className="w-full [&>span>span]:bg-accent [&>span]:bg-muted"
               disabled={isLoading || isProcessingCamera || isRecordingAudio }
             />
             <div className="flex justify-between text-xs text-muted-foreground mt-1 px-1">
@@ -799,11 +794,11 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           </div>
           <div>
             <div className="flex flex-col items-start sm:flex-row sm:justify-between sm:items-center mb-1 gap-1 sm:gap-0">
-              <Label htmlFor={positivitySliderId} className="text-sm font-medium text-slate-300">
+              <Label htmlFor={positivitySliderId} className="text-sm font-medium text-foreground">
                 Positivity: <span className="text-xs text-muted-foreground">({positivitySlider !== 50 ? ((positivitySlider ?? 50)/10 - 5).toFixed(1) : "AI Decides"})</span>
               </Label>
                {positivitySlider !== 50 && (
-                <Button type="button" variant="ghost" size="sm" onClick={resetPositivitySlider} className="text-xs h-auto p-1 text-slate-400 hover:text-stardust-blue self-start sm:self-center">
+                <Button type="button" variant="ghost" size="sm" onClick={resetPositivitySlider} className="text-xs h-auto p-1 text-muted-foreground hover:text-primary self-start sm:self-center">
                   <RotateCcw className="w-3 h-3 mr-1" /> Reset
                 </Button>
               )}
@@ -814,7 +809,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
               step={1}
               value={[positivitySlider ?? 50]}
               onValueChange={(value) => setPositivitySlider(value[0])}
-              className="w-full [&>span>span]:bg-primary [&>span]:bg-slate-600"
+              className="w-full [&>span>span]:bg-primary [&>span]:bg-muted"
               disabled={isLoading || isProcessingCamera || isRecordingAudio }
             />
              <div className="flex justify-between text-xs text-muted-foreground mt-1 px-1">
@@ -826,24 +821,24 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         </div>
       </div>
 
-      <Separator className="my-6 bg-slate-700" />
+      <Separator className="my-6 bg-border" />
       
       <div>
-        <Label htmlFor={genreSelectId + "-standard"} className="block text-lg font-medium text-stardust-blue mb-3">
+        <Label htmlFor={genreSelectId + "-standard"} className="block text-lg font-medium text-foreground mb-3">
           3. Select Music Genre (Optional):
         </Label>
         <Select value={selectedGenre} onValueChange={onGenreChange} disabled={isLoading || isProcessingCamera || isRecordingAudio }>
-          <SelectTrigger id={genreSelectId + "-standard"} className="w-full p-3 bg-nebula-gray border border-slate-600 rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-primary transition-colors duration-150 text-galaxy-white">
+          <SelectTrigger id={genreSelectId + "-standard"} className="w-full p-3 bg-input border border-border rounded-lg shadow-sm focus:ring-2 focus:ring-ring focus:border-primary transition-colors duration-150 text-foreground">
             <SelectValue placeholder="Select a genre" />
           </SelectTrigger>
-          <SelectContent className="bg-nebula-gray border-slate-500 text-galaxy-white">
+          <SelectContent className="bg-popover border-border text-popover-foreground">
             {MUSIC_GENRES.map(genre => (
               <SelectItem 
                 key={genre} 
                 value={genre} 
                 className={cn(
-                  "hover:bg-primary/50 focus:bg-primary/60",
-                  genre === "AI" && "text-red-500 dark:text-red-400 font-semibold"
+                  "hover:bg-accent/80 focus:bg-accent/90",
+                  genre === "AI" && "text-destructive dark:text-red-400 font-semibold"
                 )}
               >
                 {genre}
@@ -856,7 +851,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
       <Button
         type="submit"
         disabled={isSubmitDisabled}
-        className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-nebula-dark focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
+        className="w-full text-base font-medium rounded-md shadow-sm text-primary-foreground bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 group"
         size="lg"
       >
         {isLoading ? (
@@ -886,7 +881,7 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
         ) : ( 
           <>
             <SparklesIcon className="w-5 h-5 mr-2 text-yellow-300 group-hover:scale-110 transition-transform" />
-            Generate Musical Essence
+            Generate Musical Resonance
           </>
         )}
       </Button>

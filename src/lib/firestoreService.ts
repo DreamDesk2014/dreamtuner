@@ -1,17 +1,15 @@
 
-// 'use client'; // This service might be called from client components - REMOVED
-
-import { db } from './firebase'; // Your Firebase initialization file path
+import { db } from './firebase'; 
 import { collection, addDoc, serverTimestamp, Timestamp, getDocs, doc, getDoc, query, where, orderBy, limit } from 'firebase/firestore';
 import type { InstrumentConfigFirebase, FirebaseSampleInstrument, AIPrompt, MasterMusicParameterSet, InputType } from '../types';
 
 interface EventData {
   eventName: string;
   eventDetails?: Record<string, any>;
-  timestamp?: Timestamp; // Firestore Timestamp for server-side stamping
-  clientTimestamp?: Date; // Client-side Date object
-  sessionId?: string; // Optional session identifier
-  userId?: string; // Optional user identifier (if you add auth later)
+  timestamp?: Timestamp; 
+  clientTimestamp?: Date; 
+  sessionId?: string; 
+  userId?: string; 
 }
 
 export async function logEvent(collectionName: string, data: Omit<EventData, 'timestamp'>): Promise<void> {
@@ -23,7 +21,7 @@ export async function logEvent(collectionName: string, data: Omit<EventData, 'ti
     ...data,
     eventDetails: data.eventDetails || {},
     timestamp: serverTimestamp() as Timestamp,
-    clientTimestamp: new Date(), // If called server-side, this will be server's current time.
+    clientTimestamp: new Date(), 
   };
   try {
     await addDoc(collection(db, collectionName), eventDataToLog);
@@ -34,17 +32,16 @@ export async function logEvent(collectionName: string, data: Omit<EventData, 'ti
 
 let currentSessionId: string | null = null;
 export function getSessionId(): string {
-  if (typeof window !== 'undefined') { // This check allows the function to not break on server
+  if (typeof window !== 'undefined') { 
     if (!currentSessionId) {
-      currentSessionId = sessionStorage.getItem('dreamTunerSessionId');
+      currentSessionId = sessionStorage.getItem('resonanceAiSessionId'); // Updated key
       if (!currentSessionId) {
         currentSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-        sessionStorage.setItem('dreamTunerSessionId', currentSessionId);
+        sessionStorage.setItem('resonanceAiSessionId', currentSessionId);
       }
     }
     return currentSessionId;
   }
-  // When called from server (e.g., AI flow), window is undefined.
   return 'server_or_unknown_session';
 }
 
@@ -74,7 +71,6 @@ export async function saveContactSubmission(data: Omit<ContactSubmissionData, 't
   }
 }
 
-// For Synth Configurations (remains as is, distinct from Sample Instruments)
 const INSTRUMENT_CONFIG_COLLECTION = 'instrumentConfigs';
 export async function getInstrumentConfig(instrumentId: string): Promise<InstrumentConfigFirebase | null> {
   if (!db) return null;
@@ -109,7 +105,6 @@ export async function getAllInstrumentConfigs(): Promise<InstrumentConfigFirebas
   }
 }
 
-// For Sample Instruments (Tone.Sampler definitions)
 const SAMPLE_INSTRUMENTS_COLLECTION = 'sampleInstruments';
 export async function getFirebaseSampleInstrumentById(id: string): Promise<FirebaseSampleInstrument | null> {
   if (!db) {
@@ -153,13 +148,12 @@ export async function getAllFirebaseSampleInstruments(): Promise<FirebaseSampleI
   }
 }
 
-// For AI Prompts
 const AI_PROMPTS_COLLECTION = 'aiPrompts';
 interface AIPromptCriteria {
   genre?: string;
   mode?: 'standard' | 'kids';
   inputType?: InputType;
-  variationKey?: string; // Specific variation requested
+  variationKey?: string; 
 }
 export async function getAIPrompt(criteria: AIPromptCriteria): Promise<AIPrompt | null> {
   if (!db) {
@@ -170,7 +164,6 @@ export async function getAIPrompt(criteria: AIPromptCriteria): Promise<AIPrompt 
     const promptsRef = collection(db, AI_PROMPTS_COLLECTION);
     let q;
 
-    // Attempt to find the most specific match first
     if (criteria.genre && criteria.variationKey) {
       q = query(promptsRef,
         where("genreTags", "array-contains", criteria.genre),
@@ -208,8 +201,7 @@ export async function getAIPrompt(criteria: AIPromptCriteria): Promise<AIPrompt 
       if (!snapshot.empty) return { promptId: snapshot.docs[0].id, ...snapshot.docs[0].data() } as AIPrompt;
     }
 
-    // Fallback to a global default prompt if any specific criteria were given but not matched
-    if (criteria.genre || criteria.mode || criteria.inputType || criteria.variationKey) {
+    if (criteria.variationKey === "default_standard" || (criteria.genre || criteria.mode || criteria.inputType || criteria.variationKey) ) {
         q = query(promptsRef, where("variationKey", "==", "default_standard"), where("isEnabled", "==", true), orderBy("version", "desc"), limit(1));
         const snapshot = await getDocs(q);
         if (!snapshot.empty) {
@@ -226,7 +218,6 @@ export async function getAIPrompt(criteria: AIPromptCriteria): Promise<AIPrompt 
   }
 }
 
-// For Master Music Parameter Sets
 const MASTER_PARAMETER_SETS_COLLECTION = 'masterMusicParameterSets';
 interface MasterParamCriteria {
   setId?: string;
@@ -266,7 +257,6 @@ export async function getMasterMusicParameterSet(criteria: MasterParamCriteria):
       if (!snapshot.empty) return { setId: snapshot.docs[0].id, ...snapshot.docs[0].data() } as MasterMusicParameterSet;
     }
 
-    // Fallback to a global default parameter set
     q = query(setsRef, where("name", "==", "Default Global Parameters"), where("isEnabled", "==", true), orderBy("version", "desc"), limit(1));
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {

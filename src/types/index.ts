@@ -18,8 +18,8 @@ export interface BaseAppInput {
   mode: 'standard' | 'kids';
   userEnergy?: number;
   userPositivity?: number;
-  promptVariationKey?: string; // e.g., "energetic_riff", "mellow_ballad"
-  masterParameterSetId?: string; // ID of a MasterMusicParameterSet
+  promptVariationKey?: string; 
+  masterParameterSetId?: string; 
 }
 
 export type AppInput = BaseAppInput & (
@@ -51,14 +51,13 @@ export interface MusicParameters extends AIOutput {
 }
 
 export interface MasterMusicParameterContext {
-  // Subset of MasterMusicParameterSet, relevant for the prompt
   name?: string;
   preferredTempoRange?: { min: number; max: number };
-  preferredKeyContext?: string; // e.g., "Major keys like C, G, D" or "Minor keys, often modal"
+  preferredKeyContext?: string; 
   preferredInstrumentHints?: string[];
   preferredMelodicContour?: string;
   preferredMelodicPhrasing?: string;
-  notesOnDynamics?: string; // e.g., "Wide dynamic range preferred"
+  notesOnDynamics?: string; 
 }
 
 export interface FlowInput extends FlowInputTypeOriginal {
@@ -67,7 +66,7 @@ export interface FlowInput extends FlowInputTypeOriginal {
   drawingSoundSequence?: string;
   userEnergy?: number;
   userPositivity?: number;
-  masterParameterContext?: MasterMusicParameterContext; // To pass fetched master parameters to Handlebars
+  masterParameterContext?: MasterMusicParameterContext; 
 }
 
 export interface GeminiMusicParamsResponse {
@@ -96,38 +95,38 @@ export interface RenderKidsDrawingInput extends Omit<RenderKidsDrawingInputOrigi
 }
 
 export interface InstrumentConfigFirebase {
-  synthType: 'AMSynth' | 'DuoSynth' | 'FMSynth' | 'MonoSynth' | 'NoiseSynth' | 'PluckSynth' | 'Synth' | 'PolySynth'; // Tone.js synth type
-  options: any; // This can be refined later to specific synth options
-  volume?: number; // Volume adjustment
-  effects?: Array<EffectConfig>; // Array of effect configurations
-  filter?: FilterConfig; // Filter settings
-  tags: string[]; // Tags for categorization (e.g., "melody", "bass", "pad", "piano")
+  synthType: 'AMSynth' | 'DuoSynth' | 'FMSynth' | 'MonoSynth' | 'NoiseSynth' | 'PluckSynth' | 'Synth' | 'PolySynth'; 
+  options: any; 
+  volume?: number; 
+  effects?: Array<EffectConfig>; 
+  filter?: FilterConfig; 
+  tags: string[]; 
 }
 
 export interface EffectConfig {
-  type: 'Chorus' | 'Reverb' | 'Delay' | 'Distortion' | 'FeedbackDelay' | 'Phaser' | 'AutoFilter' | 'AutoWah' | 'Compressor' | 'EQ3' | string; // Common effect types, can be extended
-  options: any; // This can be refined later to specific effect options
+  type: 'Chorus' | 'Reverb' | 'Delay' | 'Distortion' | 'FeedbackDelay' | 'Phaser' | 'AutoFilter' | 'AutoWah' | 'Compressor' | 'EQ3' | string; 
+  options: any; 
 }
 
 export interface ChorusEffectOptions {
-  frequency?: number; // The frequency of the LFO.
-  delayTime?: number; // The amount of delay in milliseconds.
-  depth?: number; // The depth of the effect.
-  feedback?: number; // Amount of feedback from the output back into the input of the chorus.
-  spread?: number; // Stereo spread of the chorus.
+  frequency?: number; 
+  delayTime?: number; 
+  depth?: number; 
+  feedback?: number; 
+  spread?: number; 
 }
 
 export interface ReverbEffectOptions {
-  decay?: number; // The amount of time the reverb will sustain.
-  predelay?: number; // The time before the first reflection occurs.
+  decay?: number; 
+  predelay?: number; 
 }
 
 export interface FilterConfig {
-  type: 'lowpass' | 'highpass' | 'bandpass' | 'allpass' | 'notch' | 'peaking' | 'lowshelf' | 'highshelf'; // Filter type
-  frequency?: number; // The cutoff frequency of the filter.
-  Q?: number; // The quality factor of the filter.
-  gain?: number; // The gain of the filter (for peaking and shelf filters).
-  rolloff?: -12 | -24 | -48 | -96; // The rolloff of the filter.
+  type: 'lowpass' | 'highpass' | 'bandpass' | 'allpass' | 'notch' | 'peaking' | 'lowshelf' | 'highshelf'; 
+  frequency?: number; 
+  Q?: number; 
+  gain?: number; 
+  rolloff?: -12 | -24 | -48 | -96; 
 }
 
 export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}
@@ -135,80 +134,75 @@ export interface RenderedDrawingResponse extends RenderKidsDrawingOutput {}
 export interface RenderStandardInputArtInput extends StandardArtInputOriginal {}
 export interface RenderedStandardArtResponse extends StandardArtOutput {}
 
-// Defines the structure for storing sample instrument data in Firebase
 export interface FirebaseSampleInstrument {
-  id: string; // Unique ID for the instrument (matches document ID)
-  name: string; // User-friendly name (e.g., "Grand Piano", "808 Kick")
-  category: string; // e.g., "Piano", "Drum", "Synth", "Guitar", "Strings"
-  description?: string; // Optional description
-  tags?: string[]; // For filtering (e.g., "acoustic", "electronic", "percussive", "sustained")
+  id: string; 
+  name: string; 
+  category: string; 
+  description?: string; 
+  tags?: string[]; 
 
-  samples: { // Multi-sample mapping: maps MIDI note numbers (as strings or numbers) to sample URLs
-    [noteIdentifier: string]: string; // e.g., { "C4": "url/to/piano_c4.wav", "62": "url/to/piano_d4.wav" }
-  } | string; // A single URL for simpler instruments if the sampler handles pitching
+  samples: { 
+    [noteIdentifier: string]: string; 
+  } | string; 
 
-  baseUrl?: string; // Optional base URL if samples are relative paths (e.g., "/samples/piano/")
+  baseUrl?: string; 
 
-  attack?: number; // Default attack time in seconds
-  release?: number; // Default release time in seconds
-  volume?: number; // Default volume adjustment in dB (Tone.js Sampler usually takes volume in dB)
-  loop?: boolean | { start: number; end: number; }; // Loop points if applicable
-  pitch?: string | number; // Base pitch if 'samples' is a single URL and the sample needs pitching (e.g. "C4")
+  attack?: number; 
+  release?: number; 
+  volume?: number; 
+  loop?: boolean | { start: number; end: number; }; 
+  pitch?: string | number; 
 
-  isEnabled?: boolean; // To easily enable/disable this sample set
-  version?: number; // For versioning sample sets
-  createdAt?: any; // Firestore Timestamp
-  updatedAt?: any; // Firestore Timestamp
+  isEnabled?: boolean; 
+  version?: number; 
+  createdAt?: any; 
+  updatedAt?: any; 
 }
 
-// Defines the structure for AI Prompts in Firebase
 export interface AIPrompt {
-  promptId: string; // Unique ID for the prompt (matches document ID)
-  name: string; // Descriptive name for the prompt
-  description?: string; // Optional description
-  genreTags?: string[]; // Genres this prompt is suitable for (e.g., ["Rock", "Pop"])
-  moodTags?: string[]; // Moods this prompt aims to achieve (e.g., ["Energetic", "Melancholy"])
-  modeTags?: Array<'standard' | 'kids'>; // Modes this prompt applies to
-  inputTypeTags?: InputType[]; // Input types this prompt is optimized for
-  variationKey?: string; // For multiple variations of a genre/mood prompt (e.g., "rock_ballad", "rock_anthem")
-  promptTemplate: string; // The actual Handlebars prompt template string
-  version: number; // For versioning prompts
-  isEnabled: boolean; // To easily enable/disable this prompt
-  createdAt?: any; // Firestore Timestamp
-  updatedAt?: any; // Firestore Timestamp
+  promptId: string; 
+  name: string; 
+  description?: string; 
+  genreTags?: string[]; 
+  moodTags?: string[]; 
+  modeTags?: Array<'standard' | 'kids'>; 
+  inputTypeTags?: InputType[]; 
+  variationKey?: string; 
+  promptTemplate: string; 
+  version: number; 
+  isEnabled: boolean; 
+  createdAt?: any; 
+  updatedAt?: any; 
 }
 
-// Defines the structure for Master Music Parameter Sets in Firebase
 export interface MasterMusicParameterSet {
-  setId: string; // Unique ID for the parameter set (matches document ID)
-  name: string; // Descriptive name (e.g., "Energetic Pop Style", "Ambient Chill Guide")
+  setId: string; 
+  name: string; 
   description?: string;
-  genreTags?: string[]; // Genres this set is primarily for
-  moodTags?: string[]; // Moods this set aligns with
+  genreTags?: string[]; 
+  moodTags?: string[]; 
 
-  // Target ranges or preferences for musical parameters
   targetTempoRange?: { min: number; max: number };
   targetRhythmicDensityRange?: { min: number; max: number };
   targetHarmonicComplexityRange?: { min: number; max: number };
-  targetValenceRange?: { min: number; max: number }; // e.g., 0.5 to 1.0 for positive
-  targetArousalRange?: { min: number; max: number }; // e.g., 0.3 to 0.8 for energetic
+  targetValenceRange?: { min: number; max: number }; 
+  targetArousalRange?: { min: number; max: number }; 
 
-  preferredKeyContext?: string; // e.g., "Primarily major keys", "Minor keys, often modal like Dorian"
-  preferredInstrumentHints?: string[]; // e.g., ["Synth Lead (Bright)", "Distorted Guitar", "Warm Pad"]
-  preferredMelodicContour?: string; // e.g., "ascending", "riff-based"
-  preferredMelodicPhrasing?: string; // e.g., "short_motifs", "long_flowing"
-  notesOnDynamics?: string; // Textual hint for dynamics, e.g., "Wide dynamic range preferred", "Compressed and punchy"
+  preferredKeyContext?: string; 
+  preferredInstrumentHints?: string[]; 
+  preferredMelodicContour?: string; 
+  preferredMelodicPhrasing?: string; 
+  notesOnDynamics?: string; 
 
   version: number;
   isEnabled: boolean;
-  createdAt?: any; // Firestore Timestamp
-  updatedAt?: any; // Firestore Timestamp
+  createdAt?: any; 
+  updatedAt?: any; 
 }
 
 export type InstrumentOutput = {
     instrument: Tone.Sampler | Tone.Instrument;
     outputNodeToConnect: Tone.ToneAudioNode;
     filterEnv?: Tone.FrequencyEnvelope;
-    availableNotes?: string[]; // For samplers, the keys of the samples map
+    availableNotes?: string[]; 
 };
-    
