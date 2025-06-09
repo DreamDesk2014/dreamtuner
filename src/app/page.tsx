@@ -23,7 +23,6 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Download, Share2, Disc3, SlidersHorizontal, Library, Users } from 'lucide-react';
 import { dataURLtoFile } from '@/lib/utils';
-// import { generateMidiFile } from '@/lib/midiService'; // No longer needed here for direct MIDI download from art card
 import { logEvent, getSessionId } from '@/lib/firestoreService';
 
 const LOCAL_STORAGE_KEY = 'dreamTunerLastSession';
@@ -179,7 +178,7 @@ export default function DreamTunerPage() {
         inputType: input.type, 
         genre: input.genre, 
         mode: input.mode,
-        userEnergyUsed: input.userEnergy !== undefined && input.userEnergy !== 0, // Assuming 0 is default float for AI Decides
+        userEnergyUsed: input.userEnergy !== undefined && input.userEnergy !== 0,
         userPositivityUsed: input.userPositivity !== undefined && input.userPositivity !== 0,
       },
       sessionId: getSessionId()
@@ -296,7 +295,7 @@ export default function DreamTunerPage() {
         hasVoiceHint: !!artInput?.originalVoiceHint,
         genre: musicInput.genre,
         drawingSoundSequenceLength: musicInput.drawingSoundSequence?.split(',').length || 0,
-        ...(drawingToolSummary || {}) // Add drawing tool summary
+        ...(drawingToolSummary || {})
       },
       sessionId: getSessionId()
     }).catch(console.error);
@@ -522,13 +521,6 @@ export default function DreamTunerPage() {
       }).catch(console.error);
     }
   };
-  
-  // This function is now primarily for the button in MusicOutputDisplay
-  // const handleDownloadMidi = () => { 
-  //   if (!musicParams) return;
-  //   // Logic is in MusicOutputDisplay
-  // };
-
 
   const handleShareStandardCreation = async () => {
     setShareStandardArtError(null);
@@ -542,14 +534,15 @@ export default function DreamTunerPage() {
       }).catch(console.error);
       return;
     }
-    if (!standardModeAiArtUrl && !musicParams) {
-        toast({ variant: "destructive", title: "Nothing to Share", description: "Please generate music and art first." });
+    if (!standardModeAiArtUrl && (!musicParams || !musicParams.generatedIdea)) {
+        toast({ variant: "destructive", title: "Nothing to Share", description: "Please generate art or a musical idea first." });
         return;
     }
 
     setIsSharingStandardArt(true);
-    const filesToShareAttempt: (File | null)[] = [];
+    const filesToShare: File[] = [];
     let shareText = "Check out what I made with DreamTuner!";
+    
     if (musicParams?.generatedIdea) {
         shareText += `\nMusical Idea: "${musicParams.generatedIdea}"`;
     }
@@ -562,26 +555,17 @@ export default function DreamTunerPage() {
     try {
         if (standardModeAiArtUrl) {
             const artFile = dataURLtoFile(standardModeAiArtUrl, "dreamtuner_standard_art.png");
-            if (artFile) filesToShareAttempt.push(artFile);
+            if (artFile) filesToShare.push(artFile);
+            else console.warn("Could not convert art data URL to file for sharing.");
         }
-        // MIDI file for sharing is handled by MusicOutputDisplay component's share logic now if it needs to be included.
-        // For this specific share button in page.tsx (associated with the art), we might only share the art and text.
-        // Or, if musicParams are available, include them. For simplicity, let's assume musicParams means MIDI can be generated.
-        // However, the MIDI generation for sharing *here* would be redundant if MusicOutputDisplay also shares it.
-        // Let's assume this share button primarily focuses on art + idea text, and MIDI is handled by the main share in MusicOutputDisplay.
-
-        const validFilesToShare = filesToShareAttempt.filter(f => f !== null) as File[];
         
         const sharePayload: ShareData = {
             title: "My DreamTuner Creation!",
             text: shareText,
         };
-        if (validFilesToShare.length > 0) {
-            sharePayload.files = validFilesToShare;
-        } else if (!shareText.includes("Musical Idea")) { // Only text if no files and no idea
-            throw new Error("No shareable content could be prepared (Art or Idea).");
+        if (filesToShare.length > 0) {
+            sharePayload.files = filesToShare;
         }
-
 
         await navigator.share(sharePayload);
         toast({ title: "Shared Creation Successfully!" });
@@ -798,16 +782,15 @@ export default function DreamTunerPage() {
         )}
 
         {currentMode !== 'comingSoon' && musicParams && !isLoadingMusic && (
-          <Card className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
-            <CardContent className="p-6 sm:p-10">
-              <MusicOutputDisplay
-                params={musicParams}
-                onRegenerateIdea={handleRegenerateIdea}
-                isRegeneratingIdea={isRegeneratingIdea}
-                standardModeArtUrl={standardModeAiArtUrl} 
-              />
-            </CardContent>
-          </Card>
+          <div className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
+            {/* CardContent was here, moved inside MusicOutputDisplay or its children */}
+            <MusicOutputDisplay
+              params={musicParams}
+              onRegenerateIdea={handleRegenerateIdea}
+              isRegeneratingIdea={isRegeneratingIdea}
+              standardModeArtUrl={standardModeAiArtUrl} 
+            />
+          </div>
         )}
 
         {currentMode === 'standard' && standardModeAiArtError && !isRenderingStandardModeAiArt && (
@@ -835,12 +818,16 @@ export default function DreamTunerPage() {
                     <Download className="w-4 h-4 mr-2" />
                     Download Art
                 </Button>
-                <Button onClick={handleShareStandardCreation} disabled={isSharingStandardArt || (!standardModeAiArtUrl && !musicParams)} variant="outline" className="border-green-500 text-green-400 hover:bg-green-500/10 hover:text-green-300">
+                <Button 
+                    onClick={handleShareStandardCreation} 
+                    disabled={isSharingStandardArt || (!standardModeAiArtUrl && (!musicParams || !musicParams.generatedIdea))}
+                    variant="outline" 
+                    className="border-green-500 text-green-400 hover:bg-green-500/10 hover:text-green-300"
+                >
                     {isSharingStandardArt ? <><svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle><path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" fill="currentColor"></path></svg>Sharing...</> : <><Share2 className="w-4 h-4 mr-2" />Share Creation</>}
                 </Button>
               </div>
               {shareStandardArtError && <p className="text-red-400 text-xs text-center mt-2">{`Share Error: ${shareStandardArtError}`}</p>}
-              {/* MIDI Download button removed from here */}
             </CardContent>
           </Card>
         )}

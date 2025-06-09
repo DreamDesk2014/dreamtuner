@@ -37,7 +37,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
 
   const [isGeneratingMidiForDownload, setIsGeneratingMidiForDownload] = useState<boolean>(false);
-  const [midiError, setMidiError] = useState<string | null>(null); // Defined midiError state 
+  const [midiError, setMidiError] = useState<string | null>(null); 
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState<boolean>(false);
@@ -108,7 +108,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
       }
       
       console.log("[MusicOutputDisplay] AudioContext is running. Proceeding to generateWavFromMusicParameters...");
-      const wavBlob = await generateWavFromMusicParameters(params); // This will now use the simplified version
+      const wavBlob = await generateWavFromMusicParameters(params); 
       
       if (wavBlob) {
         const link = document.createElement('a');
@@ -199,43 +199,80 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
       toast({ variant: "destructive", title: "Share Not Supported", description: "Web Share API is not available." });
       setShareError("Web Share API not supported."); return;
     }
+    if (!params.generatedIdea) {
+        toast({ variant: "destructive", title: "Nothing to Share", description: "No musical idea generated yet." });
+        return;
+    }
+
     setIsSharing(true);
+    let shareText = `Check out this musical idea from DreamTuner: "${params.generatedIdea}"`;
+    const filesToShare: File[] = [];
+    let midiPrepared = false;
+    let artPrepared = false;
+    let partialShareMessage = "";
+
     try {
-      const filesToShareAttempt: (File | null)[] = [];
-      let shareText = `Check out this musical idea from DreamTuner: "${params.generatedIdea}"`;
       const midiDataUri = generateMidiFile(params);
       if (midiDataUri && midiDataUri.startsWith('data:audio/midi;base64,')) {
         let baseFileName = 'dreamtuner_music';
         if(params.generatedIdea) baseFileName = params.generatedIdea.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_').slice(0,30);
         const midiFile = dataURLtoFile(midiDataUri, `${baseFileName}.mid`);
-        if (midiFile) filesToShareAttempt.push(midiFile);
+        if (midiFile) {
+            filesToShare.push(midiFile);
+            midiPrepared = true;
+        } else {
+            console.warn("Failed to convert MIDI data URI to file.");
+            partialShareMessage += "MIDI file could not be prepared. ";
+        }
+      } else {
+        console.warn("MIDI data URI was invalid or not generated.");
+        partialShareMessage += "MIDI file generation failed. ";
       }
-      if (params.originalInput.mode === 'standard' && standardModeArtUrl) {
-        const artFile = dataURLtoFile(standardModeArtUrl, "dreamtuner_standard_art.png");
-        if (artFile) filesToShareAttempt.push(artFile);
-        shareText += "\nIt also inspired this AI artwork!";
-      }
-      // Note: WAV sharing could be added here too, but WAV files can be large for sharing.
-      const validFilesToShare = filesToShareAttempt.filter(file => file !== null) as File[];
-      if (validFilesToShare.length === 0 && !(params.originalInput.mode === 'standard' && standardModeArtUrl)) { // Allow sharing text only if art is present
-         throw new Error("No shareable content prepared (MIDI or Art).");
-      }
-      
-      const sharePayload: ShareData = {
-        title: `DreamTuner: "${params.generatedIdea}"`,
-        text: shareText,
-      };
-      if(validFilesToShare.length > 0) {
-        sharePayload.files = validFilesToShare;
-      }
+    } catch (midiErr) {
+      console.error("Error generating MIDI for sharing:", midiErr);
+      partialShareMessage += "Error during MIDI preparation. ";
+    }
 
-      await navigator.share(sharePayload);
-      toast({ title: "Shared Successfully!" });
+    if (params.originalInput.mode === 'standard' && standardModeArtUrl) {
+      const artFile = dataURLtoFile(standardModeArtUrl, "dreamtuner_standard_art.png");
+      if (artFile) {
+        filesToShare.push(artFile);
+        artPrepared = true;
+        shareText += "\nIt also inspired this AI artwork!";
+      } else {
+        console.warn("Failed to convert standard mode art URL to file.");
+         partialShareMessage += "Artwork could not be prepared. ";
+      }
+    }
+    
+    const sharePayload: ShareData = {
+      title: `DreamTuner: "${params.generatedIdea}"`,
+      text: shareText,
+    };
+    if (filesToShare.length > 0) {
+      sharePayload.files = filesToShare;
+    }
+
+    if (filesToShare.length === 0 && !params.generatedIdea) { // Should not happen if button is enabled correctly
+        toast({ variant: "destructive", title: "Nothing to Share", description: "No content could be prepared for sharing." });
+        setIsSharing(false);
+        return;
+    }
+
+    try {
+        await navigator.share(sharePayload);
+        if (partialShareMessage) {
+            toast({ title: "Shared with some issues", description: `Successfully shared idea. ${partialShareMessage}`, duration: 7000 });
+        } else {
+            toast({ title: "Shared Successfully!" });
+        }
     } catch (error: any) {
       if (error.name === 'AbortError') toast({ title: "Share Cancelled" });
       else toast({ variant: "destructive", title: "Share Failed", description: error.message || "Could not share." });
       setShareError(error.message || "Failed to share.");
-    } finally { setIsSharing(false); }
+    } finally { 
+        setIsSharing(false); 
+    }
   };
 
   const renderOriginalInputInfo = (input: AppInput) => {
@@ -287,8 +324,8 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         );
         return (
             <Card className="mt-8 bg-nebula-gray/80 border-slate-700">
-                <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value="original-input-text" className="border-b-0">
+                <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+                    <AccordionItem value="item-1" className="border-b-0">
                         <AccordionTrigger className="p-6 hover:no-underline">
                             <div className="flex items-center text-stardust-blue">
                                 {icon}
@@ -399,31 +436,41 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      <Card className="p-6 bg-primary shadow-xl text-center border-none">
-        <CardTitle className="text-3xl font-bold text-primary-foreground mb-2">Musical Essence Unveiled</CardTitle>
-        <div className="flex items-center justify-center space-x-2">
-            <CardDescription className="text-lg text-primary-foreground/80 italic">
-            "{params.generatedIdea}"
-            </CardDescription>
-            <Button
-                variant="ghost"
-                size="icon"
-                onClick={onRegenerateIdea}
-                disabled={isRegeneratingIdea}
-                className="text-primary-foreground/70 hover:text-primary-foreground disabled:opacity-50"
-                title="Regenerate Idea"
-            >
-            {isRegeneratingIdea ? (
-                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle>
-                    <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" fill="currentColor"></path>
-                </svg>
-            ) : (
-                <RefreshIcon className="w-5 h-5" />
-            )}
-            </Button>
-        </div>
-      </Card>
+      <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
+        <AccordionItem value="item-1" className="border-none">
+           <Card className="p-0 bg-primary shadow-xl text-center border-none">
+            <AccordionTrigger className="p-6 hover:no-underline text-primary-foreground group">
+              <CardTitle className="text-3xl font-bold text-primary-foreground mb-0 flex-grow text-center group-hover:text-primary-foreground/90 transition-colors">Musical Essence Unveiled</CardTitle>
+              {/* Chevron is part of AccordionTrigger by default */}
+            </AccordionTrigger>
+            <AccordionContent className="px-6 pb-6 pt-0">
+                <div className="flex items-center justify-center space-x-2">
+                    <CardDescription className="text-lg text-primary-foreground/80 italic">
+                    "{params.generatedIdea}"
+                    </CardDescription>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => { e.stopPropagation(); onRegenerateIdea(); }} // Stop propagation to prevent accordion toggle
+                        disabled={isRegeneratingIdea}
+                        className="text-primary-foreground/70 hover:text-primary-foreground hover:bg-primary/70 disabled:opacity-50"
+                        title="Regenerate Idea"
+                    >
+                    {isRegeneratingIdea ? (
+                        <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25"></circle>
+                            <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" fill="currentColor"></path>
+                        </svg>
+                    ) : (
+                        <RefreshIcon className="w-5 h-5" />
+                    )}
+                    </Button>
+                </div>
+            </AccordionContent>
+           </Card>
+        </AccordionItem>
+      </Accordion>
+
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <ParameterCardComponent title="Key Signature" value={`${params.keySignature} ${params.mode}`} icon={<MusicalNoteIcon />} />
@@ -484,7 +531,7 @@ Target Arousal: ${params.targetArousal.toFixed(2)}
         </Button>
         <Button
             onClick={handleShare}
-            disabled={isSharing || (params.originalInput.mode === 'standard' && !standardModeArtUrl && !params) || (params.originalInput.mode === 'kids' && !params) }
+            disabled={isSharing || !params.generatedIdea }
             variant="outline"
             className="w-full sm:w-auto border-green-500 text-green-400 hover:bg-green-500/10 hover:text-green-300"
         >
@@ -522,8 +569,5 @@ const ParameterCardComponent: React.FC<{title: string; value: any; icon: React.R
     </CardContent>
   </Card>
 );
-
-// mapInstrumentHintToGM is now imported from toneService, or defined there
-// ensureStrictlyIncreasingTimes is now imported from toneService, or defined there
 
     
