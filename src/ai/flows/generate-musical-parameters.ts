@@ -5,6 +5,7 @@
  * @fileOverview Generates musical parameters based on user input (text, image, video, audio),
  * and supports a 'kids' mode for interpreting drawings with optional voice hints and sound sequences.
  * Also supports user-defined energy (arousal) and positivity (valence) overrides.
+ * This flow can now be guided by dynamic prompts and master parameter sets fetched from Firebase.
  *
  * - generateMusicalParameters - A function that handles the generation of musical parameters.
  * - GenerateMusicalParametersInput - The input type for the generateMusicalParameters function.
@@ -13,8 +14,9 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { getAIPrompt, getMasterMusicParameterSet } from '@/lib/firestoreService';
+import type { AIPrompt, MasterMusicParameterContext, MasterMusicParameterSet, InputType as AppInputType } from '@/types';
 
-// Schema without 6 Senses
 const GenerateMusicalParametersInputSchema = z.object({
   type: z.enum(['text', 'image', 'video']),
   content: z.string().optional(),
@@ -36,6 +38,9 @@ const GenerateMusicalParametersInputSchema = z.object({
   drawingSoundSequence: z.string().optional().describe("A comma-separated sequence of musical notes (e.g., C4,E4,G4) played when the child used different colors while drawing. Available only in Kids Mode."),
   userEnergy: z.number().min(-1).max(1).optional().describe("Optional user-defined energy level for the music (-1.0 low to 1.0 high). If provided, this should strongly influence targetArousal."),
   userPositivity: z.number().min(-1).max(1).optional().describe("Optional user-defined positivity level for the music (-1.0 negative to 1.0 positive). If provided, this should strongly influence targetValence."),
+  promptVariationKey: z.string().optional().describe("Key for a specific prompt variation to use from Firestore."),
+  masterParameterSetId: z.string().optional().describe("ID of a MasterMusicParameterSet to use from Firestore for guidance."),
+  masterParameterContext: z.any().optional().describe("Pre-fetched master parameter context to inject into the prompt."), // For Handlebars, keep as z.any() or a loose object
 });
 export type GenerateMusicalParametersInput = z.infer<
   typeof GenerateMusicalParametersInputSchema
@@ -68,22 +73,36 @@ export type GenerateMusicalParametersOutput = z.infer<
   typeof GenerateMusicalParametersOutputSchema
 >;
 
-export async function generateMusicalParameters(
-  input: GenerateMusicalParametersInput
-): Promise<GenerateMusicalParametersOutput> {
-  return generateMusicalParametersFlow(input);
-}
-
-// Prompt without "AI" genre or "6 Senses" sections
-const prompt = ai.definePrompt({
-  name: 'generateMusicalParametersPrompt',
-  model: 'googleai/gemini-1.5-flash-latest',
-  input: {schema: GenerateMusicalParametersInputSchema},
-  output: {schema: GenerateMusicalParametersOutputSchema},
-  prompt: `You are DreamTuner, an AI that translates human expression into musical concepts.
+// Default prompt template (fallback if dynamic prompt loading fails or no specific prompt is found)
+const DEFAULT_PROMPT_TEMPLATE = `You are DreamTuner, an AI that translates human expression into musical concepts.
 Pay special attention to crafting a distinct and memorable primary melody.
 Based on your analysis of the input, define the 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis' that would best represent its core feeling and style.
 Ensure the 'generatedIdea' and 'instrumentHints' for melodic instruments align with these melodic decisions.
+
+{{#if masterParameterContext}}
+**Master Parameter Guidance:**
+You should aim to align your generated parameters with the following preferences, derived from a master style guide named '{{masterParameterContext.name}}'. Use these as strong suggestions unless the primary input strongly dictates otherwise:
+{{#if masterParameterContext.preferredTempoRange}}
+- Preferred Tempo: Between {{masterParameterContext.preferredTempoRange.min}} and {{masterParameterContext.preferredTempoRange.max}} BPM.
+{{/if}}
+{{#if masterParameterContext.preferredKeyContext}}
+- Preferred Key Context: {{masterParameterContext.preferredKeyContext}}.
+{{/if}}
+{{#if masterParameterContext.preferredInstrumentHints}}
+- Preferred Instruments: {{masterParameterContext.preferredInstrumentHints}}. Consider these first.
+{{/if}}
+{{#if masterParameterContext.preferredMelodicContour}}
+- Preferred Melodic Contour: {{masterParameterContext.preferredMelodicContour}}.
+{{/if}}
+{{#if masterParameterContext.preferredMelodicPhrasing}}
+- Preferred Melodic Phrasing: {{masterParameterContext.preferredMelodicPhrasing}}.
+{{/if}}
+{{#if masterParameterContext.notesOnDynamics}}
+- Notes on Dynamics: {{masterParameterContext.notesOnDynamics}}.
+{{/if}}
+Strive for a result that reflects both the user's specific input and this guiding style.
+---
+{{/if}}
 
 {{#if isKidsMode}}
   {{! Kids Mode Specific Prompt }}
@@ -334,8 +353,14 @@ Ensure the 'generatedIdea' and 'instrumentHints' for melodic instruments align w
 {{/if}}
 
 Your response MUST be a JSON object that strictly adheres to the output schema. Do not include any introductory or explanatory text, or markdown formatting, outside of the JSON structure itself.
-`
-});
+`;
+
+
+export async function generateMusicalParameters(
+  input: GenerateMusicalParametersInput
+): Promise<GenerateMusicalParametersOutput> {
+  return generateMusicalParametersFlow(input);
+}
 
 const generateMusicalParametersFlow = ai.defineFlow(
   {
@@ -344,6 +369,46 @@ const generateMusicalParametersFlow = ai.defineFlow(
     outputSchema: GenerateMusicalParametersOutputSchema,
   },
   async (input: GenerateMusicalParametersInput) => {
+    let promptTemplateToUse = DEFAULT_PROMPT_TEMPLATE;
+    let fetchedPromptName: string | undefined = "Default Built-in Prompt";
+
+    const promptCriteria = {
+        genre: input.genre,
+        mode: input.mode,
+        inputType: input.type as AppInputType, // Cast because FlowInputTypeOriginal 'type' is enum, AppInput 'type' is literal union
+        variationKey: input.promptVariationKey,
+    };
+    const dynamicPrompt: AIPrompt | null = await getAIPrompt(promptCriteria);
+
+    if (dynamicPrompt?.promptTemplate) {
+      promptTemplateToUse = dynamicPrompt.promptTemplate;
+      fetchedPromptName = dynamicPrompt.name;
+      console.log(`Using dynamic prompt: "${fetchedPromptName}" (ID: ${dynamicPrompt.promptId}, Version: ${dynamicPrompt.version})`);
+    } else {
+      console.log("Using default built-in prompt template.");
+    }
+
+    let masterParameterContext: MasterMusicParameterContext | undefined;
+    const masterParamSet: MasterMusicParameterSet | null = await getMasterMusicParameterSet({
+        setId: input.masterParameterSetId,
+        genre: input.genre,
+        // mood: input.moodTags?.[0] // Could add logic to derive primary mood if needed
+    });
+
+    if (masterParamSet) {
+        console.log(`Applying Master Parameter Set: "${masterParamSet.name}" (ID: ${masterParamSet.setId})`);
+        masterParameterContext = {
+            name: masterParamSet.name,
+            preferredTempoRange: masterParamSet.targetTempoRange,
+            preferredKeyContext: masterParamSet.preferredKeyContext,
+            preferredInstrumentHints: masterParamSet.preferredInstrumentHints,
+            preferredMelodicContour: masterParamSet.preferredMelodicContour,
+            preferredMelodicPhrasing: masterParamSet.preferredMelodicPhrasing,
+            notesOnDynamics: masterParamSet.notesOnDynamics,
+        };
+    }
+
+
     const genreLower = input.genre?.toLowerCase();
     const handlebarsContext = {
       ...input,
@@ -358,9 +423,18 @@ const generateMusicalParametersFlow = ai.defineFlow(
       isGenreJazz: genreLower === 'jazz',
       isGenreElectronic: genreLower === 'electronic',
       isGenreCinematic: genreLower === 'cinematic',
-      // isGenreAI flag removed
+      masterParameterContext: masterParameterContext, // Pass the fetched master parameters
     };
-    const result = await prompt(handlebarsContext);
+
+    const anDefinedPrompt = ai.definePrompt({
+      name: `dynamicPrompt_${fetchedPromptName?.replace(/\s+/g, '_') || 'default'}`, // Make prompt name more dynamic for tracing
+      model: 'googleai/gemini-1.5-flash-latest',
+      input: {schema: GenerateMusicalParametersInputSchema}, // Schema remains static for now
+      output: {schema: GenerateMusicalParametersOutputSchema},
+      prompt: promptTemplateToUse,
+    });
+
+    const result = await anDefinedPrompt(handlebarsContext);
     const output = result.output;
 
     if (!output) {
@@ -371,3 +445,4 @@ const generateMusicalParametersFlow = ai.defineFlow(
   }
 );
 
+    
