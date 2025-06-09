@@ -595,7 +595,7 @@ export default function DreamTunerPage() {
   };
 
 
-  let mainSubtitle = "Translates your concepts into musical vibrations.";
+  let mainSubtitle = "Tune Anything Into Music With AI!";
   if (currentMode === 'kids') {
     mainSubtitle = "Draw, make sounds, add voice hints! Hear music & see AI art!";
   } else if (currentMode === 'comingSoon') {

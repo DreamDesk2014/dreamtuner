@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
   title: 'DreamTuner',
-  description: 'Translates your words, images, or video concepts into musical vibrations.',
+  description: 'Tune Anything Into Music With AI!',
 };
 
 export default function RootLayout({
