@@ -246,12 +246,43 @@ Strive for a result that reflects both the user's specific input and this guidin
   {{/if}}
 
   {{#if genre}}
-    **Your Role:** You are an expert musicologist and creative producer. Your goal is to deeply understand the core essence of the user's input, then fuse it with the defining characteristics of the selected genre to create a rich, authentic, and inspiring musical concept.
-    **Guiding Principle:** The user's original input determines the *emotional core* and initial melodic direction. The selected genre ('{{{genre}}}') determines the *stylistic execution and refinement of the melody*.
+    **Your Role:** You are an expert musicologist and creative producer. Your goal is to deeply understand the core essence of the user's input, then fuse it with the defining characteristics of the selected genre (or your own AI vision if genre is 'AI') to create a rich, authentic, and inspiring musical concept.
+    **Guiding Principle:** The user's original input determines the *emotional core* and initial melodic direction. The selected genre ('{{{genre}}}') or your AI interpretation determines the *stylistic execution and refinement of the melody*.
 
-    Please ensure the generated musical parameters, including 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis', are stylistically appropriate for '{{{genre}}}', while still reflecting the core essence of the primary input.
+    Please ensure the generated musical parameters, including 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis', are stylistically appropriate for '{{{genre}}}' (or your unique AI vision), while still reflecting the core essence of the primary input.
 
-    {{#if isGenreRock}}
+    {{#if isGenreAI}}
+      **Your Role as AI Musical Visionary (AI Genre):**
+      You have been granted **complete creative freedom** for the "AI" genre. Your primary task is to **explore musically** based on the user's input.
+      Deeply interpret the core essence, emotions, and implied narrative of:
+      {{#if isInputImageWithData}}the provided image.{{/if}}
+      {{#if isInputAudioWithData}}the provided audio recording.{{/if}}
+      {{#if isInputVideoWithData}}the provided video recording.{{/if}}
+      {{#if isInputVideoFileConcept}}the concept of the video file '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Video{{/if}}'.{{/if}}
+      {{#if isInputAudioFileConcept}}the concept of the audio file '{{#if fileDetails.name}}{{{fileDetails.name}}}{{else}}Unknown Audio{{/if}}'.{{/if}}
+      {{#if content}}the text: "{{{content}}}".{{/if}}
+      {{#unless isInputImageWithData}}{{#unless isInputAudioWithData}}{{#unless isInputVideoWithData}}{{#unless isInputVideoFileConcept}}{{#unless isInputAudioFileConcept}}{{#unless content}}the general concept provided or implied.{{/unless}}{{/unless}}{{/unless}}{{/unless}}{{/unless}}{{/unless}}
+      {{#if additionalContext}}Consider also the user's additional context: "{{{additionalContext}}}".{{/if}}
+      
+      **Your Goal:** Translate this interpretation into a **unique and cohesive musical composition concept**. Do not feel bound by traditional genre conventions unless you find they organically enhance the input's expression.
+      
+      You MUST generate all the following musical parameters based on your original, holistic interpretation:
+      - keySignature
+      - mode (major, minor, or modal if fitting)
+      - tempoBpm
+      - moodTags (reflecting your interpretation)
+      - instrumentHints (choose instruments that best convey your musical vision; be descriptive, e.g., "Synth Lead (Ethereal, Floating Melody)")
+      - rhythmicDensity (0.0-1.0)
+      - harmonicComplexity (0.0-1.0)
+      - targetValence (-1.0 to 1.0) {{#if userPositivity}}(User's positivity preference: {{{userPositivity}}}. This should strongly guide targetValence.){{/if}}
+      - targetArousal (-1.0 to 1.0) {{#if userEnergy}}(User's energy preference: {{{userEnergy}}}. This should strongly guide targetArousal.){{/if}}
+      - generatedIdea (max 45 words): A structured description of your unique musical piece: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their character] + [Emotional Arc/Climax].
+      - melodicContour
+      - melodicPhrasing
+      - melodicEmphasis
+
+      Strive for something novel, evocative, and musically coherent.
+    {{else if isGenreRock}}
       For Rock:
       - Key Signature: Often major or minor, can have bluesy inflections.
       - Mode: Major or Minor.
@@ -339,6 +370,7 @@ Strive for a result that reflects both the user's specific input and this guidin
   {{/if}}
 
   {{#unless genre}} {{! Only define these generic parameter instructions if NO genre was provided, otherwise genre-specific blocks handle them. }}
+  {{#unless isGenreAI}} {{! Also ensure these are not duplicated if AI genre is selected, as AI genre has its own list }}
   For all inputs (unless in Kids mode, which has its own output rules), generate the following musical parameters:
   - keySignature: The musical key and its quality (e.g., "C# major", "F minor").
   - mode: The musical mode, typically "major" or "minor", but can be modal if appropriate for the genre (e.g., "D Dorian" for Jazz).
@@ -349,6 +381,7 @@ Strive for a result that reflects both the user's specific input and this guidin
   - harmonicComplexity: A numerical value between 0.0 (simple, diatonic harmony) and 1.0 (complex, dissonant harmony).
   - targetValence: A numerical value between -1.0 (highly negative emotion) and 1.0 (highly positive emotion). {{#if userPositivity}}This MUST primarily reflect the userPositivity value if provided.{{else}}Derive this from the input content's perceived emotional tone and genre considerations.{{/if}}
   - targetArousal: A numerical value between -1.0 (low energy, calm) and 1.0 (high energy, intense). {{#if userEnergy}}This MUST primarily reflect the userEnergy value if provided.{{else}}Derive this from the input content's perceived energy level and genre considerations.{{/if}}
+  {{/unless}}
   {{/unless}}
 {{/if}}
 
@@ -419,6 +452,7 @@ const generateMusicalParametersFlow = ai.defineFlow(
       isInputVideoWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('video/'),
       isInputVideoFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('video/'),
       isInputAudioFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('audio/'),
+      isGenreAI: genreLower === 'ai',
       isGenreRock: genreLower === 'rock',
       isGenreJazz: genreLower === 'jazz',
       isGenreElectronic: genreLower === 'electronic',

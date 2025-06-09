@@ -17,6 +17,7 @@ import { Slider } from "@/components/ui/slider";
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 // Accordion import removed as 6 Senses UI is removed
 // import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
@@ -837,7 +838,14 @@ export const InputForm: React.FC<InputFormProps> = ({ onSubmit, isLoading, selec
           </SelectTrigger>
           <SelectContent className="bg-nebula-gray border-slate-500 text-galaxy-white">
             {MUSIC_GENRES.map(genre => (
-              <SelectItem key={genre} value={genre} className="hover:bg-primary/50 focus:bg-primary/60">
+              <SelectItem 
+                key={genre} 
+                value={genre} 
+                className={cn(
+                  "hover:bg-primary/50 focus:bg-primary/60",
+                  genre === "AI" && "text-red-500 dark:text-red-400 font-semibold"
+                )}
+              >
                 {genre}
               </SelectItem>
             ))}

@@ -17,7 +17,7 @@ import Image from 'next/image';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { ErrorMessage } from '@/components/ErrorMessage';
 import { generateMidiFile } from '@/lib/midiService';
-import { dataURLtoFile } from '@/lib/utils';
+import { dataURLtoFile, cn } from '@/lib/utils';
 import { logEvent, getSessionId } from '@/lib/firestoreService'; 
 // import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"; // Removed
 
@@ -407,7 +407,14 @@ export const KidsModeTab: React.FC<KidsModeTabProps> = ({
             </SelectTrigger>
             <SelectContent className="bg-nebula-gray border-slate-500 text-galaxy-white">
               {MUSIC_GENRES.map(genre => (
-                <SelectItem key={genre} value={genre} className="hover:bg-cosmic-purple/50 focus:bg-cosmic-purple/60">
+                <SelectItem 
+                  key={genre} 
+                  value={genre} 
+                  className={cn(
+                    "hover:bg-cosmic-purple/50 focus:bg-cosmic-purple/60",
+                    genre === "AI" && "text-red-500 dark:text-red-400 font-semibold"
+                  )}
+                >
                   {genre}
                 </SelectItem>
               ))}
