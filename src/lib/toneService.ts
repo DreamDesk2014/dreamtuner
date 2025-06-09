@@ -47,7 +47,7 @@ function applyHumanization(time: number, intensity: number = 0.008): number { //
 
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  const logPrefix = "[WAV_GEN_V0.9.2_SamplerFix]";
+  const logPrefix = "[WAV_GEN_V0.9.3_SamplerFix_Catch]";
   console.log(`${logPrefix} Starting synthesis for: ${params.generatedIdea ? params.generatedIdea.substring(0, 30) : "Untitled"}...`);
 
   const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
@@ -680,7 +680,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
       melodyNotesToSchedule.forEach((ev) => {
         let noteToPlay = ev.note;
-        let isMelodySampler = melodySynth instanceof Tone.Sampler;
+        const isMelodySampler = melodySynth instanceof Tone.Sampler;
 
         if (isMelodySampler && availableMelodySamplerNotes && availableMelodySamplerNotes.length > 0) {
           if (!availableMelodySamplerNotes.includes(noteToPlay)) {
@@ -698,6 +698,12 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             noteToPlay = closestNote;
           }
         }
+
+        if (typeof noteToPlay !== 'string' || noteToPlay.trim() === '') {
+            console.warn(`${logPrefix}_OFFLINE_WARN] Skipping melody note due to invalid/empty noteToPlay value. Original ev.note: ${ev.note}, Processed noteToPlay: ${noteToPlay}, Time: ${ev.time}`);
+            return; // Skip this iteration of forEach
+        }
+
         try {
             (melodySynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
             if (melodyFilterEnv && ev.filterAttack) melodyFilterEnv.triggerAttackRelease(ev.duration, ev.time);
@@ -716,7 +722,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       if (arpeggioSynth && arpInstrumentSetupResult) {
         arpeggioNotesToSchedule.forEach((ev) => {
             let noteToPlay = ev.note;
-            let isArpSampler = arpeggioSynth instanceof Tone.Sampler;
+            const isArpSampler = arpeggioSynth instanceof Tone.Sampler;
             if (isArpSampler && availableArpSamplerNotes && availableArpSamplerNotes.length > 0) {
                 if (!availableArpSamplerNotes.includes(noteToPlay)) {
                     const targetMidi = robustNoteToMidi(noteToPlay);
@@ -733,6 +739,12 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                     noteToPlay = closestNote;
                 }
             }
+
+            if (typeof noteToPlay !== 'string' || noteToPlay.trim() === '') {
+                console.warn(`${logPrefix}_OFFLINE_WARN] Skipping arpeggio note due to invalid/empty noteToPlay value. Original ev.note: ${ev.note}, Processed noteToPlay: ${noteToPlay}, Time: ${ev.time}`);
+                return; // Skip this iteration of forEach
+            }
+
             try {
                 (arpeggioSynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
                  if (arpeggioFilterEnv && ev.filterAttack) arpeggioFilterEnv.triggerAttackRelease(ev.duration, ev.time);
@@ -792,3 +804,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
+
+    
