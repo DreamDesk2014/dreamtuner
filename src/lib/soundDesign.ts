@@ -7,7 +7,7 @@ import { getFirebaseSampleInstrumentById } from './firestoreService';
 // Constants
 const SAFE_OSC_TYPE = 'triangle' as const;
 const DEFAULT_FALLBACK_SYNTH_VOLUME = -12;
-const DEFAULT_SAMPLER_ID_FOR_PIANO = "default_piano"; // Document ID in sampleInstruments collection
+const DEFAULT_SAMPLER_ID_FOR_PIANO = "default_piano";
 
 // --- Synth Configurations ---
 export const getSynthConfigurations = (
@@ -20,7 +20,6 @@ export const getSynthConfigurations = (
   const genreLower = typeof genreInput === 'string' ? genreInput.toLowerCase() : "";
   const hintsLower = instrumentHints.map(h => typeof h === 'string' ? h.toLowerCase() : "");
 
-  // Base configurations remain largely the same, but we'll add sampler flags
   const baseConfigs = {
     pianoMelody: {
         synthType: Tone.PolySynth, subType: Tone.FMSynth,
@@ -110,7 +109,7 @@ export const getSynthConfigurations = (
     tambourine: { noise: {type: 'white' as const, playbackRate: 1.6}, envelope: {attack:0.006, decay:0.06, sustain:0, release:0.07}, volume: -17, instrumentHintName: "baseTambourine"},
   };
 
-  let melodyConf: any = { ...baseConfigs.pianoMelody, instrumentHintName: "defaultMelodyPiano" }; // Default to piano
+  let melodyConf: any = { ...baseConfigs.pianoMelody, instrumentHintName: "defaultMelodyPiano" };
   let bassConf: any = { ...baseConfigs.defaultBass, instrumentHintName: "defaultBass" };
   let chordsConf: any = { ...baseConfigs.warmPadChords, instrumentHintName: "defaultChordsPad" };
   let arpConf: any = { ...baseConfigs.pluckArp, instrumentHintName: "defaultArpPluck" };
@@ -126,14 +125,12 @@ export const getSynthConfigurations = (
       const samplerId = explicitSamplerHint.substring("use_sampled_".length);
       melodyConf = { isSampler: true, samplerName: samplerId, volume: -8, instrumentHintName: `sampler_${samplerId}` };
   } else if (hintsLower.some(h => h.includes('piano')) && !isKidsMode) {
-      // If piano is hinted and not kids mode, set up for sampler
       melodyConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_PIANO, volume: -8, instrumentHintName: `sampler_piano_${DEFAULT_SAMPLER_ID_FOR_PIANO}` };
   }
 
 
   if (isKidsMode) {
-    // Kids mode synth selection (sampler logic handled above if piano was hinted, otherwise use synths)
-    if (!melodyConf.isSampler) { // Only set synth if sampler wasn't chosen
+    if (!melodyConf.isSampler) {
         melodyConf = Math.random() < 0.5 ? {...baseConfigs.kidsToyPiano} : {...baseConfigs.kidsXylophone};
     }
     bassConf = {...baseConfigs.kidsUkuleleBass};
@@ -143,7 +140,7 @@ export const getSynthConfigurations = (
     snareConf = {...baseConfigs.kidsSnare};
     hiHatConf = {...baseConfigs.kidsHiHat};
     if (hintsLower.some(h => h.includes("tambourine") || h.includes("shaker"))) useTambourine = true;
-  } else if (!melodyConf.isSampler) { // Standard mode, only if not already a sampler
+  } else if (!melodyConf.isSampler) {
     if (genreLower.includes("electronic") || genreLower.includes("synthwave") || genreLower.includes("techno") || genreLower.includes("house")) {
       melodyConf = { ...baseConfigs.synthLeadElectronic };
       bassConf = { ...baseConfigs.subBassElectronic };
@@ -252,28 +249,31 @@ export type InstrumentOutput = {
 };
 
 export const createSynth = async (
-    config: any, // Can be synth config or sampler config
+    config: any,
     audioContext?: Tone.BaseContext,
-    instrumentHintName?: string // For logging
+    instrumentHintName?: string
 ): Promise<InstrumentOutput> => {
     const currentContext = audioContext || Tone.getContext();
-    const logPrefix = audioContext && (audioContext as any).name === "Offline" ? "[soundDesign_Offline]" : "[soundDesign_Global]";
+    const logPrefix = currentContext.name === "Offline" ? "[soundDesign_Offline]" : "[soundDesign_Global]";
 
     if (config && config.isSampler && config.samplerName) {
         const samplerId = config.samplerName;
-        console.log(`${logPrefix} Attempting to load Sampler ID: ${samplerId} for ${instrumentHintName || 'track'} in context: ${(currentContext as any).name || 'default'}`);
+        console.log(`${logPrefix} Attempting to load Sampler ID: ${samplerId} for ${instrumentHintName || 'track'} in context: ${currentContext.name}`);
         try {
             const sampleInstrumentData: FirebaseSampleInstrument | null = await getFirebaseSampleInstrumentById(samplerId);
 
-            if (!sampleInstrumentData || !sampleInstrumentData.samples) {
-                console.warn(`${logPrefix} Sampler data not found or invalid for ID: ${samplerId}. Falling back to default synth.`);
-                throw new Error(`Sampler data not found or invalid for ${samplerId}`);
+            if (!sampleInstrumentData) {
+                console.warn(`${logPrefix} No Firestore document found for Sampler ID: "${samplerId}" or it was not enabled. Falling back to default synth.`);
+                throw new Error(`Sampler document not found or not enabled for ${samplerId}`);
+            } else if (!sampleInstrumentData.samples || (typeof sampleInstrumentData.samples === 'object' && Object.keys(sampleInstrumentData.samples).length === 0) && typeof sampleInstrumentData.samples !== 'string') {
+                console.warn(`${logPrefix} 'samples' field is missing, empty, or invalid in Firestore document for Sampler ID: "${samplerId}". Falling back to default synth. Samples data:`, sampleInstrumentData.samples);
+                throw new Error(`'samples' field invalid for sampler ${samplerId}`);
             }
 
             const samplerOptions: Partial<Tone.SamplerOptions> = {
                 urls: typeof sampleInstrumentData.samples === 'string' ? { [sampleInstrumentData.pitch || "C4"]: sampleInstrumentData.samples } : sampleInstrumentData.samples,
                 baseUrl: sampleInstrumentData.baseUrl || "",
-                attack: sampleInstrumentData.attack !== undefined ? sampleInstrumentData.attack : config.options?.envelope?.attack, // Fallback to synth config if available
+                attack: sampleInstrumentData.attack !== undefined ? sampleInstrumentData.attack : config.options?.envelope?.attack,
                 release: sampleInstrumentData.release !== undefined ? sampleInstrumentData.release : config.options?.envelope?.release,
                 context: currentContext,
                 onload: () => console.log(`${logPrefix} Sampler ${samplerId} loaded successfully via onload callback for ${instrumentHintName}.`),
@@ -283,7 +283,7 @@ export const createSynth = async (
             sampler.volume.value = sampleInstrumentData.volume !== undefined ? sampleInstrumentData.volume : (config.volume !== undefined ? config.volume : DEFAULT_FALLBACK_SYNTH_VOLUME);
 
             if (!sampler.loaded) {
-                 await sampler.loaded; // Ensure samples are loaded
+                 await sampler.loaded;
             }
             console.log(`${logPrefix} Sampler ${samplerId} reports 'loaded' as true post-creation/await for ${instrumentHintName}.`);
             return { instrument: sampler, outputNodeToConnect: sampler };
@@ -298,7 +298,6 @@ export const createSynth = async (
         }
     }
 
-    // Fallback or regular synth creation
     if (!config || !config.synthType) {
         console.warn(`${logPrefix} Invalid or missing synth config for ${instrumentHintName}. Using default FMSynth.`);
         const defaultOptions = { oscillator: { type: SAFE_OSC_TYPE as any }, context: currentContext };
@@ -311,29 +310,25 @@ export const createSynth = async (
     const synthOptionsWithContext = { ...(config.options || {}), context: currentContext };
 
     if (config.synthType === Tone.PolySynth) {
-        const subSynthType = config.subType || Tone.Synth;
         const polyOptions: Partial<Tone.PolySynthOptions<Tone.Synth<Tone.SynthOptions>>> = {
-             // synth: subSynthType, // This should be handled by Tone.PolySynth internally if options are for the sub-synth
             ...synthOptionsWithContext,
-            context: currentContext,
         };
-        // If subType is specified and is a valid Tone.js synth constructor
-        if (typeof config.subType === 'function' && config.subType.name in Tone) {
-            instrument = new Tone.PolySynth({ synth: config.subType, ...polyOptions });
+        if (typeof config.subType === 'function' && Tone[config.subType.name as keyof typeof Tone]) {
+             instrument = new Tone.PolySynth({ synth: config.subType as any, ...polyOptions } as any);
         } else {
-            instrument = new Tone.PolySynth(polyOptions); // Defaults to Tone.Synth if subType is invalid/not provided
+            instrument = new Tone.PolySynth(polyOptions);
         }
-    } else if (typeof config.synthType === 'function' && config.synthType.name in Tone) {
-         instrument = new config.synthType(synthOptionsWithContext);
+    } else if (typeof config.synthType === 'function' && Tone[config.synthType.name as keyof typeof Tone]) {
+         const SynthConstructor = config.synthType as any;
+         instrument = new SynthConstructor(synthOptionsWithContext);
     } else {
         console.warn(`${logPrefix} Invalid synthType constructor for ${instrumentHintName}: ${config.synthType?.name}. Using default FMSynth.`);
-        const defaultOptions = { oscillator: { type: SAFE_OSC_TYPE as any }, context: currentContext };
-        instrument = new Tone.FMSynth(defaultOptions);
+        instrument = new Tone.FMSynth({ oscillator: { type: SAFE_OSC_TYPE as any }, context: currentContext });
     }
 
     instrument.volume.value = config.volume !== undefined ? config.volume : DEFAULT_FALLBACK_SYNTH_VOLUME;
 
-    let currentOutputNode: Tone.ToneAudioNode = instrument;
+    let outputChain: Tone.ToneAudioNode = instrument;
     let filterEnv: Tone.FrequencyEnvelope | undefined;
     let mainFilterForLFO: Tone.Filter | undefined;
 
@@ -342,70 +337,54 @@ export const createSynth = async (
             frequency: config.filterFrequency || 5000,
             type: config.filterType || 'lowpass',
             rolloff: config.filterRolloff || -12,
-            context: currentContext,
             Q: config.filterQ || 1,
+            context: currentContext,
         });
         if (config.filterEnvelope) {
             filterEnv = new Tone.FrequencyEnvelope({...config.filterEnvelope, context: currentContext});
             filterEnv.connect(mainFilterForLFO.frequency);
         }
         instrument.connect(mainFilterForLFO);
-        currentOutputNode = mainFilterForLFO;
+        outputChain = mainFilterForLFO;
     }
 
     if (config.effects && Array.isArray(config.effects) && config.effects.length > 0) {
-        const effectInstances: Tone.ToneAudioNode[] = [];
         for (const effectConf of config.effects) {
             let effectNodeInstance: Tone.ToneAudioNode | undefined;
             const effectOptionsWithContext = { ...(effectConf.options || {}), context: currentContext };
 
-            if (effectConf.type && typeof effectConf.type === 'function' && effectConf.type.name in Tone) {
-                 if (effectConf.type === Tone.LFO) {
+            if (effectConf.type && typeof effectConf.type === 'function' && Tone[effectConf.type.name as keyof typeof Tone]) {
+                 const EffectConstructor = effectConf.type as any;
+                 if (EffectConstructor === Tone.LFO) {
                     const lfo = new Tone.LFO(effectOptionsWithContext);
-                    if (effectConf.targetParam === "detune" && 'detune' in instrument && instrument.detune instanceof Tone.Signal) {
-                        lfo.connect(instrument.detune);
-                    } else if (effectConf.targetParam === "filterFrequency" && mainFilterForLFO && mainFilterForLFO.frequency instanceof Tone.Signal) {
-                        lfo.connect(mainFilterForLFO.frequency);
-                    } else if (effectConf.targetParam && effectConf.targetParam in instrument && (instrument as any)[effectConf.targetParam] instanceof Tone.Signal) {
-                        lfo.connect((instrument as any)[effectConf.targetParam]);
+                    const targetableNode = mainFilterForLFO || instrument;
+                    if (effectConf.targetParam && effectConf.targetParam in targetableNode && (targetableNode as any)[effectConf.targetParam] instanceof Tone.Signal) {
+                        lfo.connect((targetableNode as any)[effectConf.targetParam]);
+                    } else if (effectConf.targetParam === "filterFrequency" && mainFilterForLFO && mainFilterForLFO.frequency instanceof Tone.Signal){
+                         lfo.connect(mainFilterForLFO.frequency);
                     } else {
                         console.warn(`${logPrefix} LFO targetParam '${effectConf.targetParam}' not found or not a Signal on ${instrumentHintName}.`);
                     }
                     if(effectConf.autostart) lfo.start();
+                    // LFOs are control signals, not part of the audio chain directly unless they modulate something that is.
                 } else {
                     try {
-                        effectNodeInstance = new effectConf.type(effectOptionsWithContext);
+                        effectNodeInstance = new EffectConstructor(effectOptionsWithContext);
                         if (effectNodeInstance && 'ready' in effectNodeInstance && typeof (effectNodeInstance as any).ready?.then === 'function') {
                            await (effectNodeInstance as any).ready;
                         }
+                        if (effectNodeInstance) {
+                            outputChain.connect(effectNodeInstance);
+                            outputChain = effectNodeInstance;
+                        }
                     } catch (e) {
-                        console.error(`${logPrefix} Error instantiating effect ${effectConf.type.name} for ${instrumentHintName}:`, e);
+                        console.error(`${logPrefix} Error instantiating effect ${EffectConstructor.name} for ${instrumentHintName}:`, e);
                     }
                 }
             } else {
                  console.warn(`${logPrefix} Unknown or invalid effect type constructor: ${effectConf.type?.name || effectConf.type } for ${instrumentHintName}`);
             }
-
-            if (effectNodeInstance) {
-                 effectInstances.push(effectNodeInstance);
-            }
-        }
-
-        if (effectInstances.length > 0) {
-            let sourceNodeForChain = instrument;
-            if (mainFilterForLFO) {
-                sourceNodeForChain = mainFilterForLFO; // Filter output becomes source for subsequent effects
-            }
-            // Chain effects: source -> effect1 -> effect2 -> ...
-            if (sourceNodeForChain.connect && typeof sourceNodeForChain.connect === 'function') {
-                sourceNodeForChain.chain(...effectInstances);
-                currentOutputNode = effectInstances[effectInstances.length - 1];
-            } else {
-                console.warn(`${logPrefix} sourceNodeForChain for ${instrumentHintName} is not connectable.`);
-            }
         }
     }
-    return { instrument, outputNodeToConnect: currentOutputNode, filterEnv };
+    return { instrument, outputNodeToConnect: outputChain, filterEnv };
 };
-
-    
