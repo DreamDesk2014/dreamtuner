@@ -21,7 +21,7 @@ import { NavigationBar } from '@/components/NavigationBar';
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { Download, Share2, Disc3, SlidersHorizontal, Library, Users } from 'lucide-react';
+import { Download, Share2, Disc3, SlidersHorizontal, Library, Users, Swords } from 'lucide-react';
 import { dataURLtoFile } from '@/lib/utils';
 import { logEvent, getSessionId } from '@/lib/firestoreService';
 
@@ -599,7 +599,7 @@ export default function DreamTunerPage() {
   if (currentMode === 'kids') {
     mainSubtitle = "Draw, make sounds, add voice hints! Hear music & see AI art!";
   } else if (currentMode === 'comingSoon') {
-    mainSubtitle = "Get Ready to Mix and Scratch! Exciting Features Ahead!";
+    mainSubtitle = "Get Ready! Exciting Features Ahead!";
   }
 
   const isLoadingOverall = isLoadingMusic || isRenderingStandardModeAiArt || isRenderingAiKidsArt;
@@ -665,28 +665,56 @@ export default function DreamTunerPage() {
             <Card className="bg-nebula-gray shadow-xl rounded-xl border-slate-700">
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl font-semibold text-accent mb-2 font-headline">
-                  <SlidersHorizontal className="inline-block w-7 h-7 mr-2 -mt-1" />
-                  AI-Powered DJ Console
+                  <Swords className="inline-block w-7 h-7 mr-2 -mt-1" />
+                  Battle Of The AIs! - Who's the Better Musician?
                 </CardTitle>
                 <CardDescription className="text-slate-300">
-                  Unleash your inner DJ! Experiment with your AI-generated musical compositions.
+                  Witness AI models go head-to-head in DreamTuner, composing music based on the same prompts. You be the judge!
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-6 text-center space-y-6">
                 <div className="flex flex-col items-center space-y-4 p-6 bg-nebula-gray/50 rounded-lg border border-dashed border-slate-600">
-                  <Disc3 className="w-24 h-24 text-slate-500 animate-spin [animation-duration:5s]" />
+                   <Image
+                      src="https://placehold.co/300x200.png"
+                      alt="AI Battle Concept Art"
+                      data-ai-hint="AI robots music"
+                      width={300}
+                      height={200}
+                      className="rounded-md border border-slate-600 shadow-md object-cover mx-auto"
+                    />
                   <h3 className="text-xl font-semibold text-slate-400">Feature Coming Soon!</h3>
                   <p className="text-sm text-slate-400 max-w-md">
-                    Get ready to mix, scratch, and transform your DreamTuner creations! Our upcoming AI DJ Console will let you:
+                    Prepare for a musical showdown! Different AI models will:
                   </p>
                   <ul className="text-xs text-slate-400 list-disc list-inside text-left max-w-sm space-y-1">
-                    <li>Load your generated MIDI stems (melody, bass, chords, drums).</li>
-                    <li>Apply real-time AI-powered effects (filters, delays, reverbs).</li>
-                    <li>Experiment with tempo and pitch shifting.</li>
-                    <li>Try AI beat-matching and looping.</li>
-                    <li>Discover AI-suggested transitions and mashup ideas.</li>
+                    <li>Receive identical creative briefs (text, image, or kid's input).</li>
+                    <li>Generate unique musical parameters and ideas.</li>
+                    <li>Compete for your vote on creativity, mood-matching, and overall appeal.</li>
+                    <li>Learn which AI's style resonates most with different genres and inputs!</li>
                   </ul>
-                  <p className="text-xs text-slate-500 mt-2">Stay tuned for the drop!</p>
+                  <p className="text-xs text-slate-500 mt-2">The ultimate AI jam session awaits!</p>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="bg-nebula-gray shadow-xl rounded-xl border-slate-700">
+              <CardHeader className="text-center">
+                <CardTitle className="text-xl font-semibold text-accent mb-1 font-headline">
+                  <SlidersHorizontal className="inline-block w-6 h-6 mr-2 -mt-1" />
+                  AI-Powered DJ Console (Compact)
+                </CardTitle>
+                <CardDescription className="text-sm text-slate-300">
+                  Mix and experiment with your AI-generated compositions.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 text-center space-y-4">
+                <div className="flex flex-col items-center space-y-3 p-4 bg-nebula-gray/50 rounded-lg border border-dashed border-slate-600">
+                  <Disc3 className="w-16 h-16 text-slate-500 animate-spin [animation-duration:5s]" />
+                  <h3 className="text-lg font-semibold text-slate-400">Feature Coming Soon!</h3>
+                  <p className="text-xs text-slate-400 max-w-md">
+                    Load generated MIDI stems. Apply AI effects, tempo/pitch shifts, and explore AI beat-matching.
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">Stay tuned for the drop!</p>
                 </div>
               </CardContent>
             </Card>
@@ -783,7 +811,6 @@ export default function DreamTunerPage() {
 
         {currentMode !== 'comingSoon' && musicParams && !isLoadingMusic && (
           <div className="mt-10 bg-nebula-gray shadow-2xl rounded-xl border-slate-700">
-            {/* CardContent was here, moved inside MusicOutputDisplay or its children */}
             <MusicOutputDisplay
               params={musicParams}
               onRegenerateIdea={handleRegenerateIdea}
@@ -837,4 +864,3 @@ export default function DreamTunerPage() {
     </div>
   );
 }
-
