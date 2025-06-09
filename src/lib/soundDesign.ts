@@ -3,12 +3,13 @@
 import * as Tone from 'tone';
 import type { FirebaseSampleInstrument, InstrumentOutput } from '@/types';
 import { getFirebaseSampleInstrumentById } from './firestoreService';
+import { robustNoteToMidi, midiToNoteName } from './musicTheory'; // Ensure these are imported
 
 // Constants
 const SAFE_OSC_TYPE = 'triangle' as const;
 const DEFAULT_FALLBACK_SYNTH_VOLUME = -12;
 const DEFAULT_SAMPLER_ID_FOR_PIANO = "default_piano";
-const DEFAULT_SAMPLER_ID_FOR_CASIO = "tonejs_casio_piano"; // Added for Casio
+const DEFAULT_SAMPLER_ID_FOR_CASIO = "tonejs_casio_piano";
 
 // --- Synth Configurations ---
 export const getSynthConfigurations = (
@@ -303,10 +304,38 @@ export const createSynth = async (
             }
 
             if (typeof sampleInstrumentData.samples === 'string' && sampleInstrumentData.samples.trim() !== '') {
-                urlsForSampler = { [sampleInstrumentData.pitch || "C4"]: sampleInstrumentData.samples };
+                const basePitch = sampleInstrumentData.pitch || "C4";
+                let normalizedPitchKey = basePitch.toString();
+                if (typeof normalizedPitchKey === 'string' && isNaN(parseInt(normalizedPitchKey))) {
+                    try {
+                        const midiValue = robustNoteToMidi(normalizedPitchKey);
+                        normalizedPitchKey = midiToNoteName(midiValue);
+                    } catch (e) {
+                        console.warn(`${logPrefix} Failed to normalize base pitch "${basePitch}" for single sample of ${samplerId}. Using original. Details: ${(e as Error).message}`);
+                    }
+                }
+                urlsForSampler = { [normalizedPitchKey]: sampleInstrumentData.samples };
             } else if (typeof sampleInstrumentData.samples === 'object' && Object.keys(sampleInstrumentData.samples).length > 0) {
-                urlsForSampler = sampleInstrumentData.samples as { [note: string]: string };
+                urlsForSampler = {};
+                for (const [key, url] of Object.entries(sampleInstrumentData.samples as { [note: string]: string })) {
+                    let normalizedKey = key;
+                    // Check if the key looks like a note name (contains A-G) and is not purely numeric
+                    if (typeof key === 'string' && /[A-G]/i.test(key) && isNaN(parseInt(key))) {
+                        try {
+                            const midiValue = robustNoteToMidi(key);
+                            normalizedKey = midiToNoteName(midiValue); // e.g., "Gs1" -> "G#1"
+                        } catch (e) {
+                            // This catch should ideally not be hit if robustNoteToMidi is sound for note-like strings
+                            console.warn(`${logPrefix} Normalization of pitch-like key "${key}" for sampler ${samplerId} failed. Using original key. Details: ${(e as Error).message}`);
+                            // normalizedKey remains original `key`
+                        }
+                    }
+                    // Else, key is numeric (e.g., "60") or an arbitrary string (e.g., "kick"). Use as is.
+                    // Tone.Sampler handles numeric keys and arbitrary string keys for non-pitched samples.
+                    urlsForSampler[normalizedKey] = url;
+                }
             }
+
 
             if (!urlsForSampler || Object.keys(urlsForSampler).length === 0) {
                 console.warn(`${logPrefix} 'samples' field is missing, empty, or invalid in Firestore document for Sampler ID: "${samplerId}". Falling back to default synth for ${instrumentHintName}. Samples data:`, sampleInstrumentData.samples);
@@ -441,3 +470,4 @@ export const createSynth = async (
     }
     return { instrument, outputNodeToConnect: currentOutputNode, filterEnv, availableNotes: undefined };
 };
+
