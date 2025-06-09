@@ -297,7 +297,16 @@ const generateMusicalParametersFlow = ai.defineFlow(
       isGenreCinematic: genreLower === 'cinematic',
       // isGenreAI flag removed
     };
-    const {output} = await prompt(handlebarsContext);
-    return output!;
+    const result = await prompt(handlebarsContext);
+    const output = result.output;
+
+    if (!output) {
+      console.error("Error in generateMusicalParametersFlow: AI prompt did not return a valid output structure.");
+      // Consider logging input or handlebarsContext for debugging
+      // console.error("Input to prompt:", JSON.stringify(handlebarsContext));
+      throw new Error("AI prompt failed to produce a valid output structure for musical parameters.");
+    }
+    return output;
   }
 );
+

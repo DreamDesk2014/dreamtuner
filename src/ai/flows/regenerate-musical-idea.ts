@@ -1,3 +1,4 @@
+
 // regenerate-musical-idea.ts
 'use server';
 /**
@@ -50,7 +51,16 @@ const regenerateMusicalIdeaFlow = ai.defineFlow(
     outputSchema: RegenerateMusicalIdeaOutputSchema,
   },
   async input => {
-    const {output} = await regenerateMusicalIdeaPrompt(input);
-    return output!;
+    const result = await regenerateMusicalIdeaPrompt(input);
+    const output = result.output;
+
+    if (!output) {
+      console.error("Error in regenerateMusicalIdeaFlow: AI prompt did not return a valid output structure.");
+      // Consider logging input for debugging
+      // console.error("Input to prompt:", JSON.stringify(input));
+      throw new Error("AI prompt failed to produce a valid output structure for regenerating the idea.");
+    }
+    return output;
   }
 );
+
