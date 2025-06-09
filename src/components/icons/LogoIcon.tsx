@@ -7,14 +7,13 @@ interface IconProps extends Omit<React.ComponentProps<typeof Image>, 'src' | 'al
 }
 
 export const LogoIcon: React.FC<IconProps> = ({ className, width, height, ...props }) => {
-  const intrinsicWidth = typeof width === 'number' ? width : 100;
-  const intrinsicHeight = typeof height === 'number' ? height : 100;
+  const intrinsicWidth = typeof width === 'number' ? width : 50; // Default width if not specified
+  const intrinsicHeight = typeof height === 'number' ? height : 50; // Default height if not specified
 
   return (
     <Image
-      src="https://placehold.co/100x100.png" 
-      alt="DreamTuner Logo Placeholder"
-      data-ai-hint="DreamTuner logo" 
+      src="/logo.png" 
+      alt="DreamTuner Logo"
       width={intrinsicWidth}
       height={intrinsicHeight}
       className={className}
