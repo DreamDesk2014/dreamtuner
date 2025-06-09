@@ -12,17 +12,14 @@ import {
 } from './musicTheory';
 import {
     getSynthConfigurations as getSynthConfigurationsFromSoundDesign,
-    createSynth as createSynthFromSoundDesign, // This will now be async
+    createSynth as createSynthFromSoundDesign, 
     type InstrumentOutput
 } from './soundDesign';
-// Firebase imports are not needed in this step as we use hardcoded samples
-// import { getAllFirebaseSampleInstruments, getFirebaseSampleInstrumentById } from './firestoreService';
-// import type { FirebaseSampleInstrument } from '@/types';
 
 
 // Constants
 const MIN_EFFECTIVE_DURATION_SECONDS = 5.0;
-const MAX_WAV_RENDER_DURATION_SECONDS = 15.0;
+const MAX_WAV_RENDER_DURATION_SECONDS = 15.0; 
 const TIME_EPSILON = 0.00001;
 
 // --- Utility Functions ---
@@ -44,38 +41,24 @@ function applyHumanization(time: number, intensity: number = 0.01): number {
 
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  const logPrefix = "[WAV_GEN_SAMPLER_V0.1]";
+  const logPrefix = "[WAV_GEN_V0.3_CTX_FIX]";
   console.log(`${logPrefix} Starting synthesis for: ${params.generatedIdea ? params.generatedIdea.substring(0, 30) : "Untitled"}...`);
 
-  if (typeof Tone === 'undefined' || !Tone.context) {
-    console.error(`${logPrefix}_ERROR] Tone.js or Tone.context is not available. Aborting.`);
-    return null;
-  }
-   if (Tone.context.state !== 'running') {
-    console.warn(`${logPrefix}_WARN] Global Tone.context is NOT 'running' (state: ${Tone.context.state}). This function expects Tone.start() to have been called via user gesture.`);
-    return null;
-  }
-
-  Tone.Transport.stop(true); Tone.Transport.cancel(0);
-  Tone.Destination.volume.value = 0;
-  Tone.Transport.bpm.value = params.tempoBpm || 120;
+  // Tone.Offline creates its own context, so global Tone.context state is less critical here,
+  // but it's good practice to ensure Tone.start() was called if any global Tone objects were touched.
+  // if (typeof Tone === 'undefined' || !Tone.context || Tone.context.state !== 'running') {
+  //   console.warn(`${logPrefix}_WARN] Global Tone.context is NOT 'running' or available. This may be fine for Tone.Offline if all nodes are created within it.`);
+  // }
 
   const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
   const isKidsMode = params.originalInput.mode === 'kids';
   const { harmonicComplexity = 0.3, rhythmicDensity = 0.5, targetArousal = 0, targetValence = 0, instrumentHints = [] } = params;
 
-  if (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.4)) {
-    Tone.Transport.swing = 0.20;
-    Tone.Transport.swingSubdivision = "8n";
-  } else {
-    Tone.Transport.swing = 0;
-  }
-  console.log(`${logPrefix} Transport BPM: ${Tone.Transport.bpm.value}, Swing: ${Tone.Transport.swing}`);
-
   const activeSynthConfigs = getSynthConfigurationsFromSoundDesign(instrumentHints, params.selectedGenre, isKidsMode, harmonicComplexity, rhythmicDensity);
 
   const startOffset = 0.1;
-  const secondsPerBeat = 60 / (Tone.Transport.bpm.value);
+  const currentBpm = params.tempoBpm || 120;
+  const secondsPerBeat = 60 / currentBpm;
   const beatsPerMeasure = 4;
   const measureDurationSeconds = beatsPerMeasure * secondsPerBeat;
   let overallMaxTime = startOffset;
@@ -87,34 +70,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     const numChordCycles = isKidsMode ? 2 : (genreLower.includes("ambient") ? 3 : (genreLower.includes("blues") ? 1 : 4));
     const totalChordProgressionSeconds = numChordCycles * progressionDegreesInput.length * measureDurationSeconds;
 
-  // --- Pre-load all instruments (synths and potential samplers) ---
-  console.log(`${logPrefix} Pre-loading instruments...`);
-  let melodyInstrumentSetup: InstrumentOutput;
-  let bassInstrumentSetup: InstrumentOutput;
-  let chordInstrumentSetup: InstrumentOutput;
-  let arpInstrumentSetup: InstrumentOutput | null = null;
-
-  // For melody, pass a specific hint if we want to try the sampler
-  const melodySpecificHints = [...instrumentHints];
-  if (instrumentHints.some(h => h.toLowerCase().includes("piano"))) { // Example condition to use sampled piano
-      melodySpecificHints.push("use_sampled_piano"); // This will be caught by createSynth
-  }
-
-  try {
-    melodyInstrumentSetup = await createSynthFromSoundDesign(activeSynthConfigs.melody, undefined, "use_sampled_piano"); // Pass hint for sampler
-    bassInstrumentSetup = await createSynthFromSoundDesign(activeSynthConfigs.bass);
-    chordInstrumentSetup = await createSynthFromSoundDesign(activeSynthConfigs.chords);
-    if (activeSynthConfigs.arpeggio) {
-        arpInstrumentSetup = await createSynthFromSoundDesign(activeSynthConfigs.arpeggio);
-    }
-  } catch (loadError) {
-    console.error(`${logPrefix}_ERROR] Critical error pre-loading an instrument:`, loadError);
-    return null; // Abort if essential instruments can't be prepared
-  }
-  console.log(`${logPrefix} All instruments pre-loaded/created.`);
-
-
-  // Melody Generation (copied from previous state, ensure it's compatible)
+  // Melody Generation 
   const melodyNotesToSchedule: { time: number, note: string, duration: string, velocity: number, filterAttack?:boolean }[] = [];
   const melodyOctave = isKidsMode ? 4 : (genreLower.includes("jazz") || genreLower.includes("classical") ? 5 : 4);
   const scaleNoteNames = getScaleNoteNamesFromTheory(params.keySignature, params.mode, melodyOctave, params.selectedGenre, harmonicComplexity);
@@ -216,7 +172,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   }
   console.log(`${logPrefix} Generated ${melodyNotesToSchedule.length} melody notes. Melody time: ${melodyCurrentTime.toFixed(2)}s`);
 
-  // Bass Line Generation (copied from previous state)
   const bassNotesToSchedule: { time: number, note: string, duration: string, velocity: number, filterAttack?:boolean }[] = [];
   const bassOctave = isKidsMode ? 2 : (genreLower.includes("jazz") || genreLower.includes("funk") ? 2 : (genreLower.includes("rock") || genreLower.includes("metal") ? 1 : 2));
   let lastBassEventTime = -TIME_EPSILON;
@@ -299,7 +254,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   }
   console.log(`${logPrefix} Generated ${bassNotesToSchedule.length} bass notes.`);
 
-  // Chords / Pads (copied from previous state)
   const chordEventsToSchedule: { time: number, notes: string[], duration: string, velocity: number, filterAttack?:boolean }[] = [];
   const chordOctave = isKidsMode ? 3 : (genreLower.includes("jazz") || genreLower.includes("classical") ? 4 : 3);
   let lastChordEventTime = -TIME_EPSILON;
@@ -354,19 +308,16 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   }
   console.log(`${logPrefix} Generated ${chordEventsToSchedule.length} chord events.`);
 
-  // Arpeggio (copied from previous state)
   const arpeggioNotesToSchedule: { time: number, note: string, duration: string, velocity: number, filterAttack?:boolean }[] = [];
   const arpeggioOctave = isKidsMode ? 4 : (harmonicComplexity > 0.3 ? 4 : 3);
   let lastArpEventTime = -TIME_EPSILON;
-  const hintsLower = instrumentHints.map(h => typeof h === 'string' ? h.toLowerCase() : "");
-  const isArpFriendlyInstrument = hintsLower.some(hint =>
-    /piano|synth lead|electric piano|pluck|bell|celesta|glockenspiel|music box|bright synth|warm lead|soft lead|arp/i.test(hint)
-  );
+  const isArpFriendlyInstrument = activeSynthConfigs.arpeggio && (activeSynthConfigs.arpeggio.instrumentHintName?.includes('Pluck') || activeSynthConfigs.arpeggio.instrumentHintName?.includes('Piano') || activeSynthConfigs.arpeggio.instrumentHintName?.includes('SynthArp') || activeSynthConfigs.arpeggio.instrumentHintName?.includes('Bell'));
+
   const playArp = (!isKidsMode && isArpFriendlyInstrument) ||
                   (isKidsMode && harmonicComplexity > 0.1 && rhythmicDensity > 0.05 && isArpFriendlyInstrument) ||
                   (!isKidsMode && (genreLower.includes("electronic") || genreLower.includes("pop") || genreLower.includes("ambient") || genreLower.includes("classical") || harmonicComplexity > 0.4));
 
-  if (playArp && arpInstrumentSetup) { // Check if arpInstrumentSetup is defined
+  if (playArp) { 
     chordEventsToSchedule.forEach(chordEvent => {
         const currentChordNotesForArp = chordEvent.notes.map(n => midiToNoteName(robustNoteToMidi(n.replace(/[0-9]+$/, String(arpeggioOctave)))));
         if (currentChordNotesForArp.length > 0) {
@@ -395,7 +346,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   }
   console.log(`${logPrefix} Generated ${arpeggioNotesToSchedule.length} arpeggio notes.`);
 
-  // Drums (copied from previous state)
   const drumEventsToSchedule: { synth: 'kick' | 'snare' | 'hiHat' | 'tambourine', time: number, duration: string, velocity: number, pitch?: string | number }[] = [];
   const numDrumMeasures = numChordCycles * progressionDegreesInput.length;
   const humanizeAmountDrums = 0.008;
@@ -479,35 +429,46 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
 
   try {
-    const audioBuffer = await Tone.Offline(async (offlineContext) => {
-      console.log(`${logPrefix}_OFFLINE] Inside Tone.Offline. SR: ${offlineContext.sampleRate}`);
-      offlineContext.transport.bpm.value = Tone.Transport.bpm.value;
-      if (Tone.Transport.swing > 0) {
-          offlineContext.transport.swing = Tone.Transport.swing;
-          offlineContext.transport.swingSubdivision = Tone.Transport.swingSubdivision;
+    const audioBuffer = await Tone.Offline(async (offlineContext: Tone.OfflineContext) => {
+      console.log(`${logPrefix}_OFFLINE] Inside Tone.Offline. SR: ${offlineContext.sampleRate}, BPM: ${currentBpm}`);
+      offlineContext.transport.bpm.value = currentBpm; 
+      if (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.4)) {
+          offlineContext.transport.swing = 0.20;
+          offlineContext.transport.swingSubdivision = "8n";
+      } else {
+          offlineContext.transport.swing = 0;
       }
 
-      const masterReverb = new Tone.Reverb(isKidsMode ? 0.7 : 1.5).toDestination();
+      const masterReverb = new Tone.Reverb({decay: isKidsMode ? 0.7 : 1.5, context: offlineContext}).connect(offlineContext.destination);
       masterReverb.wet.value = isKidsMode ? 0.12 : 0.22;
       await masterReverb.ready;
       console.log(`${logPrefix}_OFFLINE] Master Reverb created. Wet: ${masterReverb.wet.value}`);
 
-      // Use the pre-loaded/created instruments
+      console.log(`${logPrefix}_OFFLINE] Creating instruments in offline context...`);
+      const melodyInstrumentSetup = await createSynthFromSoundDesign(activeSynthConfigs.melody, offlineContext, activeSynthConfigs.melody.instrumentHintName);
+      const bassInstrumentSetup = await createSynthFromSoundDesign(activeSynthConfigs.bass, offlineContext);
+      const chordInstrumentSetup = await createSynthFromSoundDesign(activeSynthConfigs.chords, offlineContext);
+      let arpInstrumentSetupResult: InstrumentOutput | null = null;
+      if (activeSynthConfigs.arpeggio && playArp) { // Only create if playArp is true
+          arpInstrumentSetupResult = await createSynthFromSoundDesign(activeSynthConfigs.arpeggio, offlineContext);
+      }
+      console.log(`${logPrefix}_OFFLINE] All melodic/harmonic instruments created in offline context.`);
+
       const { instrument: melodySynth, outputNodeToConnect: melodyOutput, filterEnv: melodyFilterEnv } = melodyInstrumentSetup;
       melodyOutput.connect(masterReverb);
 
       const { instrument: bassSynth, outputNodeToConnect: bassOutput, filterEnv: bassFilterEnv } = bassInstrumentSetup;
-      bassOutput.toDestination();
+      bassOutput.connect(offlineContext.destination); 
 
       const { instrument: chordSynth, outputNodeToConnect: chordOutput, filterEnv: chordFilterEnv } = chordInstrumentSetup;
       chordOutput.connect(masterReverb);
 
       let arpeggioSynth: Tone.Sampler | Tone.Instrument | undefined;
       let arpeggioFilterEnv: Tone.FrequencyEnvelope | undefined;
-      if (arpInstrumentSetup) {
-        arpeggioSynth = arpInstrumentSetup.instrument;
-        arpeggioFilterEnv = arpInstrumentSetup.filterEnv;
-        arpInstrumentSetup.outputNodeToConnect.connect(masterReverb);
+      if (arpInstrumentSetupResult) {
+        arpeggioSynth = arpInstrumentSetupResult.instrument;
+        arpeggioFilterEnv = arpInstrumentSetupResult.filterEnv;
+        arpInstrumentSetupResult.outputNodeToConnect.connect(masterReverb);
       }
       console.log(`${logPrefix}_OFFLINE] Melodic/Harmonic Synths/Samplers connected.`);
 
@@ -524,22 +485,22 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         (chordSynth as any).triggerAttackRelease(ev.notes, ev.duration, ev.time, ev.velocity);
         if (chordFilterEnv && ev.filterAttack) chordFilterEnv.triggerAttackRelease(ev.duration, ev.time);
       });
-      if (arpeggioSynth && arpInstrumentSetup) {
+      if (arpeggioSynth && arpInstrumentSetupResult) {
         arpeggioNotesToSchedule.forEach((ev) => {
             (arpeggioSynth as any).triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity);
              if (arpeggioFilterEnv && ev.filterAttack) arpeggioFilterEnv.triggerAttackRelease(ev.duration, ev.time);
         });
       }
 
-      console.log(`${logPrefix}_OFFLINE] Setting up drum synths.`);
-      const kickSynth = new Tone.MembraneSynth(activeSynthConfigs.kick).toDestination();
-      const snareSynth = new Tone.NoiseSynth(activeSynthConfigs.snare).toDestination();
-      const hiHatSynth = new Tone.MetalSynth(activeSynthConfigs.hiHat).toDestination();
+      console.log(`${logPrefix}_OFFLINE] Setting up drum synths in offline context.`);
+      const kickSynth = new Tone.MembraneSynth({...activeSynthConfigs.kick, context: offlineContext}).connect(offlineContext.destination);
+      const snareSynth = new Tone.NoiseSynth({...activeSynthConfigs.snare, context: offlineContext}).connect(offlineContext.destination);
+      const hiHatSynth = new Tone.MetalSynth({...activeSynthConfigs.hiHat, context: offlineContext}).connect(offlineContext.destination);
       let tambourineSynth;
       if (activeSynthConfigs.tambourine) {
-        tambourineSynth = new Tone.NoiseSynth(activeSynthConfigs.tambourine).toDestination();
+        tambourineSynth = new Tone.NoiseSynth({...activeSynthConfigs.tambourine, context: offlineContext}).connect(offlineContext.destination);
       }
-      console.log(`${logPrefix}_OFFLINE] Drum synths created.`);
+      console.log(`${logPrefix}_OFFLINE] Drum synths created and connected to offline destination.`);
 
       drumEventsToSchedule.forEach(ev => {
         const { synth, time, duration, velocity, pitch } = ev;
@@ -549,6 +510,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         else if (synth === 'tambourine' && tambourineSynth) tambourineSynth.triggerAttackRelease(duration, time, velocity);
       });
       console.log(`${logPrefix}_OFFLINE] All events scheduled for offline rendering.`);
+      offlineContext.transport.start(0); // Start the transport within the offline context
 
     }, renderDuration);
 
@@ -576,3 +538,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
+
+
+    
