@@ -8,6 +8,7 @@ import { getFirebaseSampleInstrumentById } from './firestoreService';
 const SAFE_OSC_TYPE = 'triangle' as const;
 const DEFAULT_FALLBACK_SYNTH_VOLUME = -12;
 const DEFAULT_SAMPLER_ID_FOR_PIANO = "default_piano";
+const DEFAULT_SAMPLER_ID_FOR_CASIO = "tonejs_casio_piano"; // Added for Casio
 
 // --- Synth Configurations ---
 export const getSynthConfigurations = (
@@ -134,40 +135,59 @@ export const getSynthConfigurations = (
   let useTambourine = false;
   let useRideCymbal = false;
 
-  // Prioritize sampler if "piano" is hinted (and not kids mode)
-  if (hintsLower.some(h => h.includes('piano')) && !isKidsMode && !hintsLower.some(h => h.startsWith("use_sampled_") && !h.includes("piano"))) {
-      melodyConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_PIANO, volume: -8, instrumentHintName: `sampler_piano_${DEFAULT_SAMPLER_ID_FOR_PIANO}` };
-      if (!hintsLower.some(h => /pad|string ensemble|synth lead|electric piano/i.test(h))) { // Don't override if other chord instruments are hinted
+
+  // --- START OF MODIFIED/NEW LOGIC FOR SAMPLER HINTING ---
+  const explicitSamplerHint = hintsLower.find(h => h.startsWith("use_sampled_"));
+
+  if (explicitSamplerHint) {
+    const samplerId = explicitSamplerHint.substring("use_sampled_".length);
+    // If an explicit sampler is hinted, assume it's for the melody primarily,
+    // but allow it to be used for chords/arp if they aren't strongly hinted otherwise.
+    melodyConf = { isSampler: true, samplerName: samplerId, volume: -8, instrumentHintName: `sampler_melody_${samplerId}` };
+    if (!chordsConf.isSampler && !hintsLower.some(h => /pad|string ensemble|synth lead|electric piano|organ/i.test(h))) {
+        chordsConf = { isSampler: true, samplerName: samplerId, volume: -14, instrumentHintName: `sampler_chords_${samplerId}` };
+    }
+    if (!arpConf.isSampler && !hintsLower.some(h => /pluck|synth arp|bell|celesta|flute/i.test(h))) {
+        arpConf = { isSampler: true, samplerName: samplerId, volume: -16, instrumentHintName: `sampler_arp_${samplerId}` };
+    }
+  } else if (hintsLower.some(h => h.includes('piano')) && !isKidsMode && !hintsLower.some(h => /electric piano|toy piano/i.test(h))) {
+      // If "piano" (and not other piano types), and no explicit sampler was set, use default piano sampler.
+      melodyConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_PIANO, volume: -8, instrumentHintName: `sampler_piano_melody_${DEFAULT_SAMPLER_ID_FOR_PIANO}` };
+      if (!chordsConf.isSampler && !hintsLower.some(h => /pad|string ensemble|synth lead|organ/i.test(h))) {
           chordsConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_PIANO, volume: -14, instrumentHintName: `sampler_piano_chords_${DEFAULT_SAMPLER_ID_FOR_PIANO}` };
       }
-      if (!hintsLower.some(h => /pluck|synth arp|bell|celesta/i.test(h))) { // Don't override if other arp instruments are hinted
+      if (!arpConf.isSampler && !hintsLower.some(h => /pluck|synth arp|bell|celesta|flute/i.test(h))) {
           arpConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_PIANO, volume: -16, instrumentHintName: `sampler_piano_arp_${DEFAULT_SAMPLER_ID_FOR_PIANO}` };
       }
-  } else if (hintsLower.some(h => h.startsWith("use_sampled_"))) {
-      const explicitSamplerHint = hintsLower.find(h => h.startsWith("use_sampled_"));
-      if (explicitSamplerHint) {
-        const samplerId = explicitSamplerHint.substring("use_sampled_".length);
-        melodyConf = { isSampler: true, samplerName: samplerId, volume: -8, instrumentHintName: `sampler_${samplerId}` };
+  } else if (hintsLower.some(h => h.includes('casio') || (h.includes('keyboard') && !hintsLower.some(h => /synth lead|synth pad|organ|piano|electric piano/i.test(h)))) && !isKidsMode) {
+      // If "casio" or a generic "keyboard" (and not other specific keyboard types or already a sampler), use casio sampler.
+      melodyConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_CASIO, volume: -9, instrumentHintName: `sampler_casio_melody_${DEFAULT_SAMPLER_ID_FOR_CASIO}` };
+      if (!chordsConf.isSampler && !hintsLower.some(h => /pad|string ensemble|synth lead|organ/i.test(h))) {
+        chordsConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_CASIO, volume: -15, instrumentHintName: `sampler_casio_chords_${DEFAULT_SAMPLER_ID_FOR_CASIO}` };
+      }
+      if (!arpConf.isSampler && !hintsLower.some(h => /pluck|synth arp|bell|celesta|flute/i.test(h))) {
+        arpConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_CASIO, volume: -17, instrumentHintName: `sampler_casio_arp_${DEFAULT_SAMPLER_ID_FOR_CASIO}` };
       }
   }
+  // --- END OF MODIFIED/NEW LOGIC FOR SAMPLER HINTING ---
 
 
   if (isKidsMode) {
-    if (!melodyConf.isSampler) {
+    if (!melodyConf.isSampler) { // Only apply kids synth if no sampler was set for melody
         const kidMelodyRandom = Math.random();
         if (kidMelodyRandom < 0.4) melodyConf = {...baseConfigs.kidsToyPiano};
         else if (kidMelodyRandom < 0.8) melodyConf = {...baseConfigs.kidsXylophone};
         else melodyConf = {...baseConfigs.customPluckySynth, volume: -12, instrumentHintName: "kidsCustomPlucky"};
     }
     bassConf = {...baseConfigs.kidsUkuleleBass};
-    if (!chordsConf.isSampler) chordsConf = {...baseConfigs.kidsSimplePad};
-    if (!arpConf.isSampler) arpConf = {...baseConfigs.kidsSimpleArp};
+    if (!chordsConf.isSampler) chordsConf = {...baseConfigs.kidsSimplePad}; // Only apply kids synth if no sampler
+    if (!arpConf.isSampler) arpConf = {...baseConfigs.kidsSimpleArp}; // Only apply kids synth if no sampler
     kickConf = {...baseConfigs.kidsKick};
     snareConf = {...baseConfigs.kidsSnare};
     hiHatConf = {...baseConfigs.kidsHiHat};
     if (hintsLower.some(h => h.includes("tambourine") || h.includes("shaker"))) useTambourine = true;
 
-  } else if (!melodyConf.isSampler) { // Apply genre/hint based synth changes ONLY if melody is NOT already a sampler
+  } else if (!melodyConf.isSampler) { // Apply genre/hint based synth changes ONLY if melody is NOT already a sampler by explicit or generic hint
     if (genreLower.includes("electronic") || genreLower.includes("synthwave") || genreLower.includes("techno") || genreLower.includes("house")) {
       melodyConf = { ...baseConfigs.synthLeadElectronic };
       bassConf = { ...baseConfigs.subBassElectronic };
@@ -183,7 +203,8 @@ export const getSynthConfigurations = (
       if (!arpConf.isSampler) arpConf = { ...baseConfigs.defaultBass, volume: -28, instrumentHintName: "rockArpBass" };
       kickConf = { ...baseConfigs.kickRock, volume: -5 };
     } else if (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.3)) {
-      if(!melodyConf.isSampler) melodyConf = { ...baseConfigs.pianoMelody, volume: -10, instrumentHintName: "jazzPianoMelodyIfNotSampler" }; // Synth piano if no sampler
+      // If melody isn't a sampler (like default_piano), use a synth piano for jazz
+      if(!melodyConf.isSampler) melodyConf = { ...baseConfigs.pianoMelody, volume: -10, instrumentHintName: "jazzPianoMelodyIfNotSampler" };
       bassConf = { ...baseConfigs.jazzUprightBass };
       if (!chordsConf.isSampler) chordsConf = { ...baseConfigs.electricPianoChords, volume: -16, instrumentHintName: "jazzElectricPianoChords" };
       if (!arpConf.isSampler) arpConf = { ...baseConfigs.customPluckySynth, volume: -24, instrumentHintName: "jazzPluckArp" };
@@ -454,5 +475,3 @@ export const createSynth = async (
     }
     return { instrument, outputNodeToConnect: currentOutputNode, filterEnv, availableNotes: undefined };
 };
-
-    
