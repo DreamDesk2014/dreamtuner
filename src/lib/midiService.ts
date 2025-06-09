@@ -222,7 +222,7 @@ export const mapInstrumentHintToGM = (hints: string[], genre?: string, isKidsMod
             const hLower = hint.toLowerCase();
             if (/xylophone/i.test(hLower)) mapping.melody = KID_INSTRUMENTS.XYLOPHONE;
             else if (/toy piano|celesta|music box/i.test(hLower)) { mapping.melody = KID_INSTRUMENTS.TOY_PIANO; mapping.arpeggioSynth = KID_INSTRUMENTS.TOY_PIANO; }
-            else if (/ukulele/i.test(hLower) || /guitar/i.test(hLower)) { mapping.melody = KID_INSTRUMENTS.UKULELE; mapping.bass = KID_INSTRUMENTS.UKULELE;}
+            else if (/ukulele|guitar/i.test(hLower)) { mapping.melody = KID_INSTRUMENTS.UKULELE; mapping.bass = KID_INSTRUMENTS.UKULELE;}
             else if (/recorder|flute/i.test(hLower)) mapping.melody = KID_INSTRUMENTS.RECORDER;
             else if (/simple synth|synth lead|square lead|sine wave pad/i.test(hLower)) mapping.melody = KID_INSTRUMENTS.SIMPLE_SYNTH_LEAD;
             else if (/synth pad/i.test(hLower)) mapping.chordsPad = KID_INSTRUMENTS.SIMPLE_SYNTH_PAD;
@@ -321,13 +321,16 @@ const calculateDynamicVelocity = (
     targetValence: number,
     targetArousal: number,
     isKidsMode: boolean,
-    isAccent: boolean = false
+    isAccent: boolean = false,
+    melodicEmphasis?: string
 ): number => {
     let baseVel: number, minVel: number, maxVel: number, randomRange: number;
 
     switch (role) {
         case 'melody':
             baseVel = isKidsMode ? 75 : 85; minVel = isKidsMode ? 50 : 40; maxVel = isKidsMode ? 105 : 125; randomRange = isKidsMode ? 10 : 15;
+            if (melodicEmphasis === 'foreground') baseVel += 10;
+            else if (melodicEmphasis === 'background') baseVel -= 10;
             break;
         case 'bass':
             baseVel = isKidsMode ? 70 : 80; minVel = isKidsMode ? 45 : 50; maxVel = isKidsMode ? 95 : 115; randomRange = isKidsMode ? 8 : 12;
@@ -406,6 +409,7 @@ export function ensureStrictlyIncreasingTimes<T extends EventTime>(events: T[], 
 export const generateMidiFile = (params: MusicParameters): string => {
     const isKidsMode = params.originalInput.mode === 'kids';
     const { targetValence, targetArousal, harmonicComplexity, rhythmicDensity, instrumentHints = [] } = params;
+    const { melodicContour, melodicPhrasing, melodicEmphasis } = params; // New melodic params
     const genreLower = params.selectedGenre?.toLowerCase();
 
     const melodyTrack = new MidiWriter.Track();
@@ -434,13 +438,12 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const arpeggioOctave = isKidsMode ? 5 : (harmonicComplexity > 0.6 ? 5 : 4);
 
     const beatsPerMeasure = 4;
-    const secondsPerBeat = 60 / params.tempoBpm;
-    const secondsPerMeasure = beatsPerMeasure * secondsPerBeat;
-    const measuresInBaseProgression = 4;
-    const secondsPerBaseProgression = measuresInBaseProgression * secondsPerMeasure;
+    const secondsPerBeat = 60 / params.tempoBpm; // Not used for MIDI ticks
+    const secondsPerMeasure = beatsPerMeasure * secondsPerBeat; // Not used for MIDI ticks
+    const measuresInBaseProgression = 4; // Not used for MIDI ticks
+    const secondsPerBaseProgression = measuresInBaseProgression * secondsPerMeasure; // Not used for MIDI ticks
 
     const outroDurationMeasures = 2;
-    // const outroDurationSeconds = outroDurationMeasures * secondsPerMeasure; // Not directly used for MIDI ticks calculation
 
     let targetSongBodySeconds = TARGET_TOTAL_MIDI_SECONDS - (outroDurationMeasures * secondsPerMeasure);
     targetSongBodySeconds = Math.max(targetSongBodySeconds, Math.max(MIN_SONG_BODY_SECONDS_FOR_CALC, secondsPerBaseProgression));
@@ -453,7 +456,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
         if (!chordDef) { console.warn(`Undefined chordDef at measureIndex ${measureIndex} in chordsPadTrack. Skipping.`); return; }
         if (!Array.isArray(chordDef.notes)) { console.warn(`chordDef.notes is not an array at measureIndex ${measureIndex} in chordsPadTrack. Defaulting. ChordDef:`, chordDef); chordDef.notes = []; }
 
-        const chordVelocity = calculateDynamicVelocity('chord', targetValence, targetArousal, isKidsMode);
+        const chordVelocity = calculateDynamicVelocity('chord', targetValence, targetArousal, isKidsMode, false, melodicEmphasis);
         if (chordDef.notes && chordDef.notes.length > 0) {
             const notesToPlay = isKidsMode && chordDef.notes.length > 0 && isValidMidiNumber(chordDef.notes[0]) ? [chordDef.notes[0]] : chordDef.notes;
             if (notesToPlay && notesToPlay.length > 0 && isValidMidiNumber(notesToPlay[0])) {
@@ -473,26 +476,26 @@ export const generateMidiFile = (params: MusicParameters): string => {
         const bassNoteMidi = robustNoteToMidi(midiToNoteName(chordDef.rootNoteMidi).replace(/[0-9]+$/, String(bassOctave)));
 
         if (!isValidMidiNumber(bassNoteMidi)) return;
-        const insertRest = Math.random() < 0.1 && !isKidsMode; // 10% chance of rest before bass note for phrasing
+        const insertRest = Math.random() < 0.1 && !isKidsMode;
 
         if (isKidsMode) {
             if (insertRest && rhythmicDensity < 0.4) bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [], duration: '8', wait: '8'}));
-            bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '1', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode)}));
+            bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '1', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, false, melodicEmphasis)}));
         } else if (genreLower && (genreLower.includes('rock') || genreLower.includes('pop') || genreLower.includes('metal') || genreLower.includes('country'))) {
             for (let i = 0; i < beatsPerMeasure; i++) {
                  if (insertRest && i === 0 && rhythmicDensity < 0.5) bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [], duration: '16', wait: '16'}));
-                 bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '4', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i === 0)}));
+                 bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '4', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i === 0, melodicEmphasis)}));
             }
         } else if (genreLower && genreLower.includes('electronic')) {
              if (rhythmicDensity > 0.6) {
                 for (let i = 0; i < beatsPerMeasure * 2; i++) {
                     if (insertRest && i === 0 && rhythmicDensity < 0.7) bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [], duration: '32', wait: '32'}));
-                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '8', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i % 2 === 0)}));
+                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '8', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i % 2 === 0, melodicEmphasis)}));
                 }
             } else {
                  for (let i = 0; i < beatsPerMeasure; i++) {
                     if (insertRest && i === 0 && rhythmicDensity < 0.5) bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [], duration: '16', wait: '16'}));
-                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '4', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i === 0)}));
+                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: '4', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i === 0, melodicEmphasis)}));
                 }
             }
         } else if (genreLower && genreLower.includes('jazz')) {
@@ -527,7 +530,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
                 }
                  if (!isValidMidiNumber(noteChoice)) noteChoice = bassNoteMidi;
                  if (insertRest && i === 0 && rhythmicDensity < 0.5) bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [], duration: '16', wait: '16'}));
-                 bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [noteChoice], duration: '4', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i === 0)}));
+                 bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [noteChoice], duration: '4', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i === 0, melodicEmphasis)}));
             }
         } else if (genreLower && (genreLower.includes('funk') || genreLower.includes('soul'))) {
             const durations = ['8', '8d', '16', '8', '8', '8'];
@@ -535,7 +538,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
             for(let i=0; i < durations.length; i++) {
                 if (insertRest && i === 0 && rhythmicDensity < 0.6) bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [], duration: '32', wait: '32'}));
                 if (Math.random() > 0.2 || i === 0) {
-                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [pitches[i % pitches.length]], duration: durations[i % durations.length], velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i % 2 === 0)}));
+                    bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [pitches[i % pitches.length]], duration: durations[i % durations.length], velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, i % 2 === 0, melodicEmphasis)}));
                 } else {
                      bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [], duration: durations[i % durations.length], wait: durations[i % durations.length]}));
                 }
@@ -543,16 +546,22 @@ export const generateMidiFile = (params: MusicParameters): string => {
         }
         else {
             if (insertRest && rhythmicDensity < 0.4) bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [], duration: '8', wait: '8'}));
-            bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: chordDef.measureDuration || '1', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode)}));
+            bassTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [bassNoteMidi], duration: chordDef.measureDuration || '1', velocity: calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, false, melodicEmphasis)}));
         }
     });
 
     const rawMainScaleNotesMidi = getScaleNotesForMidiContext(params.keySignature, params.mode, melodyOctave, params.selectedGenre, rhythmicDensity, harmonicComplexity, isKidsMode, isKidsMode ? targetValence : undefined);
     const mainScaleNotesMidi = Array.isArray(rawMainScaleNotesMidi) ? rawMainScaleNotesMidi : [];
+    let lastMelodyNoteMidiForContour = mainScaleNotesMidi[0] || DEFAULT_MIDI_NOTE;
+    let melodyRiffBufferMidi: { pitch: number, duration: string, velocity: number }[] = [];
+    const RIFF_LENGTH_MIDI = 3;
+    let riffCooldownMidi = 0;
+    let melodyNoteCountInMeasure = 0;
 
     progression.forEach((chordDef, measureIndex) => {
         if (!chordDef) { console.warn(`Undefined chordDef at measureIndex ${measureIndex} in melodyTrack. Skipping.`); return; }
         if (!Array.isArray(chordDef.notes)) { console.warn(`chordDef.notes is not an array at measureIndex ${measureIndex} in melodyTrack. Defaulting. ChordDef:`, chordDef); chordDef.notes = []; }
+        melodyNoteCountInMeasure = 0; // Reset for each measure
 
         const rawCurrentChordScaleMidi = getScaleNotesForMidiContext(midiToNoteName(chordDef.rootNoteMidi).replace(/[0-9]+$/, String(melodyOctave)), chordDef.quality, melodyOctave, params.selectedGenre, rhythmicDensity, harmonicComplexity, isKidsMode, isKidsMode ? targetValence : undefined);
         const currentChordScaleMidi = Array.isArray(rawCurrentChordScaleMidi) ? rawCurrentChordScaleMidi : [];
@@ -568,10 +577,22 @@ export const generateMidiFile = (params: MusicParameters): string => {
             if (genreLower?.includes('jazz') && rhythmicDensity > 0.5) notesInMeasure = 4;
             else if (genreLower?.includes('electronic') && rhythmicDensity > 0.6) notesInMeasure = 4;
         }
+        if (melodicPhrasing === 'short_motifs') notesInMeasure = Math.max(2, notesInMeasure * 2); // More notes for short motifs
+        else if (melodicPhrasing === 'long_flowing') notesInMeasure = Math.max(1, Math.floor(notesInMeasure / 2));
+
 
         let baseDuration = notesInMeasure === 4 ? '4' : (notesInMeasure === 2 ? '2' : '1');
         if (isKidsMode && notesInMeasure === 1) baseDuration = '1';
         else if (isKidsMode && notesInMeasure === 2) baseDuration = '2';
+        if (melodicPhrasing === 'short_motifs') {
+            if (baseDuration === '1') baseDuration = '2';
+            if (baseDuration === '2') baseDuration = '4';
+            if (baseDuration === '4') baseDuration = '8';
+        } else if (melodicPhrasing === 'long_flowing') {
+             if (baseDuration === '8') baseDuration = '4';
+             if (baseDuration === '4') baseDuration = '2';
+        }
+
 
         let effectivePreferredChordTonesMidi = [...preferredChordTonesMidi];
         if (!isKidsMode && (genreLower?.includes('jazz') || genreLower?.includes('blues'))) {
@@ -580,9 +601,15 @@ export const generateMidiFile = (params: MusicParameters): string => {
                 if(isValidMidiNumber(seventhNoteMidi)) effectivePreferredChordTonesMidi.push(seventhNoteMidi, seventhNoteMidi);
             }
         }
+        riffCooldownMidi = Math.max(0, riffCooldownMidi -1);
 
         for (let i = 0; i < notesInMeasure; i++) {
-            if (Math.random() < 0.15 && i > 0 && rhythmicDensity < 0.6) {
+            melodyNoteCountInMeasure++;
+            let restProbability = 0.15;
+            if (melodicPhrasing === 'short_motifs' && i % 2 === 1) restProbability = 0.4; // More rests in short motifs
+            if (melodicPhrasing === 'long_flowing') restProbability = 0.05;
+
+            if (Math.random() < restProbability && i > 0 && rhythmicDensity < 0.6) {
                  const restDuration = baseDuration === '4' ? '8' : (baseDuration === '2' ? '4' : '2');
                  melodyTrack.addEvent(new MidiWriter.NoteEvent({pitch: [], duration: restDuration, wait: restDuration}));
                  if (baseDuration === '4' && notesInMeasure === 4) { i++; }
@@ -590,11 +617,56 @@ export const generateMidiFile = (params: MusicParameters): string => {
                  continue;
             }
 
+            // Riff-based contour for MIDI
+            if (melodicContour === 'riff-based' && melodyRiffBufferMidi.length >= RIFF_LENGTH_MIDI && Math.random() < 0.3 && riffCooldownMidi === 0) {
+                let canPlayRiff = true;
+                // Simplified check for MIDI: assume riff fits if it starts within measure.
+                // More complex duration checking for MIDI ticks is harder here without full tick accounting per event.
+                if (canPlayRiff) {
+                    for (const riffNote of melodyRiffBufferMidi) {
+                        melodyTrack.addEvent(new MidiWriter.NoteEvent({
+                            pitch: [riffNote.pitch],
+                            duration: riffNote.duration,
+                            velocity: riffNote.velocity
+                        }));
+                        lastMelodyNoteMidiForContour = riffNote.pitch;
+                    }
+                    riffCooldownMidi = RIFF_LENGTH_MIDI * 2;
+                    melodyRiffBufferMidi = []; // Clear buffer
+                    i += melodyRiffBufferMidi.length -1; // Advance main loop by number of riff notes played
+                    if (i >= notesInMeasure) break;
+                    continue;
+                }
+            }
+
+
             let pitchMidi: number;
-            if (effectivePreferredChordTonesMidi.length > 0 && (isKidsMode || Math.random() < 0.90) ) {
+            let preferChordToneMidi = Math.random() < (isKidsMode ? 0.60 : 0.70);
+            if (melodicEmphasis === 'foreground') preferChordToneMidi = Math.random() < 0.85;
+            else if (melodicEmphasis === 'background') preferChordToneMidi = Math.random() < 0.5;
+
+
+            if (preferChordToneMidi && effectivePreferredChordTonesMidi.length > 0 ) {
                  pitchMidi = effectivePreferredChordTonesMidi[Math.floor(Math.random() * effectivePreferredChordTonesMidi.length)];
             } else if (Math.random() < (isKidsMode ? 0.95 : 0.8) && currentChordScaleMidi.length > 0) {
-                pitchMidi = currentChordScaleMidi[Math.floor(Math.random() * currentChordScaleMidi.length)];
+                // Contour influence for MIDI
+                let targetNoteIndex = Math.floor(Math.random() * currentChordScaleMidi.length);
+                if (melodicContour === 'ascending' && lastMelodyNoteMidiForContour !== DEFAULT_MIDI_NOTE) {
+                    targetNoteIndex = currentChordScaleMidi.findIndex(n => n > lastMelodyNoteMidiForContour);
+                    if (targetNoteIndex === -1) targetNoteIndex = currentChordScaleMidi.length - 1;
+                } else if (melodicContour === 'descending' && lastMelodyNoteMidiForContour !== DEFAULT_MIDI_NOTE) {
+                     targetNoteIndex = currentChordScaleMidi.slice().reverse().findIndex(n => n < lastMelodyNoteMidiForContour);
+                     if (targetNoteIndex !== -1) targetNoteIndex = currentChordScaleMidi.length - 1 - targetNoteIndex;
+                     else targetNoteIndex = 0;
+                } else if (melodicContour === 'stable' && lastMelodyNoteMidiForContour !== DEFAULT_MIDI_NOTE) {
+                    const closest = currentChordScaleMidi.reduce((prev, curr) =>
+                        Math.abs(curr - lastMelodyNoteMidiForContour) < Math.abs(prev - lastMelodyNoteMidiForContour) ? curr : prev
+                    );
+                    targetNoteIndex = currentChordScaleMidi.indexOf(closest);
+                }
+                 targetNoteIndex = (targetNoteIndex + currentChordScaleMidi.length) % currentChordScaleMidi.length; // Ensure valid index
+                 pitchMidi = currentChordScaleMidi[targetNoteIndex];
+
             } else if (mainScaleNotesMidi.length > 0) {
                 pitchMidi = mainScaleNotesMidi[Math.floor(Math.random() * mainScaleNotesMidi.length)];
             } else {
@@ -602,14 +674,27 @@ export const generateMidiFile = (params: MusicParameters): string => {
             }
 
             if (!isValidMidiNumber(pitchMidi)) continue;
+            lastMelodyNoteMidiForContour = pitchMidi;
 
             let currentDuration = baseDuration;
             if (isKidsMode || (rhythmicDensity > 0.7 && notesInMeasure >=4 && Math.random() < 0.3) ) {
                 if (currentDuration === '4') currentDuration = '8';
                 else if (currentDuration === '2') currentDuration = '4';
             }
+            if (melodicPhrasing === 'short_motifs' && currentDuration === '1') currentDuration = '2';
 
-            let currentVelocity = calculateDynamicVelocity('melody', targetValence, targetArousal, isKidsMode, i === 0);
+
+            let currentVelocity = calculateDynamicVelocity('melody', targetValence, targetArousal, isKidsMode, i === 0, melodicEmphasis);
+
+            // Store for MIDI riff
+            if (melodicContour === 'riff-based') {
+                melodyRiffBufferMidi.push({ pitch: pitchMidi, duration: currentDuration, velocity: currentVelocity });
+                if (melodyRiffBufferMidi.length > RIFF_LENGTH_MIDI) {
+                    melodyRiffBufferMidi.shift();
+                }
+            } else {
+                melodyRiffBufferMidi = [];
+            }
 
 
             if (!isKidsMode && baseDuration === '4' && rhythmicDensity > 0.8 && Math.random() < 0.3 && i < notesInMeasure -1) {
@@ -628,7 +713,8 @@ export const generateMidiFile = (params: MusicParameters): string => {
                     nextPitchMidi = DEFAULT_MIDI_NOTE;
                 }
 
-                melodyTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [nextPitchMidi], duration: '8', velocity: calculateDynamicVelocity('melody', targetValence, targetArousal, isKidsMode) }));
+                melodyTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [nextPitchMidi], duration: '8', velocity: calculateDynamicVelocity('melody', targetValence, targetArousal, isKidsMode, false, melodicEmphasis) }));
+                lastMelodyNoteMidiForContour = nextPitchMidi;
             } else {
                 melodyTrack.addEvent(new MidiWriter.NoteEvent({ pitch: [pitchMidi], duration: currentDuration, velocity: currentVelocity }));
             }
@@ -637,7 +723,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
 
     let arpeggioTrackHasEvents = false;
     const hintsLower = instrumentHints.map(h => typeof h === 'string' ? h.toLowerCase() : "");
-    const isArpFriendlyInstrument = hintsLower.some(hint =>
+    const isArpFriendlyInstrumentMidi = hintsLower.some(hint =>
       /piano|synth lead|electric piano|pluck|bell|celesta|glockenspiel|music box|bright synth|warm lead|soft lead|arp/i.test(hint)
     );
 
@@ -651,9 +737,9 @@ export const generateMidiFile = (params: MusicParameters): string => {
         if(arpNotesMidi.length === 0) return;
 
         let numArpNotesPerBeat = 0;
-        if (isArpFriendlyInstrument || genreLower?.includes('pop') || genreLower?.includes('electronic') || genreLower?.includes('ambient')) {
+        if (isArpFriendlyInstrumentMidi || genreLower?.includes('pop') || genreLower?.includes('electronic') || genreLower?.includes('ambient')) {
             numArpNotesPerBeat = isKidsMode ? (harmonicComplexity > 0.2 ? 1: 0) : (harmonicComplexity > 0.6 ? 2 : (harmonicComplexity > 0.3 ? 1 : 0));
-             if (isArpFriendlyInstrument && !isKidsMode) numArpNotesPerBeat = rhythmicDensity > 0.5 ? 2 : 1; // Make arps more active for these instruments
+             if (isArpFriendlyInstrumentMidi && !isKidsMode) numArpNotesPerBeat = rhythmicDensity > 0.5 ? 2 : 1;
         }
 
 
@@ -672,12 +758,12 @@ export const generateMidiFile = (params: MusicParameters): string => {
                 for (let subBeat = 0; subBeat < numArpNotesPerBeat; subBeat++) {
                     const pitchMidi = arpNotesMidi[selectedArpPattern[(beat * numArpNotesPerBeat + subBeat) % selectedArpPattern.length] % arpNotesMidi.length];
                      if (!isValidMidiNumber(pitchMidi)) continue;
-                    const arpVelocity = calculateDynamicVelocity('arpeggio', targetValence, targetArousal, isKidsMode);
+                    const arpVelocity = calculateDynamicVelocity('arpeggio', targetValence, targetArousal, isKidsMode, false, melodicEmphasis);
                     arpeggioTrack.addEvent(new MidiWriter.NoteEvent({
                         pitch: [pitchMidi],
                         duration: arpDuration,
                         velocity: arpVelocity,
-                        tick: (measureIndex * beatsPerMeasure + beat) * getTPQN() + subBeat * (getTPQN() / numArpNotesPerBeat) // Calculate tick precisely
+                        tick: (measureIndex * beatsPerMeasure + beat) * getTPQN() + subBeat * (getTPQN() / numArpNotesPerBeat)
                     }));
                 }
             }
@@ -685,7 +771,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
              const pitchMidi = arpNotesMidi[0];
              if (!isValidMidiNumber(pitchMidi)) return;
              arpeggioTrackHasEvents = true;
-             const arpVelocity = calculateDynamicVelocity('arpeggio', targetValence, targetArousal, isKidsMode);
+             const arpVelocity = calculateDynamicVelocity('arpeggio', targetValence, targetArousal, isKidsMode, false, melodicEmphasis);
              arpeggioTrack.addEvent(new MidiWriter.NoteEvent({
                 pitch: [pitchMidi],
                 duration: chordDef.measureDuration || '1',
@@ -895,7 +981,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const finalTonicChordForPadDef = getChordProgressionWithDetails(tonicKeyName, finalModeIsMinor ? 'minor' : 'major', 1, finalPadOctave, 0.1, params.selectedGenre, isKidsMode)[0];
 
     if (finalTonicChordForPadDef && finalTonicChordForPadDef.notes && finalTonicChordForPadDef.notes.length > 0) {
-        const finalPadVelocity = calculateDynamicVelocity('chord', targetValence, targetArousal, isKidsMode, true);
+        const finalPadVelocity = calculateDynamicVelocity('chord', targetValence, targetArousal, isKidsMode, true, melodicEmphasis);
         chordsPadTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: finalTonicChordForPadDef.notes,
             duration: finalNoteDuration,
@@ -907,7 +993,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const finalMelodyOctave = isKidsMode ? 4 : (genreLower?.includes('jazz') ? 4 : 3);
     const finalMelodyNoteMidi = robustNoteToMidi(tonicKeyName + finalMelodyOctave);
     if (isValidMidiNumber(finalMelodyNoteMidi)) {
-        const finalMelodyVelocity = calculateDynamicVelocity('melody', targetValence, targetArousal, isKidsMode, true);
+        const finalMelodyVelocity = calculateDynamicVelocity('melody', targetValence, targetArousal, isKidsMode, true, melodicEmphasis);
         melodyTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: [finalMelodyNoteMidi],
             duration: finalNoteDuration,
@@ -919,7 +1005,7 @@ export const generateMidiFile = (params: MusicParameters): string => {
     const finalBassOctave = isKidsMode ? 2 : 1;
     const finalBassNoteMidi = robustNoteToMidi(tonicKeyName + finalBassOctave);
     if (isValidMidiNumber(finalBassNoteMidi)) {
-        const finalBassVelocity = calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, true);
+        const finalBassVelocity = calculateDynamicVelocity('bass', targetValence, targetArousal, isKidsMode, true, melodicEmphasis);
         bassTrack.addEvent(new MidiWriter.NoteEvent({
             pitch: [finalBassNoteMidi],
             duration: finalNoteDuration,
@@ -959,4 +1045,3 @@ export const generateMidiFile = (params: MusicParameters): string => {
         return fallbackWriter.dataUri();
     }
 };
-

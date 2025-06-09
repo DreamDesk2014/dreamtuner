@@ -12,14 +12,14 @@ import {
 } from './musicTheory';
 import {
     getSynthConfigurations as getSynthConfigurationsFromSoundDesign,
-    createSynth as createSynthFromSoundDesign, 
+    createSynth as createSynthFromSoundDesign,
     type InstrumentOutput
 } from './soundDesign';
 
 
 // Constants
 const MIN_EFFECTIVE_DURATION_SECONDS = 5.0;
-const MAX_WAV_RENDER_DURATION_SECONDS = 15.0; 
+const MAX_WAV_RENDER_DURATION_SECONDS = 15.0;
 const TIME_EPSILON = 0.00001;
 
 // --- Utility Functions ---
@@ -41,18 +41,13 @@ function applyHumanization(time: number, intensity: number = 0.01): number {
 
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  const logPrefix = "[WAV_GEN_V0.3_CTX_FIX]";
+  const logPrefix = "[WAV_GEN_V0.4_MELODY_ENH]";
   console.log(`${logPrefix} Starting synthesis for: ${params.generatedIdea ? params.generatedIdea.substring(0, 30) : "Untitled"}...`);
-
-  // Tone.Offline creates its own context, so global Tone.context state is less critical here,
-  // but it's good practice to ensure Tone.start() was called if any global Tone objects were touched.
-  // if (typeof Tone === 'undefined' || !Tone.context || Tone.context.state !== 'running') {
-  //   console.warn(`${logPrefix}_WARN] Global Tone.context is NOT 'running' or available. This may be fine for Tone.Offline if all nodes are created within it.`);
-  // }
 
   const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
   const isKidsMode = params.originalInput.mode === 'kids';
   const { harmonicComplexity = 0.3, rhythmicDensity = 0.5, targetArousal = 0, targetValence = 0, instrumentHints = [] } = params;
+  const { melodicContour, melodicPhrasing, melodicEmphasis } = params; // New melodic parameters
 
   const activeSynthConfigs = getSynthConfigurationsFromSoundDesign(instrumentHints, params.selectedGenre, isKidsMode, harmonicComplexity, rhythmicDensity);
 
@@ -70,7 +65,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     const numChordCycles = isKidsMode ? 2 : (genreLower.includes("ambient") ? 3 : (genreLower.includes("blues") ? 1 : 4));
     const totalChordProgressionSeconds = numChordCycles * progressionDegreesInput.length * measureDurationSeconds;
 
-  // Melody Generation 
+  // Melody Generation
   const melodyNotesToSchedule: { time: number, note: string, duration: string, velocity: number, filterAttack?:boolean }[] = [];
   const melodyOctave = isKidsMode ? 4 : (genreLower.includes("jazz") || genreLower.includes("classical") ? 5 : 4);
   const scaleNoteNames = getScaleNoteNamesFromTheory(params.keySignature, params.mode, melodyOctave, params.selectedGenre, harmonicComplexity);
@@ -78,6 +73,9 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   let lastMelodyEventTime = -TIME_EPSILON;
   let lastMelodyNoteMidi = -1;
   let melodyNoteCounter = 0;
+  let melodyRiffBuffer: { noteMidi: number, duration: string, velocityMod: number }[] = [];
+  const RIFF_LENGTH = 3; // Number of notes in a riff segment
+  let riffPlaybackCooldown = 0; // Cooldown to prevent riff from playing too often
 
   if (scaleNoteNames.length > 0) {
       let currentMelodyScaleIndex = Math.floor(Math.random() * scaleNoteNames.length);
@@ -85,16 +83,23 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
       while (melodyCurrentTime < totalChordProgressionSeconds - TIME_EPSILON) {
           let noteDurationNotation: string;
-          const arousalFactor = (targetArousal + 1) / 2;
+          const arousalFactor = (targetArousal + 1) / 2; // 0 to 1
 
-          if (isKidsMode) {
-            noteDurationNotation = weightedRandom(["4n", "2n", "8n"], [0.6, 0.3, 0.1]) as string;
-          } else if (rhythmicDensity < 0.33) {
-            noteDurationNotation = weightedRandom(["1m", "2n", "4n"], [0.1 + arousalFactor*0.1, 0.5, 0.4 - arousalFactor*0.1]) as string;
-          } else if (rhythmicDensity < 0.66) {
-            noteDurationNotation = weightedRandom(["2n", "4n", "8n"], [0.1, 0.6, 0.3 + arousalFactor*0.05]) as string;
-          } else {
-            noteDurationNotation = weightedRandom(["4n", "8n", "16n"], [0.4, 0.5 + arousalFactor*0.1, 0.1 - arousalFactor*0.05]) as string;
+          // Phrasing influence on duration
+          if (melodicPhrasing === 'short_motifs') {
+            noteDurationNotation = weightedRandom(["8n", "16n", "4n"], [0.6, 0.3, 0.1]) as string;
+          } else if (melodicPhrasing === 'long_flowing') {
+            noteDurationNotation = weightedRandom(["2n", "1m", "4n"], [0.5, 0.3, 0.2]) as string;
+          } else { // Default / other phrasing
+            if (isKidsMode) {
+              noteDurationNotation = weightedRandom(["4n", "2n", "8n"], [0.6, 0.3, 0.1]) as string;
+            } else if (rhythmicDensity < 0.33) {
+              noteDurationNotation = weightedRandom(["1m", "2n", "4n"], [0.1 + arousalFactor*0.1, 0.5, 0.4 - arousalFactor*0.1]) as string;
+            } else if (rhythmicDensity < 0.66) {
+              noteDurationNotation = weightedRandom(["2n", "4n", "8n"], [0.1, 0.6, 0.3 + arousalFactor*0.05]) as string;
+            } else {
+              noteDurationNotation = weightedRandom(["4n", "8n", "16n"], [0.4, 0.5 + arousalFactor*0.1, 0.1 - arousalFactor*0.05]) as string;
+            }
           }
 
           let noteDurationSec = Tone.Time(noteDurationNotation).toSeconds();
@@ -113,13 +118,19 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
            if (melodyCurrentTime >= totalChordProgressionSeconds - TIME_EPSILON) break;
 
           melodyNoteCounter++;
+          riffPlaybackCooldown = Math.max(0, riffPlaybackCooldown - 1);
+
           const restProbabilityBase = isKidsMode ? 0.20 : 0.15;
           const phraseEndRestProb = isKidsMode ? 0.30 : 0.25;
-          const restProbability = (melodyNoteCounter % (isKidsMode ? 3 : 4) === 0) ? phraseEndRestProb : (restProbabilityBase - (rhythmicDensity * 0.10) - arousalFactor * 0.03);
+          let restProbability = (melodyNoteCounter % (isKidsMode ? 3 : 4) === 0) ? phraseEndRestProb : (restProbabilityBase - (rhythmicDensity * 0.10) - arousalFactor * 0.03);
+          if (melodicPhrasing === 'short_motifs') restProbability = Math.min(0.8, restProbability + 0.15);
+          if (melodicPhrasing === 'long_flowing') restProbability = Math.max(0.05, restProbability - 0.1);
+
 
           if (Math.random() < restProbability && melodyCurrentTime > startOffset + secondsPerBeat * 0.5 && melodyNotesToSchedule.length > 0) {
               let restDurNotation = rhythmicDensity < 0.5 ? "8n" : "16n";
               if (noteDurationNotation === "2n" || noteDurationNotation === "1m") restDurNotation = "4n";
+              if (melodicPhrasing === 'short_motifs') restDurNotation = "8n"; // shorter rests for short motifs
               const restDurSec = Tone.Time(restDurNotation).toSeconds();
               if (melodyCurrentTime + restDurSec <= totalChordProgressionSeconds + TIME_EPSILON) {
                   melodyCurrentTime += restDurSec;
@@ -128,20 +139,66 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                   continue;
               }
           }
+
+          // Riff-based contour logic
+          if (melodicContour === 'riff-based' && melodyRiffBuffer.length >= RIFF_LENGTH && Math.random() < 0.3 && riffPlaybackCooldown === 0) {
+            let riffTime = melodyCurrentTime;
+            let canPlayRiff = true;
+            for (const riffNote of melodyRiffBuffer) {
+              if (riffTime + Tone.Time(riffNote.duration).toSeconds() > totalChordProgressionSeconds + TIME_EPSILON) {
+                canPlayRiff = false;
+                break;
+              }
+              riffTime += Tone.Time(riffNote.duration).toSeconds();
+            }
+
+            if (canPlayRiff) {
+              let tempRiffTime = melodyCurrentTime;
+              for (const riffNote of melodyRiffBuffer) {
+                let newTime = applyHumanization(tempRiffTime, 0.008);
+                if (newTime <= lastMelodyEventTime) newTime = lastMelodyEventTime + TIME_EPSILON;
+                const noteName = midiToNoteName(riffNote.noteMidi);
+                const velocity = Math.min(0.9, Math.max(0.15, (isKidsMode ? 0.50 : 0.55) + (targetArousal * 0.18) + (targetValence * 0.04) + riffNote.velocityMod));
+                melodyNotesToSchedule.push({ time: newTime, note: noteName, duration: riffNote.duration, velocity, filterAttack: true });
+                lastMelodyEventTime = newTime;
+                const currentRiffNoteDurSec = Tone.Time(riffNote.duration).toSeconds();
+                overallMaxTime = Math.max(overallMaxTime, newTime + currentRiffNoteDurSec);
+                tempRiffTime = newTime + currentRiffNoteDurSec;
+                lastMelodyNoteMidi = riffNote.noteMidi; // Update lastMelodyNoteMidi for continuity after riff
+              }
+              melodyCurrentTime = tempRiffTime;
+              riffPlaybackCooldown = RIFF_LENGTH * 2; // Cooldown after playing a riff
+              melodyRiffBuffer = []; // Clear buffer after playing to encourage new riffs
+              if (melodyCurrentTime >= totalChordProgressionSeconds - TIME_EPSILON) break;
+              continue;
+            }
+          }
+
           const currentChordDegree = progressionDegreesInput[Math.floor(melodyCurrentTime / measureDurationSeconds) % progressionDegreesInput.length];
           const chordNotesForMelody = getChordNotesForKeyFromTheory(params.keySignature, params.mode, currentChordDegree, melodyOctave, harmonicComplexity > 0.5, params.selectedGenre, harmonicComplexity)
                                        .map(n => robustNoteToMidi(n));
 
           let nextNoteMidi;
-          const preferChordTone = Math.random() < (isKidsMode ? 0.60 : 0.70);
-          const preferStepwise = Math.random() < (isKidsMode ? 0.70 : 0.80);
+          let preferChordTone = Math.random() < (isKidsMode ? 0.60 : 0.70);
+          if (melodicEmphasis === 'foreground') preferChordTone = Math.random() < 0.85;
+          else if (melodicEmphasis === 'background') preferChordTone = Math.random() < 0.5;
+
+          let preferStepwise = Math.random() < (isKidsMode ? 0.70 : 0.80);
+          if (melodicContour === 'stable') preferStepwise = Math.random() < 0.9;
+
 
           if (preferChordTone && chordNotesForMelody.length > 0 && (melodyNoteCounter % 2 === 1 || isKidsMode)) {
               nextNoteMidi = chordNotesForMelody[Math.floor(Math.random() * chordNotesForMelody.length)];
           } else if (preferStepwise && lastMelodyNoteMidi !== -1) {
-              const possibleSteps = [-2, -1, 1, 2];
+              let stepDirection = 0;
+              if (melodicContour === 'ascending') stepDirection = 1;
+              else if (melodicContour === 'descending') stepDirection = -1;
+              else if (melodicContour === 'wavy') stepDirection = (melodyNoteCounter % 2 === 0) ? 1 : -1;
+
+              const possibleSteps = stepDirection !== 0 ? [stepDirection * 1, stepDirection * 2] : [-2, -1, 1, 2];
               const nextStep = possibleSteps[Math.floor(Math.random() * possibleSteps.length)];
               let candidateNote = lastMelodyNoteMidi + nextStep;
+
               const scaleMidiNotes = scaleNoteNames.map(n => robustNoteToMidi(n));
               if (!scaleMidiNotes.includes(candidateNote) && scaleMidiNotes.length > 0) {
                   nextNoteMidi = scaleMidiNotes.reduce((prev, curr) => (Math.abs(curr - candidateNote) < Math.abs(prev - candidateNote) ? curr : prev));
@@ -149,22 +206,42 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                   nextNoteMidi = candidateNote;
               }
           } else {
-              currentMelodyScaleIndex = (currentMelodyScaleIndex + (Math.random() < 0.6 ? (Math.random() < 0.5 ? 1 : -1) : (Math.random() < 0.5 ? 2 : -2)) + scaleNoteNames.length) % scaleNoteNames.length;
+              let intervalJump = (Math.random() < 0.6 ? (Math.random() < 0.5 ? 1 : -1) : (Math.random() < 0.5 ? 2 : -2));
+              if (melodicContour === 'ascending') intervalJump = Math.abs(intervalJump) || 1;
+              else if (melodicContour === 'descending') intervalJump = -Math.abs(intervalJump) || -1;
+
+              currentMelodyScaleIndex = (currentMelodyScaleIndex + intervalJump + scaleNoteNames.length) % scaleNoteNames.length;
               if(scaleNoteNames[currentMelodyScaleIndex]) nextNoteMidi = robustNoteToMidi(scaleNoteNames[currentMelodyScaleIndex]);
               else nextNoteMidi = DEFAULT_MIDI_NOTE;
           }
           nextNoteMidi = Math.max(21, Math.min(108, nextNoteMidi || DEFAULT_MIDI_NOTE));
-          lastMelodyNoteMidi = nextNoteMidi;
 
-          const noteName = midiToNoteName(nextNoteMidi);
+
           const baseVelMelody = isKidsMode ? 0.50 : 0.55;
-          const velocity = Math.min(0.9, Math.max(0.15, baseVelMelody + (targetArousal * 0.18) + (targetValence * 0.04) + (Math.random() * 0.12 - 0.06) + (melodyNoteCounter === 1 ? 0.04 : 0) ));
+          let velocity = baseVelMelody + (targetArousal * 0.18) + (targetValence * 0.04) + (Math.random() * 0.12 - 0.06) + (melodyNoteCounter === 1 ? 0.04 : 0);
+          if (melodicEmphasis === 'foreground') velocity += 0.1;
+          else if (melodicEmphasis === 'background') velocity -= 0.1;
+          velocity = Math.min(0.9, Math.max(0.15, velocity));
+
+          // Store for potential riff
+           const velocityModForRiff = velocity - (baseVelMelody + (targetArousal * 0.18) + (targetValence * 0.04)); // Store deviation
+           if (melodicContour === 'riff-based') {
+                melodyRiffBuffer.push({ noteMidi: nextNoteMidi, duration: noteDurationNotation, velocityMod: velocityModForRiff });
+                if (melodyRiffBuffer.length > RIFF_LENGTH) {
+                    melodyRiffBuffer.shift();
+                }
+           } else {
+             melodyRiffBuffer = []; // Clear if not riff-based currently
+           }
+
+          lastMelodyNoteMidi = nextNoteMidi;
+          const noteName = midiToNoteName(nextNoteMidi);
 
           let newTime = applyHumanization(melodyCurrentTime, 0.008);
           if (newTime <= lastMelodyEventTime) newTime = lastMelodyEventTime + TIME_EPSILON;
           if (newTime >= totalChordProgressionSeconds - TIME_EPSILON) break;
 
-          melodyNotesToSchedule.push({ time: newTime, note: noteName, duration: noteDurationNotation, velocity, filterAttack: true });
+          melodyNotesToSchedule.push({ time: newTime, note: noteName, duration: noteDurationNotation, velocity, filterAttack: melodicPhrasing !== 'long_flowing' }); // More staccato for shorter phrases
           lastMelodyEventTime = newTime;
           overallMaxTime = Math.max(overallMaxTime, newTime + noteDurationSec);
           melodyCurrentTime = newTime + noteDurationSec;
@@ -317,7 +394,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                   (isKidsMode && harmonicComplexity > 0.1 && rhythmicDensity > 0.05 && isArpFriendlyInstrument) ||
                   (!isKidsMode && (genreLower.includes("electronic") || genreLower.includes("pop") || genreLower.includes("ambient") || genreLower.includes("classical") || harmonicComplexity > 0.4));
 
-  if (playArp) { 
+  if (playArp) {
     chordEventsToSchedule.forEach(chordEvent => {
         const currentChordNotesForArp = chordEvent.notes.map(n => midiToNoteName(robustNoteToMidi(n.replace(/[0-9]+$/, String(arpeggioOctave)))));
         if (currentChordNotesForArp.length > 0) {
@@ -431,7 +508,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   try {
     const audioBuffer = await Tone.Offline(async (offlineContext: Tone.OfflineContext) => {
       console.log(`${logPrefix}_OFFLINE] Inside Tone.Offline. SR: ${offlineContext.sampleRate}, BPM: ${currentBpm}`);
-      offlineContext.transport.bpm.value = currentBpm; 
+      offlineContext.transport.bpm.value = currentBpm;
       if (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.4)) {
           offlineContext.transport.swing = 0.20;
           offlineContext.transport.swingSubdivision = "8n";
@@ -449,7 +526,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       const bassInstrumentSetup = await createSynthFromSoundDesign(activeSynthConfigs.bass, offlineContext);
       const chordInstrumentSetup = await createSynthFromSoundDesign(activeSynthConfigs.chords, offlineContext);
       let arpInstrumentSetupResult: InstrumentOutput | null = null;
-      if (activeSynthConfigs.arpeggio && playArp) { // Only create if playArp is true
+      if (activeSynthConfigs.arpeggio && playArp) {
           arpInstrumentSetupResult = await createSynthFromSoundDesign(activeSynthConfigs.arpeggio, offlineContext);
       }
       console.log(`${logPrefix}_OFFLINE] All melodic/harmonic instruments created in offline context.`);
@@ -458,7 +535,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       melodyOutput.connect(masterReverb);
 
       const { instrument: bassSynth, outputNodeToConnect: bassOutput, filterEnv: bassFilterEnv } = bassInstrumentSetup;
-      bassOutput.connect(offlineContext.destination); 
+      bassOutput.connect(offlineContext.destination);
 
       const { instrument: chordSynth, outputNodeToConnect: chordOutput, filterEnv: chordFilterEnv } = chordInstrumentSetup;
       chordOutput.connect(masterReverb);
@@ -510,7 +587,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         else if (synth === 'tambourine' && tambourineSynth) tambourineSynth.triggerAttackRelease(duration, time, velocity);
       });
       console.log(`${logPrefix}_OFFLINE] All events scheduled for offline rendering.`);
-      offlineContext.transport.start(0); // Start the transport within the offline context
+      offlineContext.transport.start(0);
 
     }, renderDuration);
 
@@ -538,6 +615,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-
-
-    
