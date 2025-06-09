@@ -47,7 +47,7 @@ function applyHumanization(time: number, intensity: number = 0.008): number { //
 
 
 export const generateWavFromMusicParameters = async (params: MusicParameters): Promise<Blob | null> => {
-  const logPrefix = "[WAV_GEN_V0.9.1_SamplerFix]";
+  const logPrefix = "[WAV_GEN_V0.9.2_SamplerFix]";
   console.log(`${logPrefix} Starting synthesis for: ${params.generatedIdea ? params.generatedIdea.substring(0, 30) : "Untitled"}...`);
 
   const genreLower = typeof params.selectedGenre === 'string' ? params.selectedGenre.toLowerCase() : "";
@@ -59,7 +59,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
   const startOffset = 0.1;
   const currentBpm = (params.tempoBpm && params.tempoBpm > 0) ? params.tempoBpm : 120;
-  Tone.Transport.bpm.value = currentBpm;
+  // Tone.Transport.bpm.value = currentBpm; // Set in Offline context
   const secondsPerBeat = 60 / currentBpm;
   const measureDurationSeconds = BEATS_PER_MEASURE * secondsPerBeat;
   let overallMaxTime = startOffset;
@@ -86,28 +86,27 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   let melodyRiffBuffer: { noteMidi: number, duration: string, velocityMod: number }[] = [];
   const RIFF_LENGTH = (melodicPhrasing === 'short_motifs') ? 2 : 3;
   let riffPlaybackCooldown = 0;
-  let noteDurationNotation: string = "4n"; // Initialize with a safe default
+  let noteDurationNotation: string = "4n";
 
   if (scaleNoteNames.length > 0) {
       let currentMelodyScaleIndex = Math.floor(Math.random() * scaleNoteNames.length);
       if(scaleNoteNames[currentMelodyScaleIndex]) lastMelodyNoteMidi = robustNoteToMidi(scaleNoteNames[currentMelodyScaleIndex]);
 
       while (melodyCurrentTime < totalChordProgressionSeconds - TIME_EPSILON) {
-          const arousalFactor = (targetArousal + 1) / 2; // 0 to 1
+          const arousalFactor = (targetArousal + 1) / 2;
 
-          // Note Duration based on Melodic Phrasing and Rhythmic Density
           if (melodicPhrasing === 'short_motifs') {
             noteDurationNotation = weightedRandom(["8n", "16n", "4t"], [0.5, 0.35, 0.15]) as string;
           } else if (melodicPhrasing === 'long_flowing') {
             noteDurationNotation = weightedRandom(["2n", "1m", "4n."], [0.5, 0.3, 0.2]) as string;
-          } else { // Default phrasing or others
+          } else {
             if (isKidsMode) {
               noteDurationNotation = rhythmicDensity > 0.4 ? weightedRandom(["4n", "8n"], [0.6, 0.4]) as string : weightedRandom(["2n", "4n"], [0.7, 0.3]) as string;
-            } else if (rhythmicDensity < 0.33) { // Sparse
+            } else if (rhythmicDensity < 0.33) {
               noteDurationNotation = weightedRandom(["1m", "2n", "4n."], [0.2 + arousalFactor*0.1, 0.5, 0.3 - arousalFactor*0.1]) as string;
-            } else if (rhythmicDensity < 0.66) { // Moderate
+            } else if (rhythmicDensity < 0.66) {
               noteDurationNotation = weightedRandom(["2n", "4n", "8n"], [0.15, 0.6, 0.25 + arousalFactor*0.05]) as string;
-            } else { // Dense
+            } else {
               noteDurationNotation = weightedRandom(["4n", "8n", "16n"], [0.3, 0.55 + arousalFactor*0.1, 0.15 - arousalFactor*0.05]) as string;
             }
           }
@@ -117,7 +116,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
           if (melodyCurrentTime + noteDurationSec > totalChordProgressionSeconds + TIME_EPSILON) {
               noteDurationSec = totalChordProgressionSeconds - melodyCurrentTime;
-              if (noteDurationSec <= TIME_EPSILON * 5) break; // Too short, end loop
+              if (noteDurationSec <= TIME_EPSILON * 5) break;
               if (noteDurationSec >= Tone.Time("1m").toSeconds() - TIME_EPSILON) noteDurationNotation = "1m";
               else if (noteDurationSec >= Tone.Time("2n").toSeconds() - TIME_EPSILON) noteDurationNotation = "2n";
               else if (noteDurationSec >= Tone.Time("4n.").toSeconds() - TIME_EPSILON) noteDurationNotation = "4n.";
@@ -263,6 +262,8 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     for (let i=0; i < progressionDegreesInput.length; i++) {
         const degree = progressionDegreesInput[i];
         const currentMeasureStartTimeForCycle = startOffset + (cycle * progressionDegreesInput.length * measureDurationSeconds) + (i * measureDurationSeconds);
+        if (currentMeasureStartTimeForCycle >= totalChordProgressionSeconds - TIME_EPSILON) break;
+
 
         const chordNotesForBass = getChordNotesForKeyFromTheory(params.keySignature, params.mode, degree, bassOctave, harmonicComplexity > 0.5, params.selectedGenre, harmonicComplexity);
         const rootNote = chordNotesForBass[0] || midiToNoteName(DEFAULT_MIDI_NOTE + (bassOctave -4)*12);
@@ -600,7 +601,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   const finalOutroStartTime = totalChordProgressionSeconds;
   const outroDurationSeconds = OUTRO_MEASURES * measureDurationSeconds;
 
-  // Add a final resolving chord/note for melodic instruments
   const finalTonicChordNotes = getChordNotesForKeyFromTheory(params.keySignature, params.mode, 1, chordOctave, false, params.selectedGenre, 0.1);
   if (finalTonicChordNotes.length > 0) {
     chordEventsToSchedule.push({ time: finalOutroStartTime, notes: finalTonicChordNotes, duration: `${OUTRO_MEASURES}m`, velocity: Math.min(0.50, (isKidsMode ? 0.35 : 0.40) * 0.8), filterAttack: true});
@@ -619,9 +619,8 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
         if (finalArpNote) arpeggioNotesToSchedule.push({ time: finalOutroStartTime, note: finalArpNote, duration: `${OUTRO_MEASURES}m`, velocity: Math.min(0.40, (0.20)*0.7), filterAttack:true});
     }
   }
-   // Final drum hit (cymbal crash)
   const finalDrumHitTime = finalOutroStartTime;
-  if (drumEventsToSchedule.length > 0 || isKidsMode) { // Add if drums were used or it's kids mode
+  if (drumEventsToSchedule.length > 0 || isKidsMode) {
     drumEventsToSchedule.push({ synth: 'hiHat', time: finalDrumHitTime, duration: "1m", velocity: Math.min(0.7, (isKidsMode ? 0.55 : 0.65) * 0.9), pitch: activeSynthConfigs.hiHat?.frequency ? (activeSynthConfigs.hiHat.frequency * 1.8) : 600 });
     overallMaxTime = Math.max(overallMaxTime, finalDrumHitTime + measureDurationSeconds);
   }
@@ -681,7 +680,9 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
 
       melodyNotesToSchedule.forEach((ev) => {
         let noteToPlay = ev.note;
-        if (activeSynthConfigs.melody.isSampler && availableMelodySamplerNotes && availableMelodySamplerNotes.length > 0) {
+        let isMelodySampler = melodySynth instanceof Tone.Sampler;
+
+        if (isMelodySampler && availableMelodySamplerNotes && availableMelodySamplerNotes.length > 0) {
           if (!availableMelodySamplerNotes.includes(noteToPlay)) {
             const targetMidi = robustNoteToMidi(noteToPlay);
             let closestNote = availableMelodySamplerNotes[0];
@@ -697,8 +698,12 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
             noteToPlay = closestNote;
           }
         }
-        (melodySynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
-        if (melodyFilterEnv && ev.filterAttack) melodyFilterEnv.triggerAttackRelease(ev.duration, ev.time);
+        try {
+            (melodySynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
+            if (melodyFilterEnv && ev.filterAttack) melodyFilterEnv.triggerAttackRelease(ev.duration, ev.time);
+        } catch (e) {
+            console.error(`${logPrefix}_OFFLINE_ERROR] Failed to triggerAttackRelease for melody note: ${noteToPlay} (original: ${ev.note}) at time ${ev.time}. Is sampler: ${isMelodySampler}. Error:`, e);
+        }
       });
       bassNotesToSchedule.forEach((ev) => {
         (bassSynth as any).triggerAttackRelease(ev.note, ev.duration, ev.time, ev.velocity);
@@ -711,7 +716,8 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
       if (arpeggioSynth && arpInstrumentSetupResult) {
         arpeggioNotesToSchedule.forEach((ev) => {
             let noteToPlay = ev.note;
-            if (activeSynthConfigs.arpeggio.isSampler && availableArpSamplerNotes && availableArpSamplerNotes.length > 0) {
+            let isArpSampler = arpeggioSynth instanceof Tone.Sampler;
+            if (isArpSampler && availableArpSamplerNotes && availableArpSamplerNotes.length > 0) {
                 if (!availableArpSamplerNotes.includes(noteToPlay)) {
                     const targetMidi = robustNoteToMidi(noteToPlay);
                     let closestNote = availableArpSamplerNotes[0];
@@ -727,8 +733,12 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
                     noteToPlay = closestNote;
                 }
             }
-            (arpeggioSynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
-             if (arpeggioFilterEnv && ev.filterAttack) arpeggioFilterEnv.triggerAttackRelease(ev.duration, ev.time);
+            try {
+                (arpeggioSynth as any).triggerAttackRelease(noteToPlay, ev.duration, ev.time, ev.velocity);
+                 if (arpeggioFilterEnv && ev.filterAttack) arpeggioFilterEnv.triggerAttackRelease(ev.duration, ev.time);
+            } catch (e) {
+                console.error(`${logPrefix}_OFFLINE_ERROR] Failed to triggerAttackRelease for arpeggio note: ${noteToPlay} (original: ${ev.note}) at time ${ev.time}. Is sampler: ${isArpSampler}. Error:`, e);
+            }
         });
       }
 
@@ -782,5 +792,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-
-    

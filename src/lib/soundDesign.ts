@@ -125,10 +125,11 @@ export const getSynthConfigurations = (
     tambourine: { noise: {type: 'white' as const, playbackRate: 1.6}, envelope: {attack:0.006, decay:0.06, sustain:0, release:0.07}, volume: -17, instrumentHintName: "baseTambourine"},
   };
 
-  let melodyConf: any = { ...baseConfigs.pianoMelody, instrumentHintName: "defaultMelodyPiano" };
-  let bassConf: any = { ...baseConfigs.defaultBass, instrumentHintName: "defaultBass" };
-  let chordsConf: any = { ...baseConfigs.warmPadChords, instrumentHintName: "defaultChordsPad" };
-  let arpConf: any = { ...baseConfigs.pluckArp, instrumentHintName: "defaultArpPluck" };
+  let melodyConf: any = { ...baseConfigs.pianoMelody, instrumentHintName: "defaultMelodyPiano", isSampler: false };
+  let bassConf: any = { ...baseConfigs.defaultBass, instrumentHintName: "defaultBass", isSampler: false };
+  let chordsConf: any = { ...baseConfigs.warmPadChords, instrumentHintName: "defaultChordsPad", isSampler: false };
+  let arpConf: any = { ...baseConfigs.pluckArp, instrumentHintName: "defaultArpPluck", isSampler: false };
+
   let kickConf: any = { ...baseConfigs.kick, instrumentHintName: "defaultKick" };
   let snareConf: any = { ...baseConfigs.snare, instrumentHintName: "defaultSnare" };
   let hiHatConf: any = { ...baseConfigs.hiHat, instrumentHintName: "defaultHiHat" };
@@ -136,175 +137,140 @@ export const getSynthConfigurations = (
   let useRideCymbal = false;
 
 
-  // --- START OF MODIFIED/NEW LOGIC FOR SAMPLER HINTING ---
   const explicitSamplerHint = hintsLower.find(h => h.startsWith("use_sampled_"));
 
   if (explicitSamplerHint) {
     const samplerId = explicitSamplerHint.substring("use_sampled_".length);
-    // If an explicit sampler is hinted, assume it's for the melody primarily,
-    // but allow it to be used for chords/arp if they aren't strongly hinted otherwise.
     melodyConf = { isSampler: true, samplerName: samplerId, volume: -8, instrumentHintName: `sampler_melody_${samplerId}` };
-    if (!chordsConf.isSampler && !hintsLower.some(h => /pad|string ensemble|synth lead|electric piano|organ/i.test(h))) {
+    if (!hintsLower.some(h => /pad|string ensemble|synth lead|electric piano|organ|warm pad|strings pad/i.test(h) || h.startsWith("use_sampled_"))) {
         chordsConf = { isSampler: true, samplerName: samplerId, volume: -14, instrumentHintName: `sampler_chords_${samplerId}` };
     }
-    if (!arpConf.isSampler && !hintsLower.some(h => /pluck|synth arp|bell|celesta|flute/i.test(h))) {
+    if (!hintsLower.some(h => /pluck|synth arp|bell|celesta|flute|sequence/i.test(h) || h.startsWith("use_sampled_"))) {
         arpConf = { isSampler: true, samplerName: samplerId, volume: -16, instrumentHintName: `sampler_arp_${samplerId}` };
     }
   } else if (hintsLower.some(h => h.includes('piano')) && !isKidsMode && !hintsLower.some(h => /electric piano|toy piano/i.test(h))) {
-      // If "piano" (and not other piano types), and no explicit sampler was set, use default piano sampler.
       melodyConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_PIANO, volume: -8, instrumentHintName: `sampler_piano_melody_${DEFAULT_SAMPLER_ID_FOR_PIANO}` };
-      if (!chordsConf.isSampler && !hintsLower.some(h => /pad|string ensemble|synth lead|organ/i.test(h))) {
+      if (!hintsLower.some(h => /pad|string ensemble|synth lead|organ|warm pad|strings pad/i.test(h) || h.startsWith("use_sampled_"))) {
           chordsConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_PIANO, volume: -14, instrumentHintName: `sampler_piano_chords_${DEFAULT_SAMPLER_ID_FOR_PIANO}` };
       }
-      if (!arpConf.isSampler && !hintsLower.some(h => /pluck|synth arp|bell|celesta|flute/i.test(h))) {
+      if (!hintsLower.some(h => /pluck|synth arp|bell|celesta|flute|sequence/i.test(h) || h.startsWith("use_sampled_"))) {
           arpConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_PIANO, volume: -16, instrumentHintName: `sampler_piano_arp_${DEFAULT_SAMPLER_ID_FOR_PIANO}` };
       }
   } else if (hintsLower.some(h => h.includes('casio') || (h.includes('keyboard') && !hintsLower.some(h => /synth lead|synth pad|organ|piano|electric piano/i.test(h)))) && !isKidsMode) {
-      // If "casio" or a generic "keyboard" (and not other specific keyboard types or already a sampler), use casio sampler.
       melodyConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_CASIO, volume: -9, instrumentHintName: `sampler_casio_melody_${DEFAULT_SAMPLER_ID_FOR_CASIO}` };
-      if (!chordsConf.isSampler && !hintsLower.some(h => /pad|string ensemble|synth lead|organ/i.test(h))) {
+      if (!hintsLower.some(h => /pad|string ensemble|synth lead|organ|warm pad|strings pad/i.test(h) || h.startsWith("use_sampled_"))) {
         chordsConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_CASIO, volume: -15, instrumentHintName: `sampler_casio_chords_${DEFAULT_SAMPLER_ID_FOR_CASIO}` };
       }
-      if (!arpConf.isSampler && !hintsLower.some(h => /pluck|synth arp|bell|celesta|flute/i.test(h))) {
+      if (!hintsLower.some(h => /pluck|synth arp|bell|celesta|flute|sequence/i.test(h) || h.startsWith("use_sampled_"))) {
         arpConf = { isSampler: true, samplerName: DEFAULT_SAMPLER_ID_FOR_CASIO, volume: -17, instrumentHintName: `sampler_casio_arp_${DEFAULT_SAMPLER_ID_FOR_CASIO}` };
       }
   }
-  // --- END OF MODIFIED/NEW LOGIC FOR SAMPLER HINTING ---
 
 
   if (isKidsMode) {
-    if (!melodyConf.isSampler) { // Only apply kids synth if no sampler was set for melody
+    if (!melodyConf.isSampler) {
         const kidMelodyRandom = Math.random();
         if (kidMelodyRandom < 0.4) melodyConf = {...baseConfigs.kidsToyPiano};
         else if (kidMelodyRandom < 0.8) melodyConf = {...baseConfigs.kidsXylophone};
         else melodyConf = {...baseConfigs.customPluckySynth, volume: -12, instrumentHintName: "kidsCustomPlucky"};
     }
     bassConf = {...baseConfigs.kidsUkuleleBass};
-    if (!chordsConf.isSampler) chordsConf = {...baseConfigs.kidsSimplePad}; // Only apply kids synth if no sampler
-    if (!arpConf.isSampler) arpConf = {...baseConfigs.kidsSimpleArp}; // Only apply kids synth if no sampler
+    if (!chordsConf.isSampler) chordsConf = {...baseConfigs.kidsSimplePad};
+    if (!arpConf.isSampler) arpConf = {...baseConfigs.kidsSimpleArp};
     kickConf = {...baseConfigs.kidsKick};
     snareConf = {...baseConfigs.kidsSnare};
     hiHatConf = {...baseConfigs.kidsHiHat};
     if (hintsLower.some(h => h.includes("tambourine") || h.includes("shaker"))) useTambourine = true;
 
-  } else if (!melodyConf.isSampler) { // Apply genre/hint based synth changes ONLY if melody is NOT already a sampler by explicit or generic hint
-    if (genreLower.includes("electronic") || genreLower.includes("synthwave") || genreLower.includes("techno") || genreLower.includes("house")) {
-      melodyConf = { ...baseConfigs.synthLeadElectronic };
-      bassConf = { ...baseConfigs.subBassElectronic };
-      if (!chordsConf.isSampler) chordsConf = { ...baseConfigs.warmPadChords, volume: -20, instrumentHintName: "electronicWarmPadChords" };
-      if (!arpConf.isSampler) arpConf = { ...baseConfigs.synthArpElectronic };
-      kickConf = { ...baseConfigs.kickElectronic };
-      snareConf = { ...baseConfigs.snareElectronic };
-      hiHatConf = { ...baseConfigs.hiHatElectronic };
-    } else if (genreLower.includes("rock") || genreLower.includes("metal") || genreLower.includes("punk")) {
-      melodyConf = { ...baseConfigs.rockGuitarLead };
-      bassConf = { ...baseConfigs.rockBassPicked };
-      if (!chordsConf.isSampler) chordsConf = { ...baseConfigs.rockGuitarLead, synthType: Tone.PolySynth, subType: Tone.Synth, options: {...baseConfigs.rockGuitarLead.options, envelope: {...baseConfigs.rockGuitarLead.options.envelope, attack:0.005, decay:0.5, sustain:0.01, release:0.3}}, volume: -16, instrumentHintName: "rockGuitarChords" };
-      if (!arpConf.isSampler) arpConf = { ...baseConfigs.defaultBass, volume: -28, instrumentHintName: "rockArpBass" };
-      kickConf = { ...baseConfigs.kickRock, volume: -5 };
-    } else if (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.3)) {
-      // If melody isn't a sampler (like default_piano), use a synth piano for jazz
-      if(!melodyConf.isSampler) melodyConf = { ...baseConfigs.pianoMelody, volume: -10, instrumentHintName: "jazzPianoMelodyIfNotSampler" };
-      bassConf = { ...baseConfigs.jazzUprightBass };
-      if (!chordsConf.isSampler) chordsConf = { ...baseConfigs.electricPianoChords, volume: -16, instrumentHintName: "jazzElectricPianoChords" };
-      if (!arpConf.isSampler) arpConf = { ...baseConfigs.customPluckySynth, volume: -24, instrumentHintName: "jazzPluckArp" };
-      kickConf = { ...baseConfigs.kick, volume: -10, envelope: {...baseConfigs.kick.envelope, decay:0.15, sustain:0.001}, instrumentHintName: "jazzKick" };
-      snareConf = { ...baseConfigs.snare, volume: -16, noise: {type: 'pink' as const, playbackRate: 0.5}, instrumentHintName: "jazzSnare" };
-      hiHatConf = { ...baseConfigs.rideCymbal, volume: -20, instrumentHintName: "jazzRideCymbal" };
-      useRideCymbal = true;
-    } else if (genreLower.includes("ambient") || genreLower.includes("new age")) {
-        melodyConf = { ...baseConfigs.warmPadChords, synthType: Tone.PolySynth, subType: Tone.AMSynth, volume: -16, instrumentHintName: "ambientMelodyPad" };
-        bassConf = { ...baseConfigs.subBassElectronic, volume: -14, options: {...baseConfigs.subBassElectronic.options, envelope: {...baseConfigs.subBassElectronic.options.envelope, attack:0.5, release:1.5}}, instrumentHintName: "ambientSubBass" };
-        if (!chordsConf.isSampler) chordsConf = { ...baseConfigs.warmPadChords, volume: -18, instrumentHintName: "ambientChordsPad" };
-        if (!arpConf.isSampler) arpConf = { ...baseConfigs.customPluckySynth, volume: -22, options: {...baseConfigs.customPluckySynth.options, envelope: {...baseConfigs.customPluckySynth.options.envelope, release: 1.0 } }, instrumentHintName: "ambientPluckArp"};
-        kickConf = { ...baseConfigs.kick, volume: -15, envelope: {...baseConfigs.kick.envelope, decay: 0.5, sustain:0.05}, instrumentHintName: "ambientKick" };
-        snareConf = { ...baseConfigs.snare, volume: -25, instrumentHintName: "ambientSnare" };
-        hiHatConf = { ...baseConfigs.hiHat, volume: -28, instrumentHintName: "ambientHiHat" };
-    } else if (genreLower.includes("folk") || genreLower.includes("country") || genreLower.includes("acoustic")) {
-        melodyConf = { ...baseConfigs.acousticGuitarLead, instrumentHintName: "acousticGuitarMelody" };
-        bassConf = { ...baseConfigs.jazzUprightBass, volume: -12, instrumentHintName: "acousticBass"};
-        if (!chordsConf.isSampler) chordsConf = { synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarLead.options}, volume: -16, instrumentHintName: "acousticGuitarChords" };
-        if (!arpConf.isSampler) arpConf = {...baseConfigs.acousticGuitarLead, volume: -18, instrumentHintName: "acousticGuitarArp"};
-        if (hintsLower.some(h => h.includes("tambourine"))) useTambourine = true;
-    } else if (genreLower.includes("funk") || genreLower.includes("soul") || genreLower.includes("disco")) {
-        melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, volume: -11, instrumentHintName: "funkElectricPianoMelody"};
-        bassConf = { ...baseConfigs.funkSlapBass};
-        if (!chordsConf.isSampler) chordsConf = { ...baseConfigs.electricPianoChords, volume: -15, instrumentHintName: "funkElectricPianoChords"};
-        if (!arpConf.isSampler) arpConf = { ...baseConfigs.customPluckySynth, volume: -20, instrumentHintName: "funkPluckArp"};
-        kickConf = { ...baseConfigs.kick, volume: -4, instrumentHintName: "funkKick" };
-        snareConf = { ...baseConfigs.snare, volume: -10, instrumentHintName: "funkSnare" };
-        hiHatConf = { ...baseConfigs.hiHat, volume: -17, instrumentHintName: "funkHiHat" };
-    } else if (genreLower.includes("classical") || genreLower.includes("cinematic") || genreLower.includes("orchestral")) {
-        if(!melodyConf.isSampler) melodyConf = { ...baseConfigs.pianoMelody, volume: -8, instrumentHintName: "classicalPianoMelodyIfNotSampler" };
-        bassConf = { ...baseConfigs.defaultBass, options: {...baseConfigs.defaultBass.options, oscillator:{type:"sine" as const}}, volume: -14, instrumentHintName: "classicalBass" };
-        if (!chordsConf.isSampler) chordsConf = { ...baseConfigs.stringEnsembleChords, instrumentHintName: "classicalStringChords" };
-        if (!arpConf.isSampler) arpConf = { ...baseConfigs.customPluckySynth, volume: -20, instrumentHintName: "classicalPluckArp" };
-        hiHatConf = {...baseConfigs.hiHat, volume: -25, instrumentHintName: "classicalHiHat"};
-    }
-  }
-
-  // Apply specific instrument hints AFTER genre defaults and sampler priority
-  hintsLower.forEach(hint => {
-    // Melody hints (only if not already a sampler)
-    if (!melodyConf.isSampler) {
-      if (hint.includes('electric piano') || hint.includes('rhodes')) {
-        melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, options: {...baseConfigs.electricPianoChords.options}, volume: -11, instrumentHintName: "hintElectricPianoMelody"};
-      } else if (hint.includes('flute') || hint.includes('recorder')) {
-        melodyConf = {...baseConfigs.customFluteSynth, instrumentHintName: "hintFluteSound"};
-      } else if ((hint.includes('pluck') || hint.includes('bell-like') || hint.includes('kalimba')) && !(hint.includes('piano') || hint.includes('bell') || hint.includes('celesta') || hint.includes('glockenspiel') || hint.includes('music box'))) {
-        melodyConf = { ...baseConfigs.customPluckySynth, instrumentHintName: "hintPluckyMelody" };
-      } else if (hint.includes('synth lead') || hint.includes('bright synth') || hint.includes('lead synth')) {
-        melodyConf = { ...baseConfigs.synthLeadElectronic, instrumentHintName: "hintSynthLeadElectronic" };
-      } else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) {
-        melodyConf = {...baseConfigs.acousticGuitarLead, instrumentHintName: "hintAcousticGuitarLead"};
-      } else if (hint.includes('guitar') && (hint.includes('rock') || hint.includes('electric') || hint.includes('distort'))) {
-        melodyConf = {...baseConfigs.rockGuitarLead, instrumentHintName: "hintRockGuitarLead"};
-      }
-    }
-
-    // Chord hints (only if not already a sampler)
-    if (!chordsConf.isSampler) {
-      if (hint.includes('pad') || hint.includes('warm pad') || hint.includes('synth pad')) {
-        chordsConf = { ...baseConfigs.warmPadChords, instrumentHintName: "hintWarmPadChords" };
-      } else if (hint.includes('strings') || hint.includes('orchestra') || hint.includes('ensemble')) {
-        chordsConf = {...baseConfigs.stringEnsembleChords, instrumentHintName: "hintStringChords"};
-      } else if (hint.includes('electric piano') || hint.includes('rhodes')) {
-         chordsConf = { ...baseConfigs.electricPianoChords, volume: -18, instrumentHintName: "hintElectricPianoChords" };
-      } else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) {
-        chordsConf = {synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarLead.options}, volume: -16, instrumentHintName: "hintAcousticGuitarChords"};
-      } else if (hint.includes('guitar') && (hint.includes('rock') || hint.includes('electric') || hint.includes('distort'))) {
-        chordsConf = {...baseConfigs.rockGuitarLead, synthType: Tone.PolySynth, subType: Tone.Synth, options: {...baseConfigs.rockGuitarLead.options, envelope: {...baseConfigs.rockGuitarLead.options.envelope, attack:0.005, decay:0.5, sustain:0.01, release:0.3}}, volume: -16, instrumentHintName: "hintRockGuitarChords"};
-      }
-    }
-
-    // Arpeggio hints (only if not already a sampler)
-    if (!arpConf.isSampler) {
-      if (hint.includes('arp') || hint.includes('sequence') || hint.includes('arpeggio')) {
-        if (hint.includes('pluck') || hint.includes('bell-like')) {
-          arpConf = { ...baseConfigs.customPluckySynth, volume: (baseConfigs.customPluckySynth.volume || -15) -3, instrumentHintName: "hintPluckyArpFromArpHint" };
-        } else if (!melodyConf.isSampler && (melodyConf.instrumentHintName?.includes('SynthLead') || melodyConf.instrumentHintName?.includes('Electronic'))) {
-          arpConf = { ...baseConfigs.synthArpElectronic, instrumentHintName: "hintSynthArpFromArpHint" };
-        } else {
-          arpConf = { ...baseConfigs.synthArpElectronic, instrumentHintName: "defaultSynthArpFromArpHint" };
+  } else { // Standard Mode Genre/Hint Logic (only if not already a sampler)
+    // Apply genre defaults only if the corresponding part is not already set to be a sampler
+    if (!melodyConf.isSampler && !bassConf.isSampler && !chordsConf.isSampler && !arpConf.isSampler) {
+        if (genreLower.includes("electronic") || genreLower.includes("synthwave") || genreLower.includes("techno") || genreLower.includes("house")) {
+          melodyConf = { ...baseConfigs.synthLeadElectronic };
+          bassConf = { ...baseConfigs.subBassElectronic };
+          chordsConf = { ...baseConfigs.warmPadChords, volume: -20, instrumentHintName: "electronicWarmPadChords" };
+          arpConf = { ...baseConfigs.synthArpElectronic };
+          kickConf = { ...baseConfigs.kickElectronic };
+          snareConf = { ...baseConfigs.snareElectronic };
+          hiHatConf = { ...baseConfigs.hiHatElectronic };
+        } else if (genreLower.includes("rock") || genreLower.includes("metal") || genreLower.includes("punk")) {
+          melodyConf = { ...baseConfigs.rockGuitarLead };
+          bassConf = { ...baseConfigs.rockBassPicked };
+          chordsConf = { ...baseConfigs.rockGuitarLead, synthType: Tone.PolySynth, subType: Tone.Synth, options: {...baseConfigs.rockGuitarLead.options, envelope: {...baseConfigs.rockGuitarLead.options.envelope, attack:0.005, decay:0.5, sustain:0.01, release:0.3}}, volume: -16, instrumentHintName: "rockGuitarChords" };
+          arpConf = { ...baseConfigs.defaultBass, volume: -28, instrumentHintName: "rockArpBass" };
+          kickConf = { ...baseConfigs.kickRock, volume: -5 };
+        } else if (genreLower.includes("jazz") || genreLower.includes("swing") || (genreLower.includes("blues") && rhythmicDensity > 0.3)) {
+          melodyConf = { ...baseConfigs.pianoMelody, volume: -10, instrumentHintName: "jazzPianoMelodySynth" };
+          bassConf = { ...baseConfigs.jazzUprightBass };
+          chordsConf = { ...baseConfigs.electricPianoChords, volume: -16, instrumentHintName: "jazzElectricPianoChords" };
+          arpConf = { ...baseConfigs.customPluckySynth, volume: -24, instrumentHintName: "jazzPluckArp" };
+          kickConf = { ...baseConfigs.kick, volume: -10, envelope: {...baseConfigs.kick.envelope, decay:0.15, sustain:0.001}, instrumentHintName: "jazzKick" };
+          snareConf = { ...baseConfigs.snare, volume: -16, noise: {type: 'pink' as const, playbackRate: 0.5}, instrumentHintName: "jazzSnare" };
+          hiHatConf = { ...baseConfigs.rideCymbal, volume: -20, instrumentHintName: "jazzRideCymbal" };
+          useRideCymbal = true;
+        } else if (genreLower.includes("ambient") || genreLower.includes("new age")) {
+            melodyConf = { ...baseConfigs.warmPadChords, synthType: Tone.PolySynth, subType: Tone.AMSynth, volume: -16, instrumentHintName: "ambientMelodyPad" };
+            bassConf = { ...baseConfigs.subBassElectronic, volume: -14, options: {...baseConfigs.subBassElectronic.options, envelope: {...baseConfigs.subBassElectronic.options.envelope, attack:0.5, release:1.5}}, instrumentHintName: "ambientSubBass" };
+            chordsConf = { ...baseConfigs.warmPadChords, volume: -18, instrumentHintName: "ambientChordsPad" };
+            arpConf = { ...baseConfigs.customPluckySynth, volume: -22, options: {...baseConfigs.customPluckySynth.options, envelope: {...baseConfigs.customPluckySynth.options.envelope, release: 1.0 } }, instrumentHintName: "ambientPluckArp"};
+            kickConf = { ...baseConfigs.kick, volume: -15, envelope: {...baseConfigs.kick.envelope, decay: 0.5, sustain:0.05}, instrumentHintName: "ambientKick" };
+            snareConf = { ...baseConfigs.snare, volume: -25, instrumentHintName: "ambientSnare" };
+            hiHatConf = { ...baseConfigs.hiHat, volume: -28, instrumentHintName: "ambientHiHat" };
+        } else if (genreLower.includes("folk") || genreLower.includes("country") || genreLower.includes("acoustic")) {
+            melodyConf = { ...baseConfigs.acousticGuitarLead, instrumentHintName: "acousticGuitarMelody" };
+            bassConf = { ...baseConfigs.jazzUprightBass, volume: -12, instrumentHintName: "acousticBass"};
+            chordsConf = { synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarLead.options}, volume: -16, instrumentHintName: "acousticGuitarChords" };
+            arpConf = {...baseConfigs.acousticGuitarLead, volume: -18, instrumentHintName: "acousticGuitarArp"};
+            if (hintsLower.some(h => h.includes("tambourine"))) useTambourine = true;
+        } else if (genreLower.includes("funk") || genreLower.includes("soul") || genreLower.includes("disco")) {
+            melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, volume: -11, instrumentHintName: "funkElectricPianoMelody"};
+            bassConf = { ...baseConfigs.funkSlapBass};
+            chordsConf = { ...baseConfigs.electricPianoChords, volume: -15, instrumentHintName: "funkElectricPianoChords"};
+            arpConf = { ...baseConfigs.customPluckySynth, volume: -20, instrumentHintName: "funkPluckArp"};
+            kickConf = { ...baseConfigs.kick, volume: -4, instrumentHintName: "funkKick" };
+            snareConf = { ...baseConfigs.snare, volume: -10, instrumentHintName: "funkSnare" };
+            hiHatConf = { ...baseConfigs.hiHat, volume: -17, instrumentHintName: "funkHiHat" };
+        } else if (genreLower.includes("classical") || genreLower.includes("cinematic") || genreLower.includes("orchestral")) {
+            melodyConf = { ...baseConfigs.pianoMelody, volume: -8, instrumentHintName: "classicalPianoMelodySynth" }; // Default synth piano
+            bassConf = { ...baseConfigs.defaultBass, options: {...baseConfigs.defaultBass.options, oscillator:{type:"sine" as const}}, volume: -14, instrumentHintName: "classicalBass" };
+            chordsConf = { ...baseConfigs.stringEnsembleChords, instrumentHintName: "classicalStringChords" };
+            arpConf = { ...baseConfigs.customPluckySynth, volume: -20, instrumentHintName: "classicalPluckArp" };
+            hiHatConf = {...baseConfigs.hiHat, volume: -25, instrumentHintName: "classicalHiHat"};
         }
-      } else if (hint.includes('flute') || hint.includes('recorder')){
-         arpConf = {...baseConfigs.customFluteSynth, volume: (baseConfigs.customFluteSynth.volume || -12) - 4, instrumentHintName: "hintFluteArp"};
-      } else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) {
-         arpConf = {...baseConfigs.acousticGuitarLead, volume: -18, instrumentHintName: "hintAcousticGuitarArp"};
-      }
     }
 
-    // Bass hints (always synth for now)
-    if (hint.includes('sub bass') || (hint.includes("bass") && genreLower.includes("electronic"))) {
-      bassConf = {...baseConfigs.subBassElectronic, instrumentHintName: "hintSubBassElectronic"};
-    } else if (hint.includes('upright bass') || (hint.includes("bass") && genreLower.includes("jazz"))) {
-      bassConf = {...baseConfigs.jazzUprightBass, instrumentHintName: "hintJazzUprightBass"};
-    } else if (hint.includes('picked bass') || (hint.includes("bass") && (genreLower.includes("rock") || genreLower.includes("metal")))) {
-      bassConf = {...baseConfigs.rockBassPicked, instrumentHintName: "hintRockBassPicked"};
-    } else if (hint.includes('slap bass') || (hint.includes("bass") && (genreLower.includes("funk") || genreLower.includes("soul")))) {
-      bassConf = {...baseConfigs.funkSlapBass, instrumentHintName: "hintFunkSlapBass"};
-    }
-  });
+
+    hintsLower.forEach(hint => {
+      if (!melodyConf.isSampler) { // Only apply synth hint if melody isn't already a sampler
+        if (hint.includes('electric piano') || hint.includes('rhodes')) melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, options: {...baseConfigs.electricPianoChords.options}, volume: -11, instrumentHintName: "hintElectricPianoMelody"};
+        else if (hint.includes('flute') || hint.includes('recorder')) melodyConf = {...baseConfigs.customFluteSynth, instrumentHintName: "hintFluteSound"};
+        else if ((hint.includes('pluck') || hint.includes('bell-like') || hint.includes('kalimba')) && !(hint.includes('piano') || hint.includes('bell') || hint.includes('celesta') || hint.includes('glockenspiel') || hint.includes('music box'))) melodyConf = { ...baseConfigs.customPluckySynth, instrumentHintName: "hintPluckyMelody" };
+        else if (hint.includes('synth lead') || hint.includes('bright synth') || hint.includes('lead synth')) melodyConf = { ...baseConfigs.synthLeadElectronic, instrumentHintName: "hintSynthLeadElectronic" };
+        else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) melodyConf = {...baseConfigs.acousticGuitarLead, instrumentHintName: "hintAcousticGuitarLead"};
+        else if (hint.includes('guitar') && (hint.includes('rock') || hint.includes('electric') || hint.includes('distort'))) melodyConf = {...baseConfigs.rockGuitarLead, instrumentHintName: "hintRockGuitarLead"};
+      }
+      if (!chordsConf.isSampler) { // Only apply synth hint if chords aren't already a sampler
+        if (hint.includes('pad') || hint.includes('warm pad') || hint.includes('synth pad')) chordsConf = { ...baseConfigs.warmPadChords, instrumentHintName: "hintWarmPadChords" };
+        else if (hint.includes('strings') || hint.includes('orchestra') || hint.includes('ensemble')) chordsConf = {...baseConfigs.stringEnsembleChords, instrumentHintName: "hintStringChords"};
+        else if (hint.includes('electric piano') || hint.includes('rhodes')) chordsConf = { ...baseConfigs.electricPianoChords, volume: -18, instrumentHintName: "hintElectricPianoChords" };
+        else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) chordsConf = {synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarLead.options}, volume: -16, instrumentHintName: "hintAcousticGuitarChords"};
+        else if (hint.includes('guitar') && (hint.includes('rock') || hint.includes('electric') || hint.includes('distort'))) chordsConf = {...baseConfigs.rockGuitarLead, synthType: Tone.PolySynth, subType: Tone.Synth, options: {...baseConfigs.rockGuitarLead.options, envelope: {...baseConfigs.rockGuitarLead.options.envelope, attack:0.005, decay:0.5, sustain:0.01, release:0.3}}, volume: -16, instrumentHintName: "hintRockGuitarChords"};
+      }
+      if (!arpConf.isSampler) { // Only apply synth hint if arp isn't already a sampler
+        if (hint.includes('arp') || hint.includes('sequence') || hint.includes('arpeggio')) {
+          if (hint.includes('pluck') || hint.includes('bell-like')) arpConf = { ...baseConfigs.customPluckySynth, volume: (baseConfigs.customPluckySynth.volume || -15) -3, instrumentHintName: "hintPluckyArpFromArpHint" };
+          else if (!melodyConf.isSampler && (melodyConf.instrumentHintName?.includes('SynthLead') || melodyConf.instrumentHintName?.includes('Electronic'))) arpConf = { ...baseConfigs.synthArpElectronic, instrumentHintName: "hintSynthArpFromArpHint" };
+          else arpConf = { ...baseConfigs.synthArpElectronic, instrumentHintName: "defaultSynthArpFromArpHint" };
+        } else if (hint.includes('flute') || hint.includes('recorder')) arpConf = {...baseConfigs.customFluteSynth, volume: (baseConfigs.customFluteSynth.volume || -12) - 4, instrumentHintName: "hintFluteArp"};
+        else if (hint.includes('guitar') && (hint.includes('acoustic') || hint.includes('folk'))) arpConf = {...baseConfigs.acousticGuitarLead, volume: -18, instrumentHintName: "hintAcousticGuitarArp"};
+      }
+      // Bass hints (always synth for now, so no isSampler check needed for bassConf itself)
+      if (hint.includes('sub bass') || (hint.includes("bass") && genreLower.includes("electronic"))) bassConf = {...baseConfigs.subBassElectronic, instrumentHintName: "hintSubBassElectronic"};
+      else if (hint.includes('upright bass') || (hint.includes("bass") && genreLower.includes("jazz"))) bassConf = {...baseConfigs.jazzUprightBass, instrumentHintName: "hintJazzUprightBass"};
+      else if (hint.includes('picked bass') || (hint.includes("bass") && (genreLower.includes("rock") || genreLower.includes("metal")))) bassConf = {...baseConfigs.rockBassPicked, instrumentHintName: "hintRockBassPicked"};
+      else if (hint.includes('slap bass') || (hint.includes("bass") && (genreLower.includes("funk") || genreLower.includes("soul")))) bassConf = {...baseConfigs.funkSlapBass, instrumentHintName: "hintFunkSlapBass"};
+    });
+  }
 
 
   return {
@@ -342,9 +308,9 @@ export const createSynth = async (
                 urlsForSampler = sampleInstrumentData.samples as { [note: string]: string };
             }
 
-            if (!urlsForSampler) {
+            if (!urlsForSampler || Object.keys(urlsForSampler).length === 0) {
                 console.warn(`${logPrefix} 'samples' field is missing, empty, or invalid in Firestore document for Sampler ID: "${samplerId}". Falling back to default synth for ${instrumentHintName}. Samples data:`, sampleInstrumentData.samples);
-                throw new Error(`'samples' field invalid for sampler ${samplerId}`);
+                throw new Error(`'samples' field invalid or empty for sampler ${samplerId}`);
             }
 
             const samplerOptions: Partial<Tone.SamplerOptions> = {
