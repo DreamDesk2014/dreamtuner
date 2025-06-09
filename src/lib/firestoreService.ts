@@ -1,5 +1,5 @@
 
-'use client'; // This service might be called from client components
+// 'use client'; // This service might be called from client components - REMOVED
 
 import { db } from './firebase'; // Your Firebase initialization file path
 import { collection, addDoc, serverTimestamp, Timestamp, getDocs, doc, getDoc, query, where, orderBy, limit } from 'firebase/firestore';
@@ -23,7 +23,7 @@ export async function logEvent(collectionName: string, data: Omit<EventData, 'ti
     ...data,
     eventDetails: data.eventDetails || {},
     timestamp: serverTimestamp() as Timestamp,
-    clientTimestamp: new Date(),
+    clientTimestamp: new Date(), // If called server-side, this will be server's current time.
   };
   try {
     await addDoc(collection(db, collectionName), eventDataToLog);
@@ -34,7 +34,7 @@ export async function logEvent(collectionName: string, data: Omit<EventData, 'ti
 
 let currentSessionId: string | null = null;
 export function getSessionId(): string {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined') { // This check allows the function to not break on server
     if (!currentSessionId) {
       currentSessionId = sessionStorage.getItem('dreamTunerSessionId');
       if (!currentSessionId) {
@@ -44,6 +44,7 @@ export function getSessionId(): string {
     }
     return currentSessionId;
   }
+  // When called from server (e.g., AI flow), window is undefined.
   return 'server_or_unknown_session';
 }
 
@@ -292,5 +293,3 @@ export async function getAllMasterMusicParameterSets(): Promise<MasterMusicParam
     return [];
   }
 }
-
-    
