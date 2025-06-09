@@ -37,7 +37,7 @@ export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, 
 
 
   const [isGeneratingMidiForDownload, setIsGeneratingMidiForDownload] = useState<boolean>(false);
-  const [midiError, setMidiError] = useState<string | null>(null); // Defined midiError state
+  const [midiError, setMidiError] = useState<string | null>(null); // Defined midiError state 
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState<boolean>(false);
