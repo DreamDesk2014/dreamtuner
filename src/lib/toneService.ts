@@ -7,7 +7,6 @@ import { audioBufferToWav } from "./audioBufferToWav";
 // Constants
 const SAFE_OSC_TYPE = 'triangle' as const;
 const MIN_EFFECTIVE_DURATION_SECONDS = 5.0;
-const MAX_WAV_RENDER_DURATION_SECONDS = 15.0; // New constant for WAV cap
 const TIME_EPSILON = 0.00001;
 const DEFAULT_MIDI_NOTE = 60; // C4
 
@@ -344,11 +343,18 @@ const getSynthConfigurations = (
         snareConf = { ...baseConfigs.snare, volume: -25 };
         hiHatConf = { ...baseConfigs.hiHat, volume: -28 };
     } else if (genreLower.includes("folk") || genreLower.includes("country") || genreLower.includes("acoustic")) {
+        // This block handles folk, country, acoustic genres.
         melodyConf = { ...baseConfigs.acousticGuitarLead };
         bassConf = { ...baseConfigs.jazzUprightBass, volume: -12}; // acoustic bass fits well
         chordsConf = { synthType: Tone.PolySynth, subType: Tone.PluckSynth, options: {...baseConfigs.acousticGuitarLead.options}, volume: -16 };
         arpConf = {...baseConfigs.acousticGuitarLead, volume: -18};
         if (hintsLower.some(h => h.includes("tambourine"))) useTambourine = true;
+
+        // Nested check for ambient/new age within folk/country/acoustic block
+        if (genreLower.includes("ambient") || genreLower.includes("new age")) {
+             if (!melodyConf.effects) melodyConf.effects = [];
+             melodyConf.effects.push({type: Tone.Reverb, decay: 2.5, wet: 0.4});
+        }
     } else if (genreLower.includes("funk") || genreLower.includes("soul") || genreLower.includes("disco")) {
         melodyConf = { ...baseConfigs.electricPianoChords, synthType: Tone.PolySynth, subType: Tone.FMSynth, volume: -11};
         bassConf = { ...baseConfigs.funkSlapBass};
@@ -364,6 +370,7 @@ const getSynthConfigurations = (
         arpConf = { ...baseConfigs.pluckArp, volume: -20 };
         hiHatConf = {...baseConfigs.hiHat, volume: -25}
     }
+
 
     hintsLower.forEach(hint => {
       if (hint.includes('piano')) {
@@ -462,7 +469,7 @@ const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instr
             } else if (effectConf.type === Tone.FeedbackDelay){
                  effectNodeInstance = new Tone.FeedbackDelay(effectConf.delayTime || "8n", effectConf.feedback || 0.5);
                  if (effectConf.wet !== undefined) (effectNodeInstance as Tone.FeedbackDelay).wet.value = effectConf.wet;
-            } else if (effectConf.type === Tone.Filter && effectConf.targetParam !== "filterFrequency" && !mainFilterForLFO ) {
+            } else if (effectConf.type === Tone.Filter && effectConf.targetParam !== "filterFrequency" && !mainFilterForLFO ) { 
                  effectNodeInstance = new Tone.Filter(effectConf.frequency || 1000, effectConf.type || 'lowpass', effectConf.rolloff || -12);
                  if (effectConf.Q !== undefined) (effectNodeInstance as Tone.Filter).Q.value = effectConf.Q;
             } else if (effectConf.type === Tone.LFO) {
@@ -481,7 +488,7 @@ const createSynth = (config: any, offlineContext?: Tone.OfflineContext): { instr
             } else if (effectConf.type === Tone.BitCrusher) {
                 effectNodeInstance = new Tone.BitCrusher(effectConf.bits || 4);
                 if (effectConf.wet !== undefined) (effectNodeInstance as Tone.BitCrusher).wet.value = effectConf.wet;
-            } else if (effectConf.type === Tone.Reverb && !(currentOutputNode instanceof Tone.Reverb)) {
+            } else if (effectConf.type === Tone.Reverb && !(currentOutputNode instanceof Tone.Reverb)) { 
                 effectNodeInstance = new Tone.Reverb(effectConf.decay || 1.5);
                 if (effectConf.wet !== undefined) (effectNodeInstance as Tone.Reverb).wet.value = effectConf.wet;
             }
@@ -921,8 +928,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   console.log(`${logPrefix} Generated ${drumEventsToSchedule.length} drum events.`);
 
   const calculatedRenderDuration = Math.max(MIN_EFFECTIVE_DURATION_SECONDS, overallMaxTime + 3.0);
-  const renderDuration = Math.min(calculatedRenderDuration, MAX_WAV_RENDER_DURATION_SECONDS);
-  console.log(`${logPrefix} Calculated renderDuration: ${calculatedRenderDuration.toFixed(2)}s. Capped renderDuration: ${renderDuration.toFixed(2)}s.`);
+  const renderDuration = calculatedRenderDuration;
 
 
   try {
@@ -1028,4 +1034,3 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
     return null;
   }
 };
-

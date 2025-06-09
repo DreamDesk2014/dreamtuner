@@ -21,6 +21,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { generateWavFromMusicParameters } from '@/lib/toneService';
+
+
 import { logEvent, getSessionId } from '@/lib/firestoreService';
 
 
@@ -32,8 +34,10 @@ interface MusicOutputDisplayProps {
 }
 
 export const MusicOutputDisplay: React.FC<MusicOutputDisplayProps> = ({ params, onRegenerateIdea, isRegeneratingIdea, standardModeArtUrl }) => {
-  const [midiError, setMidiError] = useState<string | null>(null);
+
+
   const [isGeneratingMidiForDownload, setIsGeneratingMidiForDownload] = useState<boolean>(false);
+  const [midiError, setMidiError] = useState<string | null>(null); // Defined midiError state
   const [isCopied, setIsCopied] = useState<boolean>(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [isSharing, setIsSharing] = useState<boolean>(false);

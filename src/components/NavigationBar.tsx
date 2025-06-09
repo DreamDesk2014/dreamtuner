@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { InfoIcon, Sun, Moon, Heart } from 'lucide-react'; // Added Heart icon
-import { Separator } from '@/components/ui/separator';
+import { Separator } from '@/components/ui/separator'; 
 import { logEvent, getSessionId, saveContactSubmission } from '@/lib/firestoreService';
 
 export const NavigationBar: React.FC = () => {
@@ -55,12 +55,7 @@ export const NavigationBar: React.FC = () => {
       document.documentElement.classList.remove('dark');
     }
     logEvent('user_interactions', {
-      eventName: 'theme_changed',
-      eventDetails: { newTheme },
-      sessionId: getSessionId(),
-    }).catch(console.error);
-  };
-
+ eventName: 'theme_changed', eventDetails: { newTheme }, sessionId: getSessionId() }).catch(console.error);  };
   const handleAboutOpenChange = (open: boolean) => {
     setIsDialogOpen(open);
     if (open) {
