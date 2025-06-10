@@ -1,15 +1,9 @@
 //
 // FILE: src/ai/genkit.ts
 //
-import { configureGenkit } from '@genkit-ai/core';
-import { googleAI } from '@genkit-ai/googleai';
+// This file now only exports your flows.
+// The configuration is handled in init.ts
 
-// This file now ONLY configures Genkit.
-configureGenkit({
-  plugins: [
-    googleAI(),
-  ],
-  logSinks: ['stdout'],
-  traceSinks: ['stdout'],
-  enableTracingAndMetrics: true,
-});
+export * from './flows/regenerate-musical-idea';
+export * from './flows/render-kids-drawing-flow';
+export * from './flows/render-standard-input-art-flow';

@@ -3,10 +3,10 @@
 //
 import { startFlowsServer } from '@genkit-ai/flow';
 
-// Run the configuration from your main genkit file
-import '@/ai/genkit';
+// Run the new, isolated configuration file first.
+import '@/ai/init';
 
-// Now, explicitly import all your flows so the server knows about them
+// Now, import all your flows so the server knows about them
 import '@/ai/flows/regenerate-musical-idea';
 import '@/ai/flows/render-kids-drawing-flow';
 import '@/ai/flows/render-standard-input-art-flow';
