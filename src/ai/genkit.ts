@@ -1,15 +1,14 @@
 // src/ai/genkit.ts
 
 import { configureGenkit } from '@genkit-ai/core';
-import { googleAI } from '@genkit-ai/google-ai';
-import { defineFlow, startFlowsServer } from '@genkit-ai/flow';
+import { googleAI } from '@genkit-ai/googleai'; // This is the correct import
+import { defineFlow } from '@genkit-ai/flow';
 import { z } from 'zod';
 
-// Configure Genkit with your plugins.
-// This is the one and only place you should call configureGenkit.
+// Configure Genkit with the correct googleAI plugin
 configureGenkit({
   plugins: [
-    googleAI(), // The API key is read automatically from the GEMINI_API_KEY environment variable we set.
+    googleAI(), // This now matches the correct package
   ],
   logSinks: ['stdout'],
   traceSinks: ['stdout'],
@@ -25,11 +24,7 @@ export const menuSuggestionFlow = defineFlow(
     outputSchema: z.string(),
   },
   async (prompt) => {
-    // Replace with your actual flow logic
     console.log('menuSuggestionFlow received prompt:', prompt);
     return `Suggestions for ${prompt}...`;
   }
 );
-
-// IMPORTANT: Do NOT export startFlowsServer() from this file.
-// That belongs in your Next.js API route file.
