@@ -1,5 +1,9 @@
-
 'use server';
+
+// --- ADD THIS LINE HERE ---
+import '@/ai/genkit'; // Ensure Genkit is configured on server startup
+// -------------------------
+
 import type { AppInput, MusicParameters, FlowInput } from '@/types';
 import { generateMusicalParameters as generateMusicalParametersFlow, type GenerateMusicalParametersOutput } from '@/ai/flows/generate-musical-parameters';
 
@@ -52,10 +56,6 @@ export async function generateMusicParametersAction(input: AppInput): Promise<Mu
       ...aiResult,
       originalInput: input, 
       selectedGenre: input.genre,
-      // Explicitly include new melodic fields, even if undefined initially from AI
-      melodicContour: aiResult.melodicContour,
-      melodicPhrasing: aiResult.melodicPhrasing,
-      melodicEmphasis: aiResult.melodicEmphasis,
     };
     return resultForClient;
 

@@ -1,13 +1,19 @@
-
+// src/ai/genkit.ts
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
 import { config as dotenvConfig } from 'dotenv'; // Import dotenv
 
 // Load environment variables from .env file at the project root
 // This is a fallback. Next.js automatically loads .env*.
-dotenvConfig();
+dotenvConfig(); // This line is likely for local dev, Next.js handles .env.local automatically.
 
 const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+
+// --- ADD THESE CONSOLE.LOGS FOR DEBUGGING ---
+console.log(`[Genkit Debug] process.env.GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? '***** (present)' : 'undefined'}`);
+console.log(`[Genkit Debug] process.env.GOOGLE_API_KEY: ${process.env.GOOGLE_API_KEY ? '***** (present)' : 'undefined'}`);
+console.log(`[Genkit Debug] Derived apiKey variable: ${apiKey ? '***** (present)' : 'undefined'}`);
+// --- END DEBUG LOGS ---
 
 if (!apiKey && process.env.NODE_ENV !== 'production') {
   // In development, if the key isn't found after checking process.env,
@@ -23,18 +29,11 @@ if (!apiKey && process.env.NODE_ENV !== 'production') {
   );
 }
 
-
 export const ai = genkit({
   plugins: [
-    // Explicitly pass the API key to the googleAI plugin.
-    // The plugin would normally try to read from process.env itself,
-    // but this makes the dependency clearer and more robust.
     googleAI({ apiKey: apiKey || undefined })
   ],
-  // The model defined here is a default for ai.generate() calls if not overridden.
-  // Individual prompts/flows can specify their own models.
-  // 'googleai/gemini-2.0-flash' does not seem to be a valid model identifier for Gemini 1.5 Flash via Genkit.
-  // Let's use 'gemini-1.5-flash-latest' which is commonly used and valid.
-  // If a flow specifies its own model (like generate-musical-parameters.ts does), that will take precedence.
   model: 'googleai/gemini-1.5-flash-latest',
+  // Set logLevel to debug to get more verbose Genkit logs in the console
+  logLevel: 'debug',
 });

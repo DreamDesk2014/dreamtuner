@@ -3,8 +3,18 @@
 apphosting:
   target: dreamtuner-app # This must EXACTLY match your backend name in Firebase Console
   # If you have other configurations here (like 'nodejs: 20' or 'framework: nextjs'), keep them.
-  # Place the 'environmentVariables' section like this:
+
   environmentVariables:
-    GEMINI_API_KEY: "AIzaSyCFqQm3bNb_Zb4mQyMXh08XZtah-EviDhc" # <<< IMPORTANT: REPLACE THIS WITH YOUR KEY!
-    # You can add other environment variables here if needed
-    # MY_OTHER_VARIABLE: "some_value"
+    # --- YOUR BACKEND'S GEMINI API KEY ---
+    GEMINI_API_KEY: "AIzaSyCFqQm3bNb_Zb4mQyMXh08XZtah-EviDhc" 
+    # ^^^ IMPORTANT: This is your SERVER'S key, ensure it's correct ^^^
+
+    # --- YOUR FRONTEND'S FIREBASE SDK KEYS (from firebaseConfig) ---
+    NEXT_PUBLIC_FIREBASE_API_KEY: "AIzaSyCbH1Oqibb_tDZASblCNN0S-ryN-Z-98hk" # <<< Your FRONTEND's key
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "resonanceai-gopeq.firebaseapp.com"
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: "resonanceai-gopeq"
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: "resonanceai-gopeq.firebasestorage.app"
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "519097336176"
+    NEXT_PUBLIC_FIREBASE_APP_ID: "1:519097336176:web:02f583e0cd7b654b1bcfb5"
+    # If your firebaseConfig had a measurementId, add it here too:
+    # NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: "G-XXXXXXXXXX"
