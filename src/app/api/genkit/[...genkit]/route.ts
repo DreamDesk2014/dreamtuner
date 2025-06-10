@@ -3,8 +3,13 @@
 //
 import { startFlowsServer } from '@genkit-ai/flow';
 
-// This line imports your main config file to register all your flows
+// Run the configuration from your main genkit file
 import '@/ai/genkit';
 
-// This exports the route handlers for Next.js
+// Now, explicitly import all your flows so the server knows about them
+import '@/ai/flows/regenerate-musical-idea';
+import '@/ai/flows/render-kids-drawing-flow';
+import '@/ai/flows/render-standard-input-art-flow';
+
+// Start the server
 export const { GET, POST, OPTIONS } = startFlowsServer();

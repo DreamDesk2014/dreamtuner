@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@genkit-ai/ai": "^1.12.0",
     "@genkit-ai/core": "^1.12.0",
     "@genkit-ai/flow": "^0.5.17",
     "@genkit-ai/googleai": "^1.12.0",
