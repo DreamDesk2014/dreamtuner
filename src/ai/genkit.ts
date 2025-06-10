@@ -10,13 +10,12 @@ dotenvConfig();
 // --- Extracted Genkit Initialization Function ---
 // This function will be called explicitly by the new API route.
 export function initializeGenkit() {
-  // Move apiKey definition INSIDE the function
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY; // THIS MUST BE ACTIVE, NOT COMMENTED OUT
 
-  // --- ADD THESE CONSOLE.LOGS FOR DEBUGGING ---
-  console.log(`[Genkit Debug Init] process.env.GEMINI_API_KEY: ${apiKey ? '***** (present)' : 'undefined'}`);
-  console.log(`[Genkit Debug Init] Google Cloud Project ID: ${process.env.GOOGLE_CLOUD_PROJECT || 'undefined'}`);
-  console.log(`[Genkit Debug Init] Derived apiKey variable: ${apiKey ? '***** (present)' : 'undefined'}`);
+  // --- THESE CONSOLE.LOGS FOR DEBUGGING ---
+  console.log(`[Genkit Debug Final] process.env.GEMINI_API_KEY: ${apiKey ? '***** (present)' : 'undefined'}`); // THIS MUST BE ACTIVE
+  console.log(`[Genkit Debug Final] Google Cloud Project ID: ${process.env.GOOGLE_CLOUD_PROJECT || 'undefined'}`); // THIS MUST BE ACTIVE
+  console.log(`[Genkit Debug Final] Derived apiKey variable: ${apiKey ? '***** (present)' : 'undefined'}`); // THIS MUST BE ACTIVE
   // --- END DEBUG LOGS ---
 
   if (!apiKey && process.env.NODE_ENV !== 'production') {
@@ -30,7 +29,8 @@ export function initializeGenkit() {
     );
   }
 
-  // Move the genkit() call INSIDE the function
+  // --- Genkit Initialization ---
+  // THIS ENTIRE BLOCK MUST BE ACTIVE, NOT COMMENTED OUT
   genkit({
     plugins: [
       googleAI({ apiKey: apiKey || undefined }),
@@ -39,12 +39,8 @@ export function initializeGenkit() {
     logLevel: 'debug', // Keep this for verbose logs
   });
 
-  console.log('[Genkit Debug Init] Genkit configured!');
+  console.log('[Genkit Debug Init] Genkit configured!'); // THIS MUST BE ACTIVE
 }
 
-// NOTE: We no longer need 'export const ai = genkit({...})' here.
-// The 'ai' variable will be implicitly configured when initializeGenkit() is called.
-
-
-
-
+// We no longer export 'ai' directly from here.
+// The 'ai' variable will be implicitly configured when initializeGenkit() is called by route.ts.
