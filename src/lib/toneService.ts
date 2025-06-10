@@ -437,7 +437,7 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
               ];
               let selectedArpPattern = arpPatterns[Math.floor(Math.random() * arpPatterns.length)];
               if (melodicContour === 'ascending' && currentChordNotesForArp.length >=3) selectedArpPattern = [0, 1, 2, 3 % currentChordNotesForArp.length];
-              else if (melodicContour === 'descending' && currentChordNotesForArp.length >=3) selectedArpPattern = [currentChordNotesForArp.length-1, Math.max(0, currentChordNotesForArp.length-2), Math.max(0, currentChordNotesForArp.length-3), 0];
+              else if (melodicContour === 'descending') selectedArpPattern = [currentChordNotesForArp.length-1, Math.max(0, currentChordNotesForArp.length-2), Math.max(0, currentChordNotesForArp.length-3), 0];
 
               const arpNoteDurationNotation = (rhythmicDensity > 0.45 || genreLower.includes("electronic") || isArpFriendlyInstrument) ? "16n" : "8n";
               const arpNoteDurationSeconds = Tone.Time(arpNoteDurationNotation).toSeconds();

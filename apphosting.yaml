@@ -9,6 +9,10 @@ apphosting:
     GEMINI_API_KEY: "AIzaSyCFqQm3bNb_Zb4mQyMXh08XZtah-EviDhc" 
     # ^^^ IMPORTANT: This is your SERVER'S key, ensure it's correct ^^^
 
+    # --- GOOGLE CLOUD PROJECT ID (often needed by Google Cloud libraries) ---
+    GOOGLE_CLOUD_PROJECT: "resonanceai-gopeq" # <<< Your Google Cloud Project ID
+    # ---------------------------------------------------------------------
+
     # --- YOUR FRONTEND'S FIREBASE SDK KEYS (from firebaseConfig) ---
     NEXT_PUBLIC_FIREBASE_API_KEY: "AIzaSyCbH1Oqibb_tDZASblCNN0S-ryN-Z-98hk" # <<< Your FRONTEND's key
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "resonanceai-gopeq.firebaseapp.com"
