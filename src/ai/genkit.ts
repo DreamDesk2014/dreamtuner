@@ -1,30 +1,21 @@
-// src/ai/genkit.ts
-
+//
+// FILE: src/ai/genkit.ts
+//
 import { configureGenkit } from '@genkit-ai/core';
-import { googleAI } from '@genkit-ai/googleai'; // This is the correct import
-import { defineFlow } from '@genkit-ai/flow';
-import { z } from 'zod';
+import { googleAI } from '@genkit-ai/googleai';
 
-// Configure Genkit with the correct googleAI plugin
+// Configure Genkit with the Google AI plugin
 configureGenkit({
   plugins: [
-    googleAI(), // This now matches the correct package
+    googleAI(), // Reads API key from GEMINI_API_KEY environment variable
   ],
   logSinks: ['stdout'],
   traceSinks: ['stdout'],
   enableTracingAndMetrics: true,
 });
 
-// Define your flows here.
-// Example flow:
-export const menuSuggestionFlow = defineFlow(
-  {
-    name: 'menuSuggestionFlow',
-    inputSchema: z.string(),
-    outputSchema: z.string(),
-  },
-  async (prompt) => {
-    console.log('menuSuggestionFlow received prompt:', prompt);
-    return `Suggestions for ${prompt}...`;
-  }
-);
+// This section finds and exports all flows from your flow files,
+// making them available to the Genkit server.
+export * from './flows/regenerate-musical-idea';
+export * from './flows/render-kids-drawing-flow';
+export * from './flows/render-standard-input-art-flow';
