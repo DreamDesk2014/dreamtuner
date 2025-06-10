@@ -1,4 +1,3 @@
-
 'use client';
 import * as Tone from 'tone';
 import type { MusicParameters } from '@/types';
@@ -832,7 +831,6 @@ export const generateWavFromMusicParameters = async (params: MusicParameters): P
   }
 };
 
-'use client';
 import * as Tone from 'tone';
 import type { MusicParameters } from '@/types';
 import { audioBufferToWav } from "./audioBufferToWav";
