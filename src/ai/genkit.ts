@@ -1,29 +1,35 @@
 // src/ai/genkit.ts
-import { configure, genkit } from 'genkit';
-import { googleAI } from '@genkit-ai/googleai';
-import { config as dotenvConfig } from 'dotenv';
 
-// Load environment variables from a .env file
-dotenvConfig();
+import { configureGenkit } from '@genkit-ai/core';
+import { googleAI } from '@genkit-ai/google-ai';
+import { defineFlow, startFlowsServer } from '@genkit-ai/flow';
+import { z } from 'zod';
 
-// Retrieve the API key from environment variables
-const geminiApiKey = process.env.GEMINI_API_KEY;
-
-// Throw an error if the API key is not set, preventing the app from running without it.
-if (!geminiApiKey) {
-  throw new Error("GEMINI_API_KEY is not defined in your environment variables.");
-}
-
-// Configure and export the Genkit instance in one go.
-// The code inside configure() is run only once when this module is first imported.
-export const ai = configure({
+// Configure Genkit with your plugins.
+// This is the one and only place you should call configureGenkit.
+configureGenkit({
   plugins: [
-    googleAI({
-      apiKey: geminiApiKey,
-    }),
+    googleAI(), // The API key is read automatically from the GEMINI_API_KEY environment variable we set.
   ],
-  logLevel: 'debug', // Set to 'info' for production
+  logSinks: ['stdout'],
+  traceSinks: ['stdout'],
   enableTracingAndMetrics: true,
 });
 
-// You no longer need the initializeGenkit() function or the global variables.
+// Define your flows here.
+// Example flow:
+export const menuSuggestionFlow = defineFlow(
+  {
+    name: 'menuSuggestionFlow',
+    inputSchema: z.string(),
+    outputSchema: z.string(),
+  },
+  async (prompt) => {
+    // Replace with your actual flow logic
+    console.log('menuSuggestionFlow received prompt:', prompt);
+    return `Suggestions for ${prompt}...`;
+  }
+);
+
+// IMPORTANT: Do NOT export startFlowsServer() from this file.
+// That belongs in your Next.js API route file.
