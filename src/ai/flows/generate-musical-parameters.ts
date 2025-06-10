@@ -1,3 +1,4 @@
+// src/ai/flows/generate-musical-parameters.ts
 
 'use server';
 
@@ -12,8 +13,10 @@
  * - GenerateMusicalParametersOutput - The return type for the generateMusicalParameters function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+// --- FIX: Change import from '@/ai/genkit' to 'genkit' for defineFlow ---
+import { defineFlow } from 'genkit'; // Changed from {ai}
+import { z } from 'genkit'; // Keep this
+// -----------------------------------------------------------------------
 import { getAIPrompt, getMasterMusicParameterSet } from '@/lib/firestoreService';
 import type { AIPrompt, MasterMusicParameterContext, MasterMusicParameterSet, InputType as AppInputType } from '@/types';
 
@@ -66,7 +69,7 @@ const GenerateMusicalParametersOutputSchema = z.object({
     .describe("A value between -1 and 1 representing the arousal of the music. If the user provided a 'userEnergy' value, this should directly reflect it."),
   generatedIdea: z.string().describe('A structured description of the musical piece, following a specific format based on mode. (Max 20 words for Kids Mode, Max 45 words for Standard Mode). Structure: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their character] + [Emotional Arc/Climax].'),
   melodicContour: z.string().optional().describe("The overall shape or direction of the primary melody (e.g., 'ascending', 'descending', 'arching', 'wavy', 'stable', 'riff-based', 'improvisational', 'mixed')."),
-  melodicPhrasing: z.string().optional().describe("The characteristic phrasing of the main melody (e.g., 'short_motifs', 'long_flowing', 'call_and_response', 'question_answer', 'syncopated_phrases')."),
+  melodicPhrasing: z.string().optional().describe("The characteristic phrasing of the main melody (e.g., 'short_motifs', 'long_flowing', 'call_and_response', 'Youtube', 'syncopated_phrases')."),
   melodicEmphasis: z.string().optional().describe("How prominent the main melody is in the overall texture (e.g., 'foreground', 'background', 'interwoven')."),
 });
 export type GenerateMusicalParametersOutput = z.infer<
@@ -145,7 +148,7 @@ Strive for a result that reflects both the user's specific input and this guidin
   - targetArousal: Can be low to mid (-0.5 to 0.5).
   - generatedIdea (max 20 words): A brief, fun, and imaginative textual description inspired by the drawing (if valid){{#if voiceDescription}} and/or the voice hint{{/if}}{{#if drawingSoundSequence}} and accompanying sounds{{/if}}. If only a voice hint is present, the idea should be based solely on that {{#if drawingSoundSequence}}and the sounds{{/if}}. If only sounds, base it on the sounds. Structure: [Core Concept/Theme] + [Simple Action/Feeling] + [Key Melodic Instrument/Sound].
   - melodicContour: Suggest simple contours like 'ascending' for happy/rising, 'wavy' for playful, 'stable' for calm.
-  - melodicPhrasing: Suggest 'short_motifs' or 'question_answer' patterns.
+  - melodicPhrasing: Suggest 'short_motifs' or 'Youtube' patterns.
   - melodicEmphasis: 'foreground' for the main simple melody.
 
   {{#if genre}}
@@ -268,7 +271,7 @@ Strive for a result that reflects both the user's specific input and this guidin
       - instrumentHints (choose instruments that best convey your musical vision; be descriptive, e.g., "Synth Lead (Ethereal, Floating Melody)")
       - rhythmicDensity (0.0-1.0)
       - harmonicComplexity (0.0-1.0)
-      - targetValence (-1.0 to 1.0) {{#if userPositivity}}(User's positivity preference: {{{userPositivity}}}. This should strongly guide targetValence.){{/if}}
+      - targetValence (-1.0 to 1.0) {{#if userPositivity}}(User's positivity preference: {{{userPositivity}}}. This should strongly guide targetValence.){{if}}
       - targetArousal (-1.0 to 1.0) {{#if userEnergy}}(User's energy preference: {{{userEnergy}}}. This should strongly guide targetArousal.){{/if}}
       - generatedIdea (max 45 words): A structured description of your unique musical piece: [Opening Feel/Intro] + [Core Rhythmic/Harmonic Elements] + [Primary Melodic Instruments & their character] + [Emotional Arc/Climax].
       - melodicContour
@@ -282,7 +285,7 @@ Strive for a result that reflects both the user's specific input and this guidin
       **Guiding Principle:** The user's original input determines the *emotional core* and initial melodic direction. The selected genre ('{{{genre}}}') determines the *stylistic execution and refinement of the melody*.
 
       Please ensure the generated musical parameters, including 'melodicContour', 'melodicPhrasing', and 'melodicEmphasis', are stylistically appropriate for '{{{genre}}}', while still reflecting the core essence of the primary input.
-    
+      
       {{#if isGenreRock}}
         For Rock:
         - Key Signature: Often major or minor, can have bluesy inflections.
@@ -318,7 +321,7 @@ Strive for a result that reflects both the user's specific input and this guidin
       {{else if isGenreElectronic}}
         For Electronic (e.g., House, Synthpop, Techno):
         - Key Signature: Often minor or major, can be modal.
-        - Mode: Major or Minor, sometimes Dorian or Mixolydian.
+        - Mode: Major or Minor, sometimes Dorian or Mixolydian).
         - TempoBpm: House/Synthpop (115-135 BPM), Techno (125-150 BPM).
         - MoodTags: Suggest ["rhythmic", "danceable", "futuristic", "pulsating", "groovy", "atmospheric"].
         - InstrumentHints: Suggest ["Synth Lead (Bright, Plucky, Catchy Melody/Riff)", "Synth Bass (Driving, Sub, FM/Analog-style)", "Synth Pad (Atmospheric, Evolving Background)", "Drum Machine (e.g., 808/909-style Kick, Snare/Clap, Crisp Hi-Hats)", "Arpeggiator (Sequenced, Rhythmic Melody)"]. Emphasize melodic role.
@@ -392,90 +395,90 @@ Your response MUST be a JSON object that strictly adheres to the output schema. 
 
 
 export async function generateMusicalParameters(
-  input: GenerateMusicalParametersInput
+  input: GenerateMusicalParametersInput
 ): Promise<GenerateMusicalParametersOutput> {
-  return generateMusicalParametersFlow(input);
+  return generateMusicalParametersFlow(input);
 }
 
 const generateMusicalParametersFlow = ai.defineFlow(
-  {
-    name: 'generateMusicalParametersFlow',
-    inputSchema: GenerateMusicalParametersInputSchema,
-    outputSchema: GenerateMusicalParametersOutputSchema,
-  },
-  async (input: GenerateMusicalParametersInput) => {
-    let promptTemplateToUse = DEFAULT_PROMPT_TEMPLATE;
-    let fetchedPromptName: string | undefined = "Default Built-in Prompt";
+  {
+    name: 'generateMusicalParametersFlow',
+    inputSchema: GenerateMusicalParametersInputSchema,
+    outputSchema: GenerateMusicalParametersOutputSchema,
+  },
+  async (input: GenerateMusicalParametersInput) => {
+    let promptTemplateToUse = DEFAULT_PROMPT_TEMPLATE;
+    let fetchedPromptName: string | undefined = "Default Built-in Prompt";
 
-    const promptCriteria = {
-        genre: input.genre,
-        mode: input.mode,
-        inputType: input.type as AppInputType, 
-        variationKey: input.promptVariationKey,
-    };
-    const dynamicPrompt: AIPrompt | null = await getAIPrompt(promptCriteria);
+    const promptCriteria = {
+        genre: input.genre,
+        mode: input.mode,
+        inputType: input.type as AppInputType, 
+        variationKey: input.promptVariationKey,
+    };
+    const dynamicPrompt: AIPrompt | null = await getAIPrompt(promptCriteria);
 
-    if (dynamicPrompt?.promptTemplate) {
-      promptTemplateToUse = dynamicPrompt.promptTemplate;
-      fetchedPromptName = dynamicPrompt.name;
-      console.log(`Using dynamic prompt: "${fetchedPromptName}" (ID: ${dynamicPrompt.promptId}, Version: ${dynamicPrompt.version})`);
-    } else {
-      console.log("Using default built-in prompt template.");
-    }
+    if (dynamicPrompt?.promptTemplate) {
+      promptTemplateToUse = dynamicPrompt.promptTemplate;
+      fetchedPromptName = dynamicPrompt.name;
+      console.log(`Using dynamic prompt: "${fetchedPromptName}" (ID: ${dynamicPrompt.promptId}, Version: ${dynamicPrompt.version})`);
+    } else {
+      console.log("Using default built-in prompt template.");
+    }
 
-    let masterParameterContext: MasterMusicParameterContext | undefined;
-    const masterParamSet: MasterMusicParameterSet | null = await getMasterMusicParameterSet({
-        setId: input.masterParameterSetId,
-        genre: input.genre,
-    });
+    let masterParameterContext: MasterMusicParameterContext | undefined;
+    const masterParamSet: MasterMusicParameterSet | null = await getMasterMusicParameterSet({
+        setId: input.masterParameterSetId,
+        genre: input.genre,
+    });
 
-    if (masterParamSet) {
-        console.log(`Applying Master Parameter Set: "${masterParamSet.name}" (ID: ${masterParamSet.setId})`);
-        masterParameterContext = {
-            name: masterParamSet.name,
-            preferredTempoRange: masterParamSet.targetTempoRange,
-            preferredKeyContext: masterParamSet.preferredKeyContext,
-            preferredInstrumentHints: masterParamSet.preferredInstrumentHints,
-            preferredMelodicContour: masterParamSet.preferredMelodicContour,
-            preferredMelodicPhrasing: masterParamSet.preferredMelodicPhrasing,
-            notesOnDynamics: masterParamSet.notesOnDynamics,
-        };
-    }
+    if (masterParamSet) {
+        console.log(`Applying Master Parameter Set: "${masterParamSet.name}" (ID: ${masterParamSet.setId})`);
+        masterParameterContext = {
+            name: masterParamSet.name,
+            preferredTempoRange: masterParamSet.targetTempoRange,
+            preferredKeyContext: masterParamSet.preferredKeyContext,
+            preferredInstrumentHints: masterParamSet.preferredInstrumentHints,
+            preferredMelodicContour: masterParamSet.preferredMelodicContour,
+            preferredMelodicPhrasing: masterParamSet.preferredMelodicPhrasing,
+            notesOnDynamics: masterParamSet.notesOnDynamics,
+        };
+    }
 
 
-    const genreLower = input.genre?.toLowerCase();
-    const handlebarsContext = {
-      ...input,
-      isKidsMode: input.mode === 'kids',
-      hasKidsDrawing: input.mode === 'kids' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
-      isInputImageWithData: input.type === 'image' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
-      isInputAudioWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('audio/'),
-      isInputVideoWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('video/'),
-      isInputVideoFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('video/'),
-      isInputAudioFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('audio/'),
-      isGenreAI: genreLower === 'ai',
-      isGenreRock: genreLower === 'rock',
-      isGenreJazz: genreLower === 'jazz',
-      isGenreElectronic: genreLower === 'electronic',
-      isGenreCinematic: genreLower === 'cinematic',
-      masterParameterContext: masterParameterContext, 
-    };
+    const genreLower = input.genre?.toLowerCase();
+    const handlebarsContext = {
+      ...input,
+      isKidsMode: input.mode === 'kids',
+      hasKidsDrawing: input.mode === 'kids' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
+      isInputImageWithData: input.type === 'image' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
+      isInputAudioWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('audio/'),
+      isInputVideoWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('video/'),
+      isInputVideoFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('video/'),
+      isInputAudioFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('audio/'),
+      isGenreAI: genreLower === 'ai',
+      isGenreRock: genreLower === 'rock',
+      isGenreJazz: genreLower === 'jazz',
+      isGenreElectronic: genreLower === 'electronic',
+      isGenreCinematic: genreLower === 'cinematic',
+      masterParameterContext: masterParameterContext, 
+    };
 
-    const anDefinedPrompt = ai.definePrompt({
-      name: `dynamicPrompt_${fetchedPromptName?.replace(/\s+/g, '_') || 'default'}`, 
-      model: 'googleai/gemini-1.5-flash-latest',
-      input: {schema: GenerateMusicalParametersInputSchema}, 
-      output: {schema: GenerateMusicalParametersOutputSchema},
-      prompt: promptTemplateToUse,
-    });
+    const anDefinedPrompt = ai.definePrompt({
+      name: `dynamicPrompt_${fetchedPromptName?.replace(/\s+/g, '_') || 'default'}`, 
+      model: 'googleai/gemini-1.5-flash-latest',
+      input: {schema: GenerateMusicalParametersInputSchema}, 
+      output: {schema: GenerateMusicalParametersOutputSchema},
+      prompt: promptTemplateToUse,
+    });
 
-    const result = await anDefinedPrompt(handlebarsContext);
-    const output = result.output;
+    const result = await anDefinedPrompt(handlebarsContext);
+    const output = result.output;
 
-    if (!output) {
-      console.error("Error in generateMusicalParametersFlow: AI prompt did not return a valid output structure.");
-      throw new Error("AI prompt failed to produce a valid output structure for musical parameters. The output was null or undefined.");
-    }
-    return output;
-  }
+    if (!output) {
+      console.error("Error in generateMusicalParametersFlow: AI prompt did not return a valid output structure.");
+      throw new Error("AI prompt failed to produce a valid output structure for musical parameters. The output was null or undefined.");
+    }
+    return output;
+  }
 );

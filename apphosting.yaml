@@ -5,12 +5,12 @@ apphosting:
   # If you have other configurations here (like 'nodejs: 20' or 'framework: nextjs'), keep them.
 
   environmentVariables:
-    # --- YOUR BACKEND'S GEMINI API KEY ---
-    GEMINI_API_KEY: "AIzaSyCFqQm3bNb_Zb4mQyMXh08XZtah-EviDhc" 
-    # ^^^ IMPORTANT: This is your SERVER'S key, ensure it's correct ^^^
+    # --- YOUR BACKEND'S GEMINI API KEY (from Secret Manager) ---
+    GEMINI_API_KEY: "secret:projects/resonanceai-gopeq/secrets/gemini_api_key/versions/latest"
+    # ^^^ IMPORTANT: This now points to Secret Manager ^^^
 
     # --- GOOGLE CLOUD PROJECT ID (often needed by Google Cloud libraries) ---
-    GOOGLE_CLOUD_PROJECT: "resonanceai-gopeq" # <<< Your Google Cloud Project ID
+    GOOGLE_CLOUD_PROJECT: "resonanceai-gopeq" # Your project ID
     # ---------------------------------------------------------------------
 
     # --- YOUR FRONTEND'S FIREBASE SDK KEYS (from firebaseConfig) ---

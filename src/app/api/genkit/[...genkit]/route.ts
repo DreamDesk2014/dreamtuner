@@ -1,14 +1,15 @@
 // src/app/api/genkit/[...genkit]/route.ts
 
-import { initializeGenkit } from '@/ai/genkit'; // Import the initialization function
+import { initializeGenkit, ai } from '@/ai/genkit'; // Import both the function and the 'ai' export
 import { handlers } from 'genkit'; // Import Genkit's API handlers
 
-// Initialize Genkit only once when this module is loaded on the server.
-// This is the CRITICAL call to ensure Genkit is configured.
-initializeGenkit();
+// CRITICAL: Call initializeGenkit() explicitly here.
+// This ensures Genkit is configured when this API route is accessed.
+const genkitAiInstance = initializeGenkit(); // Call it and store the returned instance
 
 // Export Genkit's handlers to serve the API endpoints for your flows.
 // This uses Next.js App Router's route.ts convention.
-export const GET = handlers.forNextJs();
-export const POST = handlers.forNextJs();
-export const OPTIONS = handlers.forNextJs();
+// Pass the initialized 'ai' instance directly to the handlers.
+export const GET = handlers.forNextJs(genkitAiInstance); 
+export const POST = handlers.forNextJs(genkitAiInstance);
+export const OPTIONS = handlers.forNextJs(genkitAiInstance);
