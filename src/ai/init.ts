@@ -16,3 +16,4 @@ configureGenkit({
 });
 
 console.log('Genkit initialized.');
+// Final build trigger
