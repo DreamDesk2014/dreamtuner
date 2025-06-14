@@ -13,10 +13,9 @@
  * - GenerateMusicalParametersOutput - The return type for the generateMusicalParameters function.
  */
 
-// --- FIX: Change import from '@/ai/genkit' to 'genkit' for defineFlow ---
-import { defineFlow } from 'genkit'; // Changed from {ai}
-import { z } from 'genkit'; // Keep this
-// -----------------------------------------------------------------------
+import { defineFlow } from '@genkit-ai/flow';
+import { generate } from '@genkit-ai/ai'; // Import generate function
+import { z } from 'zod'; // Use zod for schema definition
 import { getAIPrompt, getMasterMusicParameterSet } from '@/lib/firestoreService';
 import type { AIPrompt, MasterMusicParameterContext, MasterMusicParameterSet, InputType as AppInputType } from '@/types';
 
@@ -394,91 +393,91 @@ Your response MUST be a JSON object that strictly adheres to the output schema. 
 `;
 
 
-export async function generateMusicalParameters(
-  input: GenerateMusicalParametersInput
-): Promise<GenerateMusicalParametersOutput> {
-  return generateMusicalParametersFlow(input);
-}
+const generateMusicalParametersFlow = defineFlow(
+  {
+  name: 'generateMusicalParametersFlow',
+  inputSchema: GenerateMusicalParametersInputSchema,
+  outputSchema: GenerateMusicalParametersOutputSchema,
+  },
+  async (input: GenerateMusicalParametersInput) => {
+    let promptTemplateToUse = DEFAULT_PROMPT_TEMPLATE;
+    let fetchedPromptName: string | undefined = "Default Built-in Prompt";
 
-const generateMusicalParametersFlow = ai.defineFlow(
-  {
-    name: 'generateMusicalParametersFlow',
-    inputSchema: GenerateMusicalParametersInputSchema,
-    outputSchema: GenerateMusicalParametersOutputSchema,
-  },
-  async (input: GenerateMusicalParametersInput) => {
-    let promptTemplateToUse = DEFAULT_PROMPT_TEMPLATE;
-    let fetchedPromptName: string | undefined = "Default Built-in Prompt";
+    const promptCriteria = {
+      genre: input.genre,
+      mode: input.mode,
+      inputType: input.type as AppInputType,
+      variationKey: input.promptVariationKey,
+    };
+    const dynamicPrompt: AIPrompt | null = await getAIPrompt(promptCriteria);
 
-    const promptCriteria = {
-        genre: input.genre,
-        mode: input.mode,
-        inputType: input.type as AppInputType, 
-        variationKey: input.promptVariationKey,
-    };
-    const dynamicPrompt: AIPrompt | null = await getAIPrompt(promptCriteria);
+    if (dynamicPrompt?.promptTemplate) {
+      promptTemplateToUse = dynamicPrompt.promptTemplate;
+      fetchedPromptName = dynamicPrompt.name;
+      console.log(`Using dynamic prompt: "${fetchedPromptName}" (ID: ${dynamicPrompt.promptId}, Version: ${dynamicPrompt.version})`);
+    } else {
+      console.log("Using default built-in prompt template.");
+    }
 
-    if (dynamicPrompt?.promptTemplate) {
-      promptTemplateToUse = dynamicPrompt.promptTemplate;
-      fetchedPromptName = dynamicPrompt.name;
-      console.log(`Using dynamic prompt: "${fetchedPromptName}" (ID: ${dynamicPrompt.promptId}, Version: ${dynamicPrompt.version})`);
-    } else {
-      console.log("Using default built-in prompt template.");
-    }
+    let masterParameterContext: MasterMusicParameterContext | undefined;
+    const masterParamSet: MasterMusicParameterSet | null = await getMasterMusicParameterSet({
+      setId: input.masterParameterSetId,
+      genre: input.genre,
+    });
 
-    let masterParameterContext: MasterMusicParameterContext | undefined;
-    const masterParamSet: MasterMusicParameterSet | null = await getMasterMusicParameterSet({
-        setId: input.masterParameterSetId,
-        genre: input.genre,
-    });
-
-    if (masterParamSet) {
-        console.log(`Applying Master Parameter Set: "${masterParamSet.name}" (ID: ${masterParamSet.setId})`);
-        masterParameterContext = {
-            name: masterParamSet.name,
-            preferredTempoRange: masterParamSet.targetTempoRange,
-            preferredKeyContext: masterParamSet.preferredKeyContext,
-            preferredInstrumentHints: masterParamSet.preferredInstrumentHints,
-            preferredMelodicContour: masterParamSet.preferredMelodicContour,
-            preferredMelodicPhrasing: masterParamSet.preferredMelodicPhrasing,
-            notesOnDynamics: masterParamSet.notesOnDynamics,
-        };
-    }
+    if (masterParamSet) {
+      console.log(`Applying Master Parameter Set: "${masterParamSet.name}" (ID: ${masterParamSet.setId})`);
+      masterParameterContext = {
+        name: masterParamSet.name,
+        preferredTempoRange: masterParamSet.targetTempoRange,
+        preferredKeyContext: masterParamSet.preferredKeyContext,
+        preferredInstrumentHints: masterParamSet.preferredInstrumentHints,
+        preferredMelodicContour: masterParamSet.preferredMelodicContour,
+        preferredMelodicPhrasing: masterParamSet.preferredMelodicPhrasing,
+        notesOnDynamics: masterParamSet.notesOnDynamics,
+      };
+    }
 
 
-    const genreLower = input.genre?.toLowerCase();
-    const handlebarsContext = {
-      ...input,
-      isKidsMode: input.mode === 'kids',
-      hasKidsDrawing: input.mode === 'kids' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
-      isInputImageWithData: input.type === 'image' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
-      isInputAudioWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('audio/'),
-      isInputVideoWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('video/'),
-      isInputVideoFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('video/'),
-      isInputAudioFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('audio/'),
-      isGenreAI: genreLower === 'ai',
-      isGenreRock: genreLower === 'rock',
-      isGenreJazz: genreLower === 'jazz',
-      isGenreElectronic: genreLower === 'electronic',
-      isGenreCinematic: genreLower === 'cinematic',
-      masterParameterContext: masterParameterContext, 
-    };
+    const genreLower = input.genre?.toLowerCase();
+    const handlebarsContext = {
+      ...input,
+      isKidsMode: input.mode === 'kids',
+      hasKidsDrawing: input.mode === 'kids' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
+      isInputImageWithData: input.type === 'image' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('image/'),
+      isInputAudioWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('audio/'),
+      isInputVideoWithData: input.type === 'video' && input.fileDetails?.url && input.fileDetails.url !== 'data:,' && input.fileDetails.url.includes('base64') && input.fileDetails.type?.startsWith('video/'),
+      isInputVideoFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('video/'),
+      isInputAudioFileConcept: input.type === 'video' && input.fileDetails && (!input.fileDetails.url || !input.fileDetails.url.includes('base64')) && input.fileDetails.type?.startsWith('audio/'),
+      isGenreAI: genreLower === 'ai',
+      isGenreRock: genreLower === 'rock',
+      isGenreJazz: genreLower === 'jazz',
+      isGenreElectronic: genreLower === 'electronic',
+      isGenreCinematic: genreLower === 'cinematic',
+      masterParameterContext: masterParameterContext,
+    };
 
-    const anDefinedPrompt = ai.definePrompt({
-      name: `dynamicPrompt_${fetchedPromptName?.replace(/\s+/g, '_') || 'default'}`, 
-      model: 'googleai/gemini-1.5-flash-latest',
-      input: {schema: GenerateMusicalParametersInputSchema}, 
-      output: {schema: GenerateMusicalParametersOutputSchema},
-      prompt: promptTemplateToUse,
-    });
+    const anDefinedPrompt = ai.definePrompt({
+      name: `dynamicPrompt_${fetchedPromptName?.replace(/\s+/g, '_') || 'default'}`,
+      model: 'googleai/gemini-1.5-flash-latest',
+      input: {schema: GenerateMusicalParametersInputSchema},
+      output: {schema: GenerateMusicalParametersOutputSchema},
+      prompt: promptTemplateToUse,
+    });
 
-    const result = await anDefinedPrompt(handlebarsContext);
-    const output = result.output;
+    const result = await anDefinedPrompt(handlebarsContext);
+    const output = result.output;
 
-    if (!output) {
-      console.error("Error in generateMusicalParametersFlow: AI prompt did not return a valid output structure.");
-      throw new Error("AI prompt failed to produce a valid output structure for musical parameters. The output was null or undefined.");
-    }
-    return output;
-  }
+    if (!output) {
+      console.error("Error in generateMusicalParametersFlow: AI prompt did not return a valid output structure.");
+      throw new Error("AI prompt failed to produce a valid output structure for musical parameters. The output was null or undefined.");
+    }
+    return output;
+  }
 );
+
+export async function generateMusicalParameters(
+  input: GenerateMusicalParametersInput
+): Promise<GenerateMusicalParametersOutput> {
+  return generateMusicalParametersFlow(input);
+}

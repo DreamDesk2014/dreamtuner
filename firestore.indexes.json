@@ -1,0 +1,23 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "masterMusicParameterSets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "genreTags",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "isEnabled",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "version",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

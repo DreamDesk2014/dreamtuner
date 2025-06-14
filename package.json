@@ -61,6 +61,7 @@
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
     "tone": "^15.0.4",
+    "yaml": "^2.8.0",
     "zod": "^3.2.4"
   },
   "devDependencies": {

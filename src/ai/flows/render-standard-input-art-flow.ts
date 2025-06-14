@@ -1,8 +1,9 @@
 //
 // FILE: src/ai/flows/render-standard-input-art-flow.ts
 //
-import { defineFlow, generate } from '@genkit-ai/flow';
-import { geminiPro } from '@genkit-ai/googleai'; // Correct import for the model
+import { defineFlow } from '@genkit-ai/flow';
+import { generate } from '@genkit-ai/ai'; // Import generate from @genkit-ai/ai
+import { gemini15Pro } from '@genkit-ai/googleai'; // Correct import for the model
 import { z } from 'zod';
 
 export const renderStandardInputArtFlow = defineFlow(
@@ -13,7 +14,7 @@ export const renderStandardInputArtFlow = defineFlow(
   },
   async (subject) => {
     const llmResponse = await generate({
-      model: geminiPro, // Use the imported model directly
+      model: gemini15Pro, // Use the imported model directly
       prompt: `Create a detailed, artistic text description of a piece of art based on the following subject: ${subject}`,
     });
     return llmResponse.text();

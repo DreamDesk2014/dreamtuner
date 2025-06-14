@@ -1,0 +1,31 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "predeploy": [
+      "npm --prefix \"$RESOURCE_DIR\" run build"
+    ],
+    "runtime": "nodejs18" // Ensure this matches your functions/package.json engine, or use nodejs20
+  },
+  "hosting": {
+    "public": ".next/static", // This points to the static assets (CSS, JS chunks for client)
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "frameworksBackend": {
+      "region": "us-central1", // Must match the region you selected during firebase init for App Hosting
+      "webApp": "dreamtuner"    // Must match the name you gave your App Hosting backend
+    },
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "app" // This rewrites all requests to the 'app' function (your Next.js SSR server)
+      }
+    ]
+  }
+}

@@ -1,8 +1,9 @@
 //
 // FILE: src/ai/flows/render-kids-drawing-flow.ts
 //
-import { defineFlow, generate } from '@genkit-ai/flow';
-import { geminiProVision } from '@genkit-ai/googleai'; // Using the vision model for images
+import { defineFlow } from '@genkit-ai/flow';
+import { generate } from '@genkit-ai/ai'; // Import generate from @genkit-ai/ai
+import { gemini15Pro } from '@genkit-ai/googleai'; // Using the correct vision model for images
 import { z } from 'zod';
 
 export const renderKidsDrawingFlow = defineFlow(
@@ -16,7 +17,7 @@ export const renderKidsDrawingFlow = defineFlow(
   },
   async ({ prompt, imageUrl }) => {
     const llmResponse = await generate({
-      model: geminiProVision, // Use the vision model
+      model: gemini15Pro, // Use the vision model
       prompt: `${prompt}:`,
       input: [
         { media: { url: imageUrl } }

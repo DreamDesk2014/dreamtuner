@@ -1,8 +1,8 @@
 
 'use server';
-import { renderKidsDrawing as renderKidsDrawingFlow, type RenderKidsDrawingOutput } from '@/ai/flows/render-kids-drawing-flow';
-import type { RenderedDrawingResponse, RenderKidsDrawingInput } from '@/types'; // Import RenderKidsDrawingInput
-
+import { renderKidsDrawingFlow, type RenderKidsDrawingOutput } from '@/ai/flows/render-kids-drawing-flow';
+import type { RenderedDrawingResponse, RenderKidsDrawingInput } from '/src/types'; // Import RenderKidsDrawingInput
+ 
 export async function renderKidsDrawingAction(
     drawingDataUri?: string, 
     originalVoiceHint?: string, 

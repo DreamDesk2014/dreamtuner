@@ -1,6 +1,6 @@
 
 'use server';
-import { renderStandardInputArt as renderStandardInputArtFlow, type RenderStandardInputArtOutput } from '@/ai/flows/render-standard-input-art-flow';
+import { renderStandardInputArtFlow, type RenderStandardInputArtOutput } from '@/ai/flows/render-standard-input-art-flow';
 import type { RenderedStandardArtResponse, RenderStandardInputArtInput, AppInput } from '@/types';
 
 export async function renderStandardInputArtAction(
