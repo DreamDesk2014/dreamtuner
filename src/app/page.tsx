@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useState, useCallback, useEffect } from 'react';
 import { MusicOutputDisplay } from '@/components/MusicOutputDisplay';
@@ -256,7 +255,7 @@ export default function DreamTunerPage() {
       }
     } catch (err) {
       console.error("Error in standard submission process:", err);
-      const errorMessage = err instanceof Error ? `Failed process input: ${err.message}.` : "An unknown error occurred.";
+      const errorMessage = err instanceof Error ? `Failed process input: ${err.message}` : "An unknown error occurred.";
       setError(errorMessage);
       setMusicParams(null);
       logEvent('errors', { 
@@ -755,7 +754,7 @@ export default function DreamTunerPage() {
                             width={150}
                             height={150}
                             className="rounded-md border border-border shadow-md object-cover mx-auto sm:mx-0"
-                        />
+                          />
                         <div className="space-y-1 text-sm flex-grow">
                             <p><strong className="text-foreground">Album:</strong> Indigo Echoes Vol. 1</p>
                             <p><strong className="text-foreground">Artist:</strong> DreamTuner User</p>
@@ -779,12 +778,12 @@ export default function DreamTunerPage() {
           </div>
         )}
         {currentMode === 'standard' && isRenderingStandardModeAiArt && musicParams && (
-             <div className="mt-10 text-center">
+              <div className="mt-10 text-center">
                 <LoadingSpinner />
                 <p className="mt-4 text-lg text-accent animate-pulse-subtle">
                     AI Artist is painting your vision...
                 </p>
-            </div>
+              </div>
         )}
 
 
