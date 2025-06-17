@@ -1,8 +1,7 @@
 // src/ai/flows/generate-musical-parameters.ts
 
-// This file now acts as a clean wrapper.
-// It imports the logic and schemas, then defines the flow for Genkit.
-
+// This file now acts as a clean wrapper for the Genkit framework.
+import '@/ai/init'; // CRITICAL: This ensures Genkit is initialized before the flow is defined.
 import { defineFlow } from '@genkit-ai/flow';
 
 // Import the schemas and the core logic function from our new .logic.ts file
